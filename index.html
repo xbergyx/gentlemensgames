@@ -875,9 +875,10 @@ window.openGameRanking=(gameId)=>{
   others.forEach(p=>{ if(!ranked.includes(p)) ranked.push(p); });
   el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-title"><span>Rank for: ${game.name}</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
-    <div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Drag to reorder — 1 = best player</div>
+    <div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Hold and drag to reorder — 1 = best player</div>
     <div id="game-rank-list">${ranked.map((p,i)=>`<div class="rank-item" draggable="true" data-player="${esc(p)}"
-      ondragstart="dstart(event)" ondragover="dover(event,'game-rank-list')" ondrop="ddrop(event,'game-rank-list')" ondragleave="dleave(event)">
+      ondragstart="dstart(event)" ondragover="dover(event,'game-rank-list')" ondrop="ddrop(event,'game-rank-list')" ondragleave="dleave(event)"
+      ontouchstart="tstart(event,'game-rank-list')" ontouchmove="tmove(event)" ontouchend="tend(event)">
       <span style="color:#ccc;font-size:18px">⠿</span>
       <span class="rn" style="width:20px;font-size:11px;color:#aaa;text-align:center">${i+1}</span>
       <div class="avatar">${initials(p)}</div>
@@ -899,18 +900,70 @@ window.submitGameRanking=async(gameId)=>{
   setTimeout(()=>closeModal(),700);
 };
 
-let _ds=null;
+// ── DRAG & DROP (mouse + touch) ──────────────────────────────
+let _ds=null, _touchClone=null, _touchList=null, _touchOffX=0, _touchOffY=0;
+
+// Mouse drag
 window.dstart=(e)=>{ _ds=e.currentTarget; e.currentTarget.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; };
 window.dover=(e,listId)=>{ e.preventDefault(); if(e.currentTarget!==_ds) e.currentTarget.classList.add('drag-over'); };
 window.dleave=(e)=>{ e.currentTarget.classList.remove('drag-over'); };
 window.ddrop=(e,listId)=>{
   e.preventDefault(); e.currentTarget.classList.remove('drag-over');
   if(!_ds||_ds===e.currentTarget) return;
-  const list=el(listId||'ranking-drag-list');
+  const list=el(listId||'game-rank-list');
   const si=Array.from(list.children).indexOf(_ds), ti=Array.from(list.children).indexOf(e.currentTarget);
   if(si<ti) e.currentTarget.after(_ds); else e.currentTarget.before(_ds);
   _ds.classList.remove('dragging');
   Array.from(list.querySelectorAll('.rank-item')).forEach((el2,i)=>{ const sp=el2.querySelector('.rn'); if(sp) sp.textContent=i+1; });
+};
+
+// Touch drag — iOS/Android compatible
+window.tstart=(e,listId)=>{
+  const item=e.currentTarget;
+  _ds=item; _touchList=el(listId||'game-rank-list');
+  const rect=item.getBoundingClientRect();
+  const touch=e.touches[0];
+  _touchOffX=touch.clientX-rect.left;
+  _touchOffY=touch.clientY-rect.top;
+  _touchClone=item.cloneNode(true);
+  _touchClone.style.cssText='position:fixed;left:'+rect.left+'px;top:'+rect.top+'px;width:'+rect.width+'px;opacity:0.85;z-index:999;pointer-events:none;background:#EEEDFE;border:2px dashed #7F77DD;border-radius:9px;box-shadow:0 4px 12px rgba(0,0,0,.15);';
+  document.body.appendChild(_touchClone);
+  item.style.opacity='0.3';
+  e.preventDefault();
+};
+window.tmove=(e)=>{
+  if(!_touchClone||!_ds) return;
+  const touch=e.touches[0];
+  _touchClone.style.left=(touch.clientX-_touchOffX)+'px';
+  _touchClone.style.top=(touch.clientY-_touchOffY)+'px';
+  const els=Array.from(_touchList.querySelectorAll('.rank-item'));
+  els.forEach(x=>x.classList.remove('drag-over'));
+  const target=els.find(x=>{
+    if(x===_ds) return false;
+    const r=x.getBoundingClientRect();
+    return touch.clientY>=r.top&&touch.clientY<=r.bottom;
+  });
+  if(target) target.classList.add('drag-over');
+  e.preventDefault();
+};
+window.tend=(e)=>{
+  if(!_ds||!_touchList) return;
+  const touch=e.changedTouches[0];
+  const els=Array.from(_touchList.querySelectorAll('.rank-item'));
+  els.forEach(x=>x.classList.remove('drag-over'));
+  const target=els.find(x=>{
+    if(x===_ds) return false;
+    const r=x.getBoundingClientRect();
+    return touch.clientY>=r.top&&touch.clientY<=r.bottom;
+  });
+  if(target){
+    const si=els.indexOf(_ds),ti=els.indexOf(target);
+    if(si<ti) target.after(_ds); else target.before(_ds);
+    Array.from(_touchList.querySelectorAll('.rank-item')).forEach((x,i)=>{ const sp=x.querySelector('.rn'); if(sp) sp.textContent=i+1; });
+  }
+  _ds.style.opacity='';
+  if(_touchClone){ _touchClone.remove(); _touchClone=null; }
+  _ds=null; _touchList=null;
 };
 function renderMyTeams(){
   const e=el('my-teams-list'); if(!e) return;
@@ -984,7 +1037,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .ptab{display:flex;gap:5px;margin-bottom:1rem}
 .ptab-btn{flex:1;padding:8px 4px;font-size:11px;font-weight:600;text-align:center;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;transition:all .15s}
 .ptab-btn.active{background:#7F77DD;color:#fff;border-color:#7F77DD}
-.rank-item{display:flex;align-items:center;gap:8px;padding:9px 11px;background:#f8f7f4;border:1px solid #eee;border-radius:9px;margin-bottom:5px;cursor:grab;user-select:none;transition:all .15s}
+.rank-item{display:flex;align-items:center;gap:8px;padding:9px 11px;background:#f8f7f4;border:1px solid #eee;border-radius:9px;margin-bottom:5px;cursor:grab;user-select:none;touch-action:none;}
 .rank-item.drag-over{border:2px dashed #7F77DD;background:#EEEDFE}
 .rank-item.dragging{opacity:.4}
 .lb-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0ede6}
