@@ -4,6 +4,903 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gentleman's Games</title>
+
+<!-- ========================================================
+  STEP 1: Replace the firebaseConfig block below with YOUR
+  config from Firebase Console → Project Settings → General
+  ======================================================== -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, get, onValue, update, remove }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkaj_5DQm2VFx9VCXcHFBBSAJKlquC1yM",
+  authDomain: "gentlemans-games.firebaseapp.com",
+  databaseURL: "https://gentlemans-games-default-rtdb.firebaseio.com",
+  projectId: "gentlemans-games",
+  storageBucket: "gentlemans-games.firebasestorage.app",
+  messagingSenderId: "868270239422",
+  appId: "1:868270239422:web:66d165e01e97706404f8ef",
+  measurementId: "G-G5XR9TW67W"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+// ── helpers ──────────────────────────────────────────────
+function uid(){ return Math.random().toString(36).substr(2,8).toUpperCase(); }
+function esc(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+function initials(n){ return n.split(' ').map(w=>w[0]||'').join('').toUpperCase().substr(0,2); }
+function teamLabel(t){ if(!t)return'BYE'; return t.p2?t.p1+' & '+t.p2:t.p1; }
+function ordinal(n){ return n+(n===1?'st':n===2?'nd':n===3?'rd':'th'); }
+function el(id){ return document.getElementById(id); }
+function show(id){ el(id).classList.remove('hidden'); }
+function hide(id){ el(id).classList.add('hidden'); }
+
+const fmtL = {'single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools',
+  'round-robin':'Round robin','pool-playoff':'Pools+playoff','score-low':'Low score',
+  'score-high':'High score','multi-round-high':'Multi-round hi','multi-round-low':'Multi-round lo',
+  'h2h-points':'H2H points','h2h-wins':'H2H wins'};
+
+// ── app state (mirrors Firebase, rebuilt on each snapshot) ──
+let S = null;           // full tournament doc
+let tourneyId = null;   // current tournament key
+let localRole = null;   // 'admin' | 'player'
+let localName = null;   // player name if role=player
+let unsubscribe = null; // Firebase listener cleanup
+
+// ── Firebase read / write ────────────────────────────────
+async function fbSet(path, val){
+  await set(ref(db, path), val);
+}
+async function fbUpdate(path, val){
+  await update(ref(db, path), val);
+}
+async function fbGet(path){
+  const snap = await get(ref(db, path));
+  return snap.exists() ? snap.val() : null;
+}
+function fbListen(path, cb){
+  const r = ref(db, path);
+  onValue(r, snap => cb(snap.exists() ? snap.val() : null));
+  return () => {}; // Firebase v10 onValue returns unsubscribe fn directly
+}
+
+// ── persist session locally so refresh doesn't log out ──
+function saveSession(){ localStorage.setItem('gg_session', JSON.stringify({tourneyId, localRole, localName})); }
+function loadSession(){
+  try{
+    const d = JSON.parse(localStorage.getItem('gg_session')||'null');
+    if(d){ tourneyId=d.tourneyId; localRole=d.localRole; localName=d.localName; }
+  }catch(e){}
+}
+
+// ── INIT ─────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async ()=>{
+  loadSession();
+  if(tourneyId && localRole){
+    const exists = await fbGet('tournaments/'+tourneyId);
+    if(exists){
+      startListening();
+      return;
+    }
+  }
+  showView('home');
+});
+
+function startListening(){
+  if(unsubscribe) unsubscribe();
+  onValue(ref(db,'tournaments/'+tourneyId), snap=>{
+    S = snap.exists() ? snap.val() : null;
+    if(!S){ showView('home'); return; }
+    if(!S.bs) S.bs={};
+    if(!S.history) S.history={};
+    if(!S.customBadges) S.customBadges=[];
+    if(!S.points) S.points={};
+    if(!S.scores) S.scores={};
+    if(!S.teams) S.teams={};
+    if(!S.rankings) S.rankings={};
+    if(localRole==='admin') renderAdminView();
+    else renderPlayerView();
+  });
+}
+
+// ── VIEWS ────────────────────────────────────────────────
+function showView(v){
+  ['home','admin','player'].forEach(x=>hide('view-'+x));
+  show('view-'+v);
+}
+function showAdminPhase(phase){
+  if(S) S._ap=phase;
+  ['setup','games','scores','board','history'].forEach(p=>{
+    hide('admin-'+p);
+    document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===p) t.classList.remove('active'); });
+  });
+  show('admin-'+phase);
+  document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===phase) t.classList.add('active'); });
+  if(phase==='scores'){ renderSGS(); loadScorePanel(); }
+  if(phase==='board'){ renderLeaderboard(); renderGPB(); updateStats(); }
+  if(phase==='history'){ renderHistoryList(); renderCustomBadges(); renderCustomBadgePlayerSelect(); }
+}
+function showPlayerTab(tab){
+  if(S) S._pt=tab;
+  ['rank','teams','lb'].forEach(t=>{ hide('pview-'+t); el('ptab-'+t).classList.remove('active'); });
+  show('pview-'+tab);
+  el('ptab-'+tab).classList.add('active');
+  if(tab==='teams') renderMyTeams();
+  if(tab==='lb'){ renderPlayerLB(); renderAllPlayerBadges(); }
+}
+
+// ── HOME ACTIONS ─────────────────────────────────────────
+window.createTournament = async ()=>{
+  const name = el('tourney-name').value.trim();
+  const code = el('admin-code').value.trim();
+  const yr   = parseInt(el('tourney-year').value)||2025;
+  const fy   = parseInt(el('founding-year').value)||2019;
+  if(!name||!code){ alert('Enter a name and admin code.'); return; }
+  tourneyId = uid();
+  localRole = 'admin';
+  localName = null;
+  const doc = {
+    tourneyName:name, tourneyYear:yr, foundingYear:fy,
+    adminCode:code, joinCode:uid().substr(0,6),
+    players:[], rankings:{}, rankingsLocked:false,
+    games:[], teams:{}, scores:{}, bs:{}, points:{},
+    history:{}, customBadges:[], tournamentFinalized:false,
+    _ap:'setup', _pt:'rank'
+  };
+  await fbSet('tournaments/'+tourneyId, doc);
+  saveSession();
+  startListening();
+};
+
+window.adminLogin = async ()=>{
+  const code = el('admin-login-code').value.trim();
+  // find tournament by admin code
+  const all = await fbGet('tournaments');
+  if(!all){ alert('No tournaments found.'); return; }
+  const match = Object.entries(all).find(([k,v])=>v.adminCode===code);
+  if(!match){ alert('Admin code not found.'); return; }
+  tourneyId = match[0];
+  localRole = 'admin';
+  saveSession();
+  startListening();
+};
+
+window.joinTournament = async ()=>{
+  const code = el('join-code-input').value.trim().toUpperCase();
+  const name = el('join-name').value.trim();
+  if(!code||!name){ alert('Enter code and your name.'); return; }
+  const all = await fbGet('tournaments');
+  if(!all){ alert('Tournament not found.'); return; }
+  const match = Object.entries(all).find(([k,v])=>v.joinCode===code);
+  if(!match){ alert('Join code not found. Check with your host.'); return; }
+  tourneyId = match[0];
+  localRole = 'player';
+  localName = name;
+  // add player to list if not already there
+  const players = match[1].players || [];
+  if(!players.includes(name)){
+    players.push(name);
+    await fbUpdate('tournaments/'+tourneyId, {players});
+  }
+  saveSession();
+  startListening();
+};
+
+window.goHome = ()=>{
+  if(unsubscribe) unsubscribe();
+  tourneyId=null; localRole=null; localName=null;
+  localStorage.removeItem('gg_session');
+  showView('home');
+};
+
+// ── RENDER ADMIN ─────────────────────────────────────────
+function renderAdminView(){
+  showView('admin');
+  el('admin-tourney-label').textContent = S.tourneyName+' '+S.tourneyYear;
+  el('join-code-display').textContent   = S.joinCode||'—';
+  renderPlayerList();
+  renderGames();
+  renderSGS();
+  showAdminPhase(S._ap||'setup');
+}
+
+// ── PLAYERS ──────────────────────────────────────────────
+window.addPlayer = async ()=>{
+  const inp = el('new-player-name');
+  const n = inp.value.trim(); if(!n) return;
+  const players = S.players||[];
+  if(players.includes(n)){ alert('Already added.'); return; }
+  players.push(n);
+  await fbUpdate('tournaments/'+tourneyId, {players});
+  inp.value='';
+};
+window.removePlayer = async (n)=>{
+  if(S.rankingsLocked){ alert('Rankings locked.'); return; }
+  const players = (S.players||[]).filter(p=>p!==n);
+  await fbUpdate('tournaments/'+tourneyId, {players});
+};
+function renderPlayerList(){
+  const el2 = el('player-list');
+  el('player-count-badge').textContent = (S.players||[]).length;
+  if(!(S.players||[]).length){ el2.innerHTML='<p style="font-size:12px;color:#aaa">No players yet.</p>'; return; }
+  el2.innerHTML = (S.players||[]).map(p=>{
+    const badges = getPlayerBadges(p);
+    return`<div class="player-row">
+      <div class="avatar">${initials(p)}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">${p}</div>
+        <div class="badges-wrap" style="margin-top:3px">${renderBadges(badges)}</div>
+      </div>
+      <span style="font-size:10px;color:#aaa;margin-right:6px">${S.rankings&&S.rankings[p]
+        ?'<span style="color:#27500A;font-weight:600">✓ ranked</span>':'pending'}</span>
+      <button class="btn btn-sm btn-danger" onclick="removePlayer('${esc(p)}')">✕</button>
+    </div>`;
+  }).join('');
+  updateRankProg();
+}
+function updateRankProg(){
+  const e = el('ranking-progress'); if(!e) return;
+  const done = (S.players||[]).filter(p=>S.rankings&&S.rankings[p]).length;
+  e.textContent = done+' of '+(S.players||[]).length+' players have submitted rankings';
+}
+
+// ── LOCK & TEAMS ─────────────────────────────────────────
+window.lockRankings = async ()=>{
+  if((S.players||[]).length<4){ alert('Need at least 4 players.'); return; }
+  const teams = {};
+  const pairs = makePairs();
+  const bs    = {};
+  const games = S.games||[];
+  games.forEach(g=>{
+    teams[g.id] = pairs;
+    bs[g.id]    = buildBracket(g, pairs);
+  });
+  await fbUpdate('tournaments/'+tourneyId, {rankingsLocked:true, teams, bs});
+};
+function getAvgRank(player){
+  const others=(S.players||[]).filter(p=>p!==player);
+  let total=0,count=0;
+  others.forEach(r=>{ const rk=S.rankings&&S.rankings[r]; if(rk){ const i=rk.indexOf(player); if(i!==-1){total+=i+1;count++;} } });
+  return count?total/count:(S.players||[]).length;
+}
+function makePairs(){
+  const sorted=(S.players||[]).slice().sort((a,b)=>getAvgRank(a)-getAvgRank(b));
+  const n=sorted.length,pairs=[],half=Math.floor(n/2);
+  for(let i=0;i<half;i++) pairs.push({id:uid(),p1:sorted[i],p2:sorted[n-1-i]});
+  if(n%2!==0) pairs.push({id:uid(),p1:sorted[half],p2:null});
+  return pairs;
+}
+function renderTeamsPreview(){
+  const e = el('teams-preview-area'); if(!e) return;
+  if(!S.rankingsLocked||!(S.games||[]).length){ e.innerHTML=''; return; }
+  const g = S.games[0], pairs = (S.teams&&S.teams[g.id])||[];
+  e.innerHTML=`<div class="card"><div class="card-title">👥 Teams for "${g.name}"</div>
+    ${pairs.map((t,i)=>`<div class="player-row">
+      <div class="avatar" style="background:#E1F5EE;color:#085041">${i+1}</div>
+      <div style="flex:1;font-size:13px;font-weight:500">${teamLabel(t)}</div>
+    </div>`).join('')}</div>`;
+}
+
+// ── BRACKET INIT ─────────────────────────────────────────
+function initStandings(teams){ const st={}; teams.forEach(t=>{st[t.id]={w:0,l:0,pf:0,pa:0};}); return st; }
+function rrMatches(teams){ const m=[]; for(let i=0;i<teams.length;i++) for(let j=i+1;j<teams.length;j++) m.push({id:uid(),t1:teams[i],t2:teams[j],winner:null,score1:null,score2:null}); return m; }
+function buildSE(teams){
+  let t=teams.slice(),rounds=[],r=0;
+  while(t.length>1){
+    const matches=[];
+    for(let i=0;i<t.length;i+=2){
+      if(i+1<t.length) matches.push({id:uid(),t1:t[i],t2:t[i+1],winner:null,score1:null,score2:null,round:r});
+      else matches.push({id:uid(),t1:t[i],t2:null,winner:t[i],score1:null,score2:null,round:r,bye:true});
+    }
+    rounds.push(matches);
+    t=matches.map(m=>m.bye?m.winner:null).filter(Boolean).concat(matches.filter(m=>!m.bye).map(()=>null));
+    r++;
+  }
+  return rounds;
+}
+function buildBracket(game, teams){
+  const fmt=game.format, b={};
+  if(fmt==='single-elim'){ b.type='single-elim'; b.rounds=buildSE(teams); }
+  else if(fmt==='double-elim'){ b.type='double-elim'; b.winners=buildSE(teams); b.losers=[]; b.losersQ=[]; }
+  else if(fmt==='two-pool'){
+    b.type='two-pool'; const half=Math.ceil(teams.length/2);
+    b.poolA=teams.slice(0,half); b.poolB=teams.slice(half);
+    b.poolAM=rrMatches(b.poolA); b.poolBM=rrMatches(b.poolB);
+    b.poolASt=initStandings(b.poolA); b.poolBSt=initStandings(b.poolB);
+    b.crossover=[]; b.crossoverBuilt=false;
+  }
+  else if(fmt==='round-robin'){ b.type='round-robin'; b.matches=rrMatches(teams); b.standings=initStandings(teams); }
+  else if(fmt==='pool-playoff'){
+    b.type='pool-playoff';
+    const gs=Math.max(2,Math.ceil(teams.length/Math.ceil(teams.length/3)));
+    b.pools=[];
+    for(let i=0;i<Math.ceil(teams.length/gs);i++){
+      const pool=teams.slice(i*gs,(i+1)*gs);
+      b.pools.push({name:'Pool '+String.fromCharCode(65+i),teams:pool,matches:rrMatches(pool),standings:initStandings(pool)});
+    }
+    b.knockout=[]; b.knockoutBuilt=false;
+  }
+  return b;
+}
+
+// ── GAMES ────────────────────────────────────────────────
+window.addGame = async ()=>{
+  const name   = el('game-name-input').value.trim();
+  const format = el('game-format').value;
+  const tb     = el('game-tiebreak').value;
+  const rounds = (format==='multi-round-high'||format==='multi-round-low') ? parseInt(el('game-rounds').value)||2 : 1;
+  if(!name){ alert('Enter a game name.'); return; }
+  const g = {id:uid(), name, format, tiebreak:tb, rounds};
+  const games = [...(S.games||[]), g];
+  const update_obj = {games};
+  if(S.rankingsLocked){
+    const pairs = makePairs();
+    const teams = {...(S.teams||{}), [g.id]: pairs};
+    const bs    = {...(S.bs||{}),    [g.id]: buildBracket(g, pairs)};
+    update_obj.teams = teams;
+    update_obj.bs    = bs;
+  }
+  await fbUpdate('tournaments/'+tourneyId, update_obj);
+  el('game-name-input').value='';
+};
+window.removeGame = async (id)=>{
+  const games  = (S.games||[]).filter(g=>g.id!==id);
+  const teams  = {...(S.teams||{})}; delete teams[id];
+  const scores = {...(S.scores||{})}; delete scores[id];
+  const points = {...(S.points||{})}; delete points[id];
+  const bs     = {...(S.bs||{})}; delete bs[id];
+  await fbUpdate('tournaments/'+tourneyId, {games,teams,scores,points,bs});
+};
+function renderGames(){
+  const e=el('games-list');
+  if(!(S.games||[]).length){ e.innerHTML='<p style="font-size:12px;color:#aaa">No games yet.</p>'; return; }
+  e.innerHTML=(S.games||[]).map(g=>`<div class="game-row">
+    <div class="gname">${g.name}</div>
+    <span class="fbadge">${fmtL[g.format]||g.format}</span>
+    <button class="btn btn-sm btn-danger" onclick="removeGame('${g.id}')">✕</button>
+  </div>`).join('');
+}
+function renderSGS(){
+  const sel=el('score-game-select');
+  sel.innerHTML='<option value="">— choose a game —</option>'+(S.games||[]).map(g=>`<option value="${g.id}">${g.name} (${fmtL[g.format]||g.format})</option>`).join('');
+}
+
+// ── MATCH / STANDINGS HELPERS ────────────────────────────
+function setResult(m,s1,s2){
+  if(isNaN(s1)||isNaN(s2)){ alert('Enter scores for both teams.'); return false; }
+  if(s1===s2){ alert('Scores cannot be equal — no draws allowed.'); return false; }
+  m.score1=s1; m.score2=s2; m.winner=s1>s2?m.t1:m.t2; return true;
+}
+function updSt(st,m){
+  if(!st[m.t1.id]) st[m.t1.id]={w:0,l:0,pf:0,pa:0};
+  if(!st[m.t2.id]) st[m.t2.id]={w:0,l:0,pf:0,pa:0};
+  st[m.t1.id].pf+=m.score1; st[m.t1.id].pa+=m.score2;
+  st[m.t2.id].pf+=m.score2; st[m.t2.id].pa+=m.score1;
+  if(m.score1>m.score2){ st[m.t1.id].w++; st[m.t2.id].l++; }
+  else { st[m.t2.id].w++; st[m.t1.id].l++; }
+}
+function sortBySt(teams,st){
+  return teams.slice().sort((a,b)=>{
+    const sa=st[a.id]||{w:0,pf:0,pa:0}, sb=st[b.id]||{w:0,pf:0,pa:0};
+    if(sb.w!==sa.w) return sb.w-sa.w;
+    return(sb.pf-sb.pa)-(sa.pf-sa.pa);
+  });
+}
+function stHTML(teams,st){
+  let h=`<div class="st-row" style="font-weight:700"><span class="st-name">Team</span><span class="st-col">W</span><span class="st-col">L</span><span class="st-col">PF</span><span class="st-col">PA</span><span class="st-col hi">+/-</span></div>`;
+  sortBySt(teams,st).forEach(t=>{
+    const s=st[t.id]||{w:0,l:0,pf:0,pa:0}, diff=s.pf-s.pa;
+    h+=`<div class="st-row"><span class="st-name">${teamLabel(t)}</span><span class="st-col">${s.w}</span><span class="st-col">${s.l}</span><span class="st-col">${s.pf}</span><span class="st-col">${s.pa}</span><span class="st-col hi">${diff>0?'+':''}${diff}</span></div>`;
+  });
+  return h;
+}
+function mHTML(gid,m,pfx,onSave){
+  if(m.bye) return`<div class="match-block"><div class="match-label">Bye</div><div class="match-team winner">${teamLabel(m.t1)} — advances</div></div>`;
+  const w=m.winner?m.winner.id:null, t2=m.t2||{id:'tbd',p1:'TBD',p2:null};
+  return`<div class="match-block">
+    <div class="match-team ${w===m.t1.id?'winner':w?'loser':''}">${teamLabel(m.t1)}<input type="number" class="si-sm" id="${pfx}-${m.id}-1" value="${m.score1!==null?m.score1:''}" placeholder="Score"></div>
+    <div class="match-team ${w===t2.id?'winner':w?'loser':''}">${teamLabel(t2)}<input type="number" class="si-sm" id="${pfx}-${m.id}-2" value="${m.score2!==null?m.score2:''}" placeholder="Score"></div>
+    ${m.winner
+      ?`<div style="font-size:10px;color:#27500A;margin-top:3px;font-weight:600">✓ ${teamLabel(m.winner)} (${m.score1}–${m.score2})</div>`
+      :`<button class="btn btn-sm btn-success" style="margin-top:6px;width:100%" onclick="${onSave}">✓ Set result</button>`
+    }
+  </div>`;
+}
+
+// ── SCORE PANEL ──────────────────────────────────────────
+window.loadScorePanel = ()=>{
+  renderSGS();
+  const gameId=el('score-game-select').value, panel=el('score-panel');
+  if(!gameId){ panel.innerHTML=''; return; }
+  const game=(S.games||[]).find(g=>g.id===gameId);
+  if(!game){ panel.innerHTML=''; return; }
+  const teams=(S.teams&&S.teams[gameId])||[];
+  if(!teams.length){ panel.innerHTML='<div class="card"><div class="alert alert-warn">Lock rankings first to generate teams.</div></div>'; return; }
+  const fmt=game.format;
+  if(fmt==='single-elim') renderSE(game,panel);
+  else if(fmt==='double-elim') renderDE(game,panel);
+  else if(fmt==='two-pool') renderTP(game,panel);
+  else if(fmt==='round-robin') renderRR(game,panel);
+  else if(fmt==='pool-playoff') renderPP(game,panel);
+  else renderScoreInput(game,teams,panel);
+};
+
+async function saveBs(gameId, newBs){
+  await fbUpdate('tournaments/'+tourneyId+'/bs', {[gameId]: newBs});
+}
+async function saveScores(gameId, newScores){
+  await fbUpdate('tournaments/'+tourneyId+'/scores', {[gameId]: newScores});
+}
+async function savePoints(gameId, newPoints){
+  await fbUpdate('tournaments/'+tourneyId+'/points', {[gameId]: newPoints});
+}
+
+// Single Elim
+function renderSE(game,panel){
+  const b=(S.bs&&S.bs[game.id])||{};
+  if(!b.rounds){ panel.innerHTML='<div class="card"><div class="alert alert-warn">No bracket data. Re-lock rankings.</div></div>'; return; }
+  const rNames=['Round 1','Round 2','Quarterfinals','Semifinals','Final'];
+  let html=`<div class="card"><div class="card-title">🏆 ${game.name} — single elimination</div>`;
+  b.rounds.forEach((round,ri)=>{
+    html+=`<div class="rnd-hdr">${rNames[ri]||'Round '+(ri+1)}</div>`;
+    round.forEach(m=>{ html+=mHTML(game.id,m,'se-'+game.id,`saveSE('${game.id}','${m.id}',${ri})`); });
+  });
+  const fin=(S.scores&&S.scores[game.id]&&S.scores[game.id]._fin);
+  const allDone=b.rounds.every(r=>r.every(m=>m.winner||m.bye));
+  if(allDone&&!fin) html+=`<div class="divider"></div><button class="btn btn-primary" onclick="finSE('${game.id}')">🏅 Finalize & award points</button>`;
+  if(fin) html+=`<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>`;
+  html+='</div>'; panel.innerHTML=html;
+}
+window.saveSE = async (gid,mid,ri)=>{
+  const b = JSON.parse(JSON.stringify(S.bs[gid]));
+  const m = b.rounds[ri].find(x=>x.id===mid); if(!m) return;
+  const s1=parseFloat(el('se-'+gid+'-'+mid+'-1').value), s2=parseFloat(el('se-'+gid+'-'+mid+'-2').value);
+  if(!setResult(m,s1,s2)) return;
+  if(ri+1<b.rounds.length){ const nr=b.rounds[ri+1],mi=b.rounds[ri].indexOf(m),nm=nr[Math.floor(mi/2)]; if(nm&&!nm.bye){ if(mi%2===0) nm.t1=m.winner; else nm.t2=m.winner; } }
+  await saveBs(gid,b);
+};
+window.finSE = async (gid)=>{
+  const b=S.bs[gid], teams=(S.teams&&S.teams[gid])||[], n=teams.length, pl={};
+  b.rounds[b.rounds.length-1].forEach(m=>{ if(m.winner){ pl[m.winner.id]=1; const l=m.winner.id===m.t1.id?m.t2:m.t1; if(l)pl[l.id]=2; } });
+  if(b.rounds.length>1) b.rounds[b.rounds.length-2].forEach((m,i)=>{ if(m.winner){ const l=m.winner.id===m.t1.id?m.t2:m.t1; if(l&&!pl[l.id])pl[l.id]=3+i; } });
+  teams.forEach((t,i)=>{ if(!pl[t.id])pl[t.id]=n-i; });
+  await saveScores(gid,{_fin:true}); await awardPts(gid,pl,teams);
+};
+
+// Double Elim
+function renderDE(game,panel){
+  const b=(S.bs&&S.bs[game.id])||{};
+  if(!b.winners){ panel.innerHTML='<div class="card"><div class="alert alert-warn">No bracket data.</div></div>'; return; }
+  let html=`<div class="card"><div class="card-title">🏆 ${game.name} — double elimination</div><div class="alert alert-info" style="font-size:11px">One loss drops to losers bracket. Two losses = eliminated.</div><div class="rnd-hdr">Winners bracket</div>`;
+  b.winners.forEach((round,ri)=>{ html+=`<div style="font-size:10px;color:#aaa;margin-bottom:3px">Round ${ri+1}</div>`; round.forEach(m=>{ if(!m.bye) html+=mHTML(game.id,m,'de-w-'+game.id,`saveDEW('${game.id}','${m.id}',${ri})`); }); });
+  if(b.losers&&b.losers.length){ html+=`<div class="rnd-hdr">Losers bracket</div>`; b.losers.forEach((round,ri)=>{ html+=`<div style="font-size:10px;color:#aaa;margin-bottom:3px">L-Round ${ri+1}</div>`; round.forEach(m=>{ html+=mHTML(game.id,m,'de-l-'+game.id,`saveDEL('${game.id}','${m.id}',${ri})`); }); }); }
+  if(b.grandFinal){ html+=`<div class="rnd-hdr">Grand final</div>`; html+=mHTML(game.id,b.grandFinal,'de-gf-'+game.id,`saveDEGF('${game.id}')`); }
+  const fin=(S.scores&&S.scores[game.id]&&S.scores[game.id]._fin);
+  if(b.grandFinal&&b.grandFinal.winner&&!fin) html+=`<div class="divider"></div><button class="btn btn-primary" onclick="finDE('${game.id}')">🏅 Finalize & award points</button>`;
+  if(fin) html+=`<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>`;
+  html+='</div>'; panel.innerHTML=html;
+}
+window.saveDEW = async (gid,mid,ri)=>{
+  const b=JSON.parse(JSON.stringify(S.bs[gid]));
+  const m=b.winners[ri].find(x=>x.id===mid); if(!m) return;
+  const s1=parseFloat(el('de-w-'+gid+'-'+mid+'-1').value), s2=parseFloat(el('de-w-'+gid+'-'+mid+'-2').value);
+  if(!setResult(m,s1,s2)) return;
+  const loser=m.winner.id===m.t1.id?m.t2:m.t1;
+  if(!b.losers) b.losers=[]; if(!b.losersQ) b.losersQ=[];
+  b.losersQ.push(loser);
+  if(b.losersQ.length>=2){ const a=b.losersQ.shift(),bq=b.losersQ.shift(); b.losers.push([{id:uid(),t1:a,t2:bq,winner:null,score1:null,score2:null}]); }
+  const wDone=b.winners.every(r=>r.every(x=>x.winner||x.bye));
+  if(wDone&&!b.grandFinal){ const wC=b.winners[b.winners.length-1][0].winner,lC=b.losers.length&&b.losers[b.losers.length-1][0].winner; if(wC) b.grandFinal={id:uid(),t1:wC,t2:lC||{id:uid(),p1:'L-Bracket Winner',p2:null},winner:null,score1:null,score2:null}; }
+  await saveBs(gid,b);
+};
+window.saveDEL = async (gid,mid,ri)=>{
+  const b=JSON.parse(JSON.stringify(S.bs[gid]));
+  const m=b.losers[ri].find(x=>x.id===mid); if(!m) return;
+  const s1=parseFloat(el('de-l-'+gid+'-'+mid+'-1').value), s2=parseFloat(el('de-l-'+gid+'-'+mid+'-2').value);
+  if(!setResult(m,s1,s2)) return; await saveBs(gid,b);
+};
+window.saveDEGF = async (gid)=>{
+  const b=JSON.parse(JSON.stringify(S.bs[gid])), gf=b.grandFinal;
+  const s1=parseFloat(el('de-gf-'+gid+'-'+gf.id+'-1').value), s2=parseFloat(el('de-gf-'+gid+'-'+gf.id+'-2').value);
+  if(!setResult(gf,s1,s2)) return; await saveBs(gid,b);
+};
+window.finDE = async (gid)=>{
+  const b=S.bs[gid], teams=(S.teams&&S.teams[gid])||[], pl={}, gf=b.grandFinal;
+  if(gf&&gf.winner){ pl[gf.winner.id]=1; const ru=gf.winner.id===gf.t1.id?gf.t2:gf.t1; if(ru)pl[ru.id]=2; }
+  teams.forEach((t,i)=>{ if(!pl[t.id])pl[t.id]=3+i; });
+  await saveScores(gid,{_fin:true}); await awardPts(gid,pl,teams);
+};
+
+// Two Pool
+function renderTP(game,panel){
+  const b=(S.bs&&S.bs[game.id])||{};
+  if(b.type!=='two-pool'){ panel.innerHTML='<div class="card"><div class="alert alert-warn">No pool data.</div></div>'; return; }
+  let html=`<div class="card"><div class="card-title">🏆 ${game.name} — 2 pools</div>`;
+  [{key:'A',teams:b.poolA,matches:b.poolAM,st:b.poolASt,idx:0},{key:'B',teams:b.poolB,matches:b.poolBM,st:b.poolBSt,idx:1}].forEach(pool=>{
+    html+=`<div class="pool-header">Pool ${pool.key}</div><div style="margin-bottom:8px">${stHTML(pool.teams,pool.st)}</div>`;
+    pool.matches.forEach(m=>{ html+=mHTML(game.id,m,'pool-'+game.id+'-'+pool.idx,`saveTPM('${game.id}','${m.id}','${pool.key}')`); });
+    html+='<div class="divider"></div>';
+  });
+  const pd=b.poolAM.every(m=>m.winner)&&b.poolBM.every(m=>m.winner);
+  if(pd&&!b.crossoverBuilt) html+=`<button class="btn btn-primary" onclick="buildCrossover('${game.id}')">🔀 Generate crossover finals</button>`;
+  if(b.crossover&&b.crossover.length){ html+=`<div class="pool-header teal" style="margin-top:8px">Crossover finals</div>`; b.crossover.forEach(m=>{ html+=`<div style="font-size:10px;color:#aaa;margin-bottom:3px">${m.label||''}</div>`+mHTML(game.id,m,'co-'+game.id,`saveCoMatch('${game.id}','${m.id}')`); }); }
+  const cd=b.crossover&&b.crossover.length&&b.crossover.every(m=>m.winner);
+  const fin=(S.scores&&S.scores[game.id]&&S.scores[game.id]._fin);
+  if(cd&&!fin) html+=`<div class="divider"></div><button class="btn btn-primary" onclick="finTP('${game.id}')">🏅 Finalize & award points</button>`;
+  if(fin) html+=`<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>`;
+  html+='</div>'; panel.innerHTML=html;
+}
+window.saveTPM = async (gid,mid,pk)=>{
+  const b=JSON.parse(JSON.stringify(S.bs[gid]));
+  const matches=pk==='A'?b.poolAM:b.poolBM, st=pk==='A'?b.poolASt:b.poolBSt, idx=pk==='A'?0:1;
+  const m=matches.find(x=>x.id===mid); if(!m) return;
+  const s1=parseFloat(el('pool-'+gid+'-'+idx+'-'+mid+'-1').value), s2=parseFloat(el('pool-'+gid+'-'+idx+'-'+mid+'-2').value);
+  if(!setResult(m,s1,s2)) return; updSt(st,m); await saveBs(gid,b);
+};
+window.buildCrossover = async (gid)=>{
+  const b=JSON.parse(JSON.stringify(S.bs[gid]));
+  const rA=sortBySt(b.poolA,b.poolASt), rB=sortBySt(b.poolB,b.poolBSt);
+  b.crossover=[]; const len=Math.min(rA.length,rB.length);
+  for(let i=0;i<len;i++) b.crossover.push({id:uid(),t1:rA[i],t2:rB[i],winner:null,score1:null,score2:null,label:ordinal(i*2+1)+' vs '+ordinal(i*2+2)+' place match'});
+  b.crossoverBuilt=true; await saveBs(gid,b);
+};
+window.saveCoMatch = async (gid,mid)=>{
+  const b=JSON.parse(JSON.stringify(S.bs[gid]));
+  const m=b.crossover.find(x=>x.id===mid); if(!m) return;
+  const s1=parseFloat(el('co-'+gid+'-'+mid+'-1').value), s2=parseFloat(el('co-'+gid+'-'+mid+'-2').value);
+  if(!setResult(m,s1,s2)) return; await saveBs(gid,b);
+};
+window.finTP = async (gid)=>{
+  const b=S.bs[gid], teams=(S.teams&&S.teams[gid])||[], pl={};
+  b.crossover.forEach((m,i)=>{ if(m.winner){ pl[m.winner.id]=i*2+1; const l=m.winner.id===m.t1.id?m.t2:m.t1; if(l)pl[l.id]=i*2+2; } });
+  teams.forEach((t,i)=>{ if(!pl[t.id])pl[t.id]=teams.length-i; });
+  await saveScores(gid,{_fin:true}); await awardPts(gid,pl,teams);
+};
+
+// Round Robin
+function renderRR(game,panel){
+  const b=(S.bs&&S.bs[game.id])||{};
+  if(!b.matches){ panel.innerHTML='<div class="card"><div class="alert alert-warn">No RR data.</div></div>'; return; }
+  const teams=(S.teams&&S.teams[game.id])||[];
+  let html=`<div class="card"><div class="card-title">🔄 ${game.name} — round robin</div>
+    <div class="pool-header">Standings</div><div style="margin-bottom:8px">${stHTML(teams,b.standings)}</div>
+    <div class="alert alert-info" style="font-size:11px">Tiebreaker: wins → point differential → head-to-head. No draws.</div>
+    <div class="divider"></div><div style="font-size:11px;font-weight:600;color:#aaa;margin-bottom:6px">Matches</div>`;
+  b.matches.forEach(m=>{ html+=mHTML(game.id,m,'rr-'+game.id,`saveRRM('${game.id}','${m.id}')`); });
+  const allDone=b.matches.every(m=>m.winner), fin=(S.scores&&S.scores[game.id]&&S.scores[game.id]._fin);
+  if(allDone&&!fin) html+=`<div class="divider"></div><button class="btn btn-primary" onclick="finRR('${game.id}')">🏅 Finalize & award points</button>`;
+  if(fin) html+=`<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>`;
+  html+='</div>'; panel.innerHTML=html;
+}
+window.saveRRM = async (gid,mid)=>{
+  const b=JSON.parse(JSON.stringify(S.bs[gid]));
+  const m=b.matches.find(x=>x.id===mid); if(!m) return;
+  const s1=parseFloat(el('rr-'+gid+'-'+mid+'-1').value), s2=parseFloat(el('rr-'+gid+'-'+mid+'-2').value);
+  if(!setResult(m,s1,s2)) return; updSt(b.standings,m); await saveBs(gid,b);
+};
+window.finRR = async (gid)=>{
+  const b=S.bs[gid], teams=(S.teams&&S.teams[gid])||[], sorted=sortBySt(teams,b.standings), pl={};
+  sorted.forEach((t,i)=>{ pl[t.id]=i+1; });
+  await saveScores(gid,{_fin:true}); await awardPts(gid,pl,teams);
+};
+
+// Pool Playoff
+function renderPP(game,panel){
+  const b=(S.bs&&S.bs[game.id])||{};
+  if(!b.pools){ panel.innerHTML='<div class="card"><div class="alert alert-warn">No data.</div></div>'; return; }
+  let html=`<div class="card"><div class="card-title">🏆 ${game.name} — pools + playoff</div>`;
+  b.pools.forEach((pool,pi)=>{
+    html+=`<div class="pool-header">${pool.name}</div><div style="margin-bottom:7px">${stHTML(pool.teams,pool.standings)}</div>`;
+    pool.matches.forEach(m=>{ html+=mHTML(game.id,m,'pp-'+game.id+'-'+pi,`savePPM('${game.id}','${m.id}',${pi})`); });
+    html+='<div class="divider"></div>';
+  });
+  const pd=b.pools.every(p=>p.matches.every(m=>m.winner));
+  if(pd&&!b.knockoutBuilt) html+=`<button class="btn btn-primary" onclick="buildKO('${game.id}')">🏆 Build knockout round</button>`;
+  if(b.knockout&&b.knockout.length){ html+=`<div class="pool-header teal" style="margin-top:8px">Knockout round</div>`; b.knockout.forEach(m=>{ html+=`<div style="font-size:10px;color:#aaa;margin-bottom:3px">${m.label||''}</div>`+mHTML(game.id,m,'ko-'+game.id,`saveKOM('${game.id}','${m.id}')`); }); }
+  const kd=b.knockout&&b.knockout.length&&b.knockout.every(m=>m.winner), fin=(S.scores&&S.scores[game.id]&&S.scores[game.id]._fin);
+  if(kd&&!fin) html+=`<div class="divider"></div><button class="btn btn-primary" onclick="finPP('${game.id}')">🏅 Finalize & award points</button>`;
+  if(fin) html+=`<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>`;
+  html+='</div>'; panel.innerHTML=html;
+}
+window.savePPM = async (gid,mid,pi)=>{
+  const b=JSON.parse(JSON.stringify(S.bs[gid])), pool=b.pools[pi];
+  const m=pool.matches.find(x=>x.id===mid); if(!m) return;
+  const s1=parseFloat(el('pp-'+gid+'-'+pi+'-'+mid+'-1').value), s2=parseFloat(el('pp-'+gid+'-'+pi+'-'+mid+'-2').value);
+  if(!setResult(m,s1,s2)) return; updSt(pool.standings,m); await saveBs(gid,b);
+};
+window.buildKO = async (gid)=>{
+  const b=JSON.parse(JSON.stringify(S.bs[gid])), ranked=b.pools.map(p=>sortBySt(p.teams,p.standings));
+  b.knockout=[]; const maxR=ranked[0].length;
+  for(let r=0;r<maxR;r++){ const mt=ranked.filter(p=>p[r]).map(p=>p[r]); for(let i=0;i+1<mt.length;i+=2) b.knockout.push({id:uid(),t1:mt[i],t2:mt[i+1],winner:null,score1:null,score2:null,label:ordinal(r+1)+'-place playoff'}); }
+  b.knockoutBuilt=true; await saveBs(gid,b);
+};
+window.saveKOM = async (gid,mid)=>{
+  const b=JSON.parse(JSON.stringify(S.bs[gid]));
+  const m=b.knockout.find(x=>x.id===mid); if(!m) return;
+  const s1=parseFloat(el('ko-'+gid+'-'+mid+'-1').value), s2=parseFloat(el('ko-'+gid+'-'+mid+'-2').value);
+  if(!setResult(m,s1,s2)) return; await saveBs(gid,b);
+};
+window.finPP = async (gid)=>{
+  const b=S.bs[gid], teams=(S.teams&&S.teams[gid])||[], pl={};
+  b.knockout.forEach((m,i)=>{ if(m.winner){ pl[m.winner.id]=i*2+1; const l=m.winner.id===m.t1.id?m.t2:m.t1; if(l)pl[l.id]=i*2+2; } });
+  teams.forEach((t,i)=>{ if(!pl[t.id])pl[t.id]=teams.length-i; });
+  await saveScores(gid,{_fin:true}); await awardPts(gid,pl,teams);
+};
+
+// Score input (non-bracket)
+function renderScoreInput(game,teams,panel){
+  const scores=(S.scores&&S.scores[game.id])||{};
+  const isMulti=game.format==='multi-round-high'||game.format==='multi-round-low';
+  let html=`<div class="card"><div class="card-title">✏️ ${game.name}</div>`;
+  teams.forEach(t=>{
+    html+=`<div style="margin-bottom:10px"><div class="sec-label">${teamLabel(t)}</div>`;
+    if(isMulti){ for(let r=1;r<=game.rounds;r++){ const key=t.id+'_r'+r; html+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:#888;width:65px">Round ${r}</span><input type="number" id="sc-${game.id}-${key}" value="${scores[key]!==undefined?scores[key]:''}" placeholder="Score" style="width:120px;margin:0"></div>`; } }
+    else html+=`<input type="number" id="sc-${game.id}-${t.id}" value="${scores[t.id]!==undefined?scores[t.id]:''}" placeholder="Score">`;
+    html+='</div>';
+  });
+  if(game.tiebreak==='host-score') html+=`<div class="sec-label">Tiebreaker score (if needed)</div><input type="text" id="tb-${game.id}" value="${game.tiebreaker||''}" placeholder="e.g. extra hole result">`;
+  const fin=scores._fin;
+  html+=`<button class="btn btn-primary" onclick="saveScoreGame('${game.id}')">💾 Save & award points</button>`;
+  if(fin) html+=`<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>`;
+  html+='</div>'; panel.innerHTML=html;
+}
+window.saveScoreGame = async (gid)=>{
+  const game=(S.games||[]).find(g=>g.id===gid), teams=(S.teams&&S.teams[gid])||[];
+  const isMulti=game.format==='multi-round-high'||game.format==='multi-round-low';
+  const lowWins=game.format==='score-low'||game.format==='multi-round-low';
+  const newScores={_fin:true}, totals={};
+  teams.forEach(t=>{
+    if(isMulti){ let total=0; for(let r=1;r<=game.rounds;r++){ const key=t.id+'_r'+r; const v=parseFloat(el('sc-'+gid+'-'+key).value)||0; newScores[key]=v; total+=v; } totals[t.id]=total; }
+    else{ const v=parseFloat(el('sc-'+gid+'-'+t.id).value); if(!isNaN(v)){ newScores[t.id]=v; totals[t.id]=v; } }
+  });
+  if(game.tiebreak==='host-score'){ const tb=el('tb-'+gid); if(tb) game.tiebreaker=tb.value; }
+  const entries=Object.entries(totals).sort((a,b)=>lowWins?a[1]-b[1]:b[1]-a[1]);
+  const pl={};let place=1;
+  for(let i=0;i<entries.length;){ let j=i; while(j<entries.length&&entries[j][1]===entries[i][1])j++; entries.slice(i,j).forEach((x,k)=>{ pl[x[0]]=place+k; }); place+=j-i; i=j; }
+  await saveScores(gid,newScores); await awardPts(gid,pl,teams);
+};
+
+async function awardPts(gid,pl,teams){
+  const n=teams.length, newPts={};
+  teams.forEach(team=>{ const place=pl[team.id]||n, pts=Math.max(1,n-place+1); [team.p1,team.p2].filter(Boolean).forEach(player=>{ newPts[player]=pts; }); });
+  await savePoints(gid,newPts);
+}
+function getTotalPts(player){ return Object.values(S.points||{}).reduce((s,gp)=>s+(gp[player]||0),0); }
+function getBreakdown(p){ return (S.games||[]).filter(g=>S.points&&S.points[g.id]&&S.points[g.id][p]!==undefined).map(g=>g.name+':'+S.points[g.id][p]).join(' · ')||'No points yet'; }
+
+// ── LEADERBOARD ──────────────────────────────────────────
+function renderLeaderboard(){
+  const e=el('leaderboard-display'); if(!e) return;
+  const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
+  if(!sorted.length){ e.innerHTML='<p style="font-size:12px;color:#aaa">No players yet.</p>'; return; }
+  e.innerHTML=sorted.map((p,i)=>`<div class="lb-row">
+    <div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div>
+    <div style="flex:1"><div class="lb-name">${p}</div><div class="lb-breakdown">${getBreakdown(p)}</div></div>
+    <div class="lb-pts">${getTotalPts(p)}</div>
+  </div>`).join('');
+}
+function renderGPB(){
+  const e=el('game-pts-breakdown'); if(!e) return;
+  if(!(S.games||[]).length){ e.innerHTML='<p style="font-size:12px;color:#aaa">No games yet.</p>'; return; }
+  e.innerHTML=(S.games||[]).map(g=>{
+    const pts=S.points&&S.points[g.id];
+    if(!pts||!Object.keys(pts).length) return`<div class="game-row"><div class="gname">${g.name}</div><span class="fbadge">No results</span></div>`;
+    return`<div style="margin-bottom:8px"><div class="sec-label">${g.name}</div>${(S.players||[]).slice().sort((a,b)=>(pts[b]||0)-(pts[a]||0)).filter(p=>pts[p]).map(p=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>${p}</span><span style="color:#534AB7;font-weight:700">${pts[p]}pts</span></div>`).join('')}</div>`;
+  }).join('');
+}
+function updateStats(){
+  const done=Object.keys(S.scores||{}).filter(id=>S.scores[id]&&S.scores[id]._fin).length;
+  el('stat-games').textContent=done; el('stat-players').textContent=(S.players||[]).length;
+}
+
+// ── DECLARE WINNER ───────────────────────────────────────
+window.declareTournamentWinner = async ()=>{
+  const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
+  if(!sorted.length){ alert('No players.'); return; }
+  const winner=sorted[0], lastPlace=sorted[sorted.length-1], podium=sorted.slice(0,3);
+  const history=JSON.parse(JSON.stringify(S.history||{}));
+  [winner,...sorted].forEach(p=>{ if(!history[p]) history[p]={years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[],gameWins:{}}; });
+  history[winner].wins=(history[winner].wins||0)+1;
+  podium.slice(1).forEach(p=>{ if(!history[p])history[p]={years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[],gameWins:{}}; history[p].podiums=(history[p].podiums||0)+1; });
+  if(lastPlace&&lastPlace!==winner){ if(!history[lastPlace])history[lastPlace]={years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[],gameWins:{}}; history[lastPlace].lastPlaces=(history[lastPlace].lastPlaces||0)+1; }
+  sorted.forEach(p=>{ if(!history[p])history[p]={years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[],gameWins:{}}; history[p].years=(history[p].years||0)+1; if(!history[p].yearsAttended)history[p].yearsAttended=[]; if(!history[p].yearsAttended.includes(S.tourneyYear))history[p].yearsAttended.push(S.tourneyYear); });
+  await fbUpdate('tournaments/'+tourneyId, {history, tournamentFinalized:true});
+  el('declare-status').innerHTML=`<div class="alert alert-success" style="margin-top:8px">🏆 Champion: <strong>${winner}</strong> · 🪣 Last place: <strong>${lastPlace}</strong><br>History saved & badges updated for all players!</div>`;
+};
+
+// ── BADGES ───────────────────────────────────────────────
+function getPlayerBadges(name){
+  const h=(S.history&&S.history[name])||{years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[],gameWins:{}};
+  const badges=[], yr=S.tourneyYear||2025, fy=S.foundingYear||2019, totalYears=yr-fy+1;
+  if(h.years===1) badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
+  if(h.years>=1) badges.push({cls:'badge-years',icon:'📅',text:h.years+' year'+(h.years!==1?'s':'')});
+  if(h.years>=totalYears&&totalYears>=2) badges.push({cls:'badge-everyyear',icon:'🔥',text:'Every Year'});
+  if(h.wins===1) badges.push({cls:'badge-champ',icon:'👑',text:'Champion'});
+  if(h.wins>=2) badges.push({cls:'badge-dynasty',icon:'🔱',text:'Dynasty ('+h.wins+'x)'});
+  if(h.podiums>=1&&h.wins===0) badges.push({cls:'badge-podium',icon:'🥉',text:'Podium x'+h.podiums});
+  if(h.years>=5) badges.push({cls:'badge-veteran',icon:'⭐',text:'Veteran'});
+  if(h.yearsAttended&&h.yearsAttended.includes(fy)) badges.push({cls:'badge-founder',icon:'🏛️',text:'Founding Member'});
+  if(h.years>=3&&h.wins===0&&h.podiums===0) badges.push({cls:'badge-winless',icon:'😅',text:'Winless Wonder'});
+  if(h.lastPlaces&&h.lastPlaces>=1) badges.push({cls:'badge-lastplace',icon:'🪣',text:'Last Place'+(h.lastPlaces>1?' x'+h.lastPlaces:'')});
+  if(h.gameWins) Object.entries(h.gameWins).forEach(e=>{ if(e[1]>=2) badges.push({cls:'badge-specialist',icon:'🎯',text:e[0]+' Specialist'}); });
+  (S.customBadges||[]).filter(b=>b.player===name).forEach(b=>{ badges.push({cls:'badge-custom',icon:'✨',text:b.name}); });
+  return badges;
+}
+function renderBadges(badges){ if(!badges.length) return'<span style="font-size:11px;color:#aaa">No badges yet</span>'; return badges.map(b=>`<span class="badge ${b.cls}">${b.icon} ${b.text}</span>`).join(''); }
+
+// ── HISTORY ADMIN ────────────────────────────────────────
+function renderHistoryList(){
+  const e=el('history-list'); if(!e) return;
+  if(!(S.players||[]).length){ e.innerHTML='<p style="font-size:12px;color:#aaa">Add players first.</p>'; return; }
+  e.innerHTML=(S.players||[]).map(p=>{
+    const h=(S.history&&S.history[p])||{years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[]};
+    return`<div style="padding:10px 0;border-bottom:1px solid #f0ede6">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+        <span style="font-size:13px;font-weight:600">${p}</span>
+        <button class="btn btn-sm" onclick="openEditHistory('${esc(p)}')" style="width:auto">Edit</button>
+      </div>
+      <div style="font-size:11px;color:#888;margin-bottom:5px">${h.years} yrs · ${h.wins} wins · ${h.podiums} podiums · ${h.lastPlaces||0} last places</div>
+      <div class="badges-wrap">${renderBadges(getPlayerBadges(p))}</div>
+    </div>`;
+  }).join('');
+}
+window.openEditHistory = (name)=>{
+  const h=(S.history&&S.history[name])||{years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[],gameWins:{}};
+  el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-title"><span>Edit history: ${name}</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
+    <div class="sec-label">Years attended (total)</div><input type="number" id="eh-years" value="${h.years}" min="0">
+    <div class="sec-label">Tournament wins</div><input type="number" id="eh-wins" value="${h.wins}" min="0">
+    <div class="sec-label">Podium finishes (top 3, excl. wins)</div><input type="number" id="eh-podiums" value="${h.podiums}" min="0">
+    <div class="sec-label">Last place finishes</div><input type="number" id="eh-last" value="${h.lastPlaces||0}" min="0">
+    <div class="sec-label">Years list (comma-separated, e.g. 2019,2020,2022)</div><input type="text" id="eh-ylist" value="${(h.yearsAttended||[]).join(',')}">
+    <div class="sec-label">Game specialisms (game=wins, e.g. Cornhole=3)</div><input type="text" id="eh-gw" value="${Object.entries(h.gameWins||{}).map(e=>e[0]+'='+e[1]).join(',')}">
+    <div class="divider"></div>
+    <button class="btn btn-primary" onclick="saveHistory('${esc(name)}')">✓ Save</button>
+  </div></div>`;
+};
+window.saveHistory = async (name)=>{
+  const years=parseInt(el('eh-years').value)||0, wins=parseInt(el('eh-wins').value)||0;
+  const podiums=parseInt(el('eh-podiums').value)||0, lastPlaces=parseInt(el('eh-last').value)||0;
+  const ylist=el('eh-ylist').value.split(',').map(y=>parseInt(y.trim())).filter(Boolean);
+  const gameWins={}; el('eh-gw').value.split(',').forEach(part=>{ const kv=part.split('='); if(kv.length===2&&kv[0].trim()) gameWins[kv[0].trim()]=parseInt(kv[1])||0; });
+  const history=JSON.parse(JSON.stringify(S.history||{}));
+  history[name]={years,wins,podiums,lastPlaces,yearsAttended:ylist,gameWins};
+  await fbUpdate('tournaments/'+tourneyId, {history});
+  closeModal();
+};
+window.openAddHistoryPlayer = ()=>{
+  el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-title"><span>Add player history</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
+    <div class="sec-label">Player name</div><input type="text" id="ahp-name" placeholder="Name">
+    <div class="sec-label">Years attended</div><input type="number" id="ahp-years" value="0" min="0">
+    <div class="sec-label">Wins</div><input type="number" id="ahp-wins" value="0" min="0">
+    <div class="sec-label">Podiums</div><input type="number" id="ahp-podiums" value="0" min="0">
+    <div class="divider"></div>
+    <button class="btn btn-primary" onclick="saveNewHistory()">+ Add</button>
+  </div></div>`;
+};
+window.saveNewHistory = async ()=>{
+  const name=el('ahp-name').value.trim(); if(!name){ alert('Enter a name.'); return; }
+  const history=JSON.parse(JSON.stringify(S.history||{}));
+  history[name]={years:parseInt(el('ahp-years').value)||0,wins:parseInt(el('ahp-wins').value)||0,podiums:parseInt(el('ahp-podiums').value)||0,lastPlaces:0,yearsAttended:[],gameWins:{}};
+  const players=[...(S.players||[])];
+  if(!players.includes(name)) players.push(name);
+  await fbUpdate('tournaments/'+tourneyId, {history,players});
+  closeModal();
+};
+window.closeModal = ()=>{ el('modal-area').innerHTML=''; };
+window.addCustomBadge = async ()=>{
+  const name=el('custom-badge-name').value.trim(), player=el('custom-badge-player').value;
+  if(!name||!player){ alert('Enter badge name and select a player.'); return; }
+  const cb=[...(S.customBadges||[]),{name,player}];
+  await fbUpdate('tournaments/'+tourneyId,{customBadges:cb});
+  el('custom-badge-name').value=''; el('custom-badge-player').value='';
+};
+window.removeCustomBadge = async (i)=>{
+  const cb=(S.customBadges||[]).filter((_,idx)=>idx!==i);
+  await fbUpdate('tournaments/'+tourneyId,{customBadges:cb});
+};
+function renderCustomBadges(){
+  const e=el('custom-badges-list'); if(!e) return;
+  if(!(S.customBadges||[]).length){ e.innerHTML='<p style="font-size:12px;color:#aaa">No custom badges yet.</p>'; return; }
+  e.innerHTML=(S.customBadges||[]).map((b,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0ede6"><span class="badge badge-custom">✨ ${b.name}</span><span style="flex:1;font-size:12px;color:#888">→ ${b.player}</span><button class="btn btn-sm btn-danger" onclick="removeCustomBadge(${i})" style="width:auto">✕</button></div>`).join('');
+}
+function renderCustomBadgePlayerSelect(){
+  const sel=el('custom-badge-player'); if(!sel) return;
+  sel.innerHTML='<option value="">— assign to player —</option>'+(S.players||[]).map(p=>`<option value="${esc(p)}">${p}</option>`).join('');
+}
+
+// ── PLAYER VIEW ──────────────────────────────────────────
+function renderPlayerView(){
+  showView('player');
+  el('player-welcome-name').textContent=localName;
+  el('player-tourney-label').textContent=S.tourneyName+' '+S.tourneyYear;
+  el('player-avatar').textContent=initials(localName);
+  el('player-own-badges').innerHTML=renderBadges(getPlayerBadges(localName));
+  renderRankingList();
+  showPlayerTab(S._pt||'rank');
+}
+function renderRankingList(){
+  const e=el('ranking-drag-list');
+  const others=(S.players||[]).filter(p=>p!==localName);
+  if(!others.length){ e.innerHTML='<p style="font-size:12px;color:#aaa">No other players yet. Check back soon.</p>'; return; }
+  let ranked=(S.rankings&&S.rankings[localName])||others.slice();
+  ranked=ranked.filter(p=>others.includes(p));
+  others.forEach(p=>{ if(!ranked.includes(p)) ranked.push(p); });
+  e.innerHTML=ranked.map((p,i)=>{
+    const badges=getPlayerBadges(p);
+    return`<div class="rank-item" draggable="true" data-player="${esc(p)}" ondragstart="dstart(event)" ondragover="dover(event)" ondrop="ddrop(event)" ondragleave="dleave(event)">
+      <span style="color:#ccc;font-size:18px">⠿</span>
+      <span style="width:20px;font-size:11px;color:#aaa;text-align:center">${i+1}</span>
+      <div class="avatar">${initials(p)}</div>
+      <div style="flex:1"><div style="font-size:13px;font-weight:500">${p}</div><div class="badges-wrap" style="margin-top:2px">${renderBadges(badges)}</div></div>
+    </div>`;
+  }).join('');
+}
+let _ds=null;
+window.dstart=(e)=>{ _ds=e.currentTarget; e.currentTarget.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; };
+window.dover=(e)=>{ e.preventDefault(); if(e.currentTarget!==_ds) e.currentTarget.classList.add('drag-over'); };
+window.dleave=(e)=>{ e.currentTarget.classList.remove('drag-over'); };
+window.ddrop=(e)=>{
+  e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+  if(!_ds||_ds===e.currentTarget) return;
+  const list=el('ranking-drag-list'), si=Array.from(list.children).indexOf(_ds), ti=Array.from(list.children).indexOf(e.currentTarget);
+  if(si<ti) e.currentTarget.after(_ds); else e.currentTarget.before(_ds);
+  _ds.classList.remove('dragging');
+  Array.from(list.children).forEach((el2,i)=>{ const sp=el2.querySelectorAll('span')[0]; if(sp) sp.textContent=i+1; });
+};
+window.submitRankings = async ()=>{
+  const items=Array.from(el('ranking-drag-list').querySelectorAll('.rank-item'));
+  const ranked=items.map(e=>e.dataset.player);
+  const rankings=JSON.parse(JSON.stringify(S.rankings||{}));
+  rankings[localName]=ranked;
+  await fbUpdate('tournaments/'+tourneyId,{rankings});
+  el('rank-submit-msg').innerHTML='<div class="alert alert-success" style="margin-top:8px">✓ Rankings submitted! The host will see your ranking.</div>';
+};
+function renderMyTeams(){
+  const e=el('my-teams-list'); if(!e) return;
+  if(!S.rankingsLocked){ e.innerHTML='<p style="font-size:12px;color:#aaa">Teams appear once the host locks rankings.</p>'; return; }
+  const rows=(S.games||[]).map(g=>{
+    const teams=(S.teams&&S.teams[g.id])||[];
+    const myTeam=teams.find(t=>t.p1===localName||t.p2===localName); if(!myTeam) return'';
+    const partner=myTeam.p1===localName?myTeam.p2:myTeam.p1;
+    const pts=S.points&&S.points[g.id]&&S.points[g.id][localName];
+    return`<div class="player-row">
+      <div class="avatar" style="background:#E1F5EE;color:#085041">🛡</div>
+      <div style="flex:1"><div style="font-size:13px;font-weight:600">${g.name}</div>
+      <div style="font-size:11px;color:#888">${partner?'With '+partner:'Solo'} · ${fmtL[g.format]||g.format}</div></div>
+      ${pts!==undefined?`<span style="background:#EEEDFE;color:#3C3489;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700">${pts}pts</span>`:''}
+    </div>`;
+  }).join('');
+  e.innerHTML=rows||'<p style="font-size:12px;color:#aaa">No games yet.</p>';
+}
+function renderPlayerLB(){
+  const e=el('player-lb-display'); if(!e) return;
+  const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
+  if(!sorted.length){ e.innerHTML='<p style="font-size:12px;color:#aaa">No data yet.</p>'; return; }
+  e.innerHTML=sorted.map((p,i)=>`<div class="lb-row">
+    <div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div>
+    <div class="lb-name">${p}${p===localName?' <span style="font-size:10px;color:#534AB7;font-weight:700">(you)</span>':''}</div>
+    <div class="lb-pts">${getTotalPts(p)}</div>
+  </div>`).join('');
+}
+function renderAllPlayerBadges(){
+  const e=el('all-player-badges'); if(!e) return;
+  if(!(S.players||[]).length){ e.innerHTML='<p style="font-size:12px;color:#aaa">No players yet.</p>'; return; }
+  e.innerHTML=(S.players||[]).map(p=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede6">
+    <div style="font-size:13px;font-weight:600;margin-bottom:4px">${p}</div>
+    <div class="badges-wrap">${renderBadges(getPlayerBadges(p))}</div>
+  </div>`).join('');
+}
+
+// expose phase/tab switchers globally
+window.showAdminPhase = showAdminPhase;
+window.showPlayerTab  = showPlayerTab;
+</script>
+
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f4f0;color:#1a1a1a;min-height:100vh}
@@ -19,13 +916,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 input,select{width:100%;padding:9px 11px;border:1px solid #ddd;border-radius:9px;font-size:14px;font-family:inherit;color:#1a1a1a;background:#fff;margin-bottom:8px;transition:border .15s}
 input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px rgba(127,119,221,.1)}
 .btn{width:100%;padding:10px;border:1px solid #ddd;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;background:#fff;color:#1a1a1a;transition:all .15s;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:7px}
-.btn:hover{background:#f5f4f0}
-.btn:active{transform:scale(.98)}
-.btn-primary{background:#7F77DD;color:#fff;border-color:#7F77DD}
-.btn-primary:hover{background:#534AB7;border-color:#534AB7}
+.btn:hover{background:#f5f4f0}.btn:active{transform:scale(.98)}
+.btn-primary{background:#7F77DD;color:#fff;border-color:#7F77DD}.btn-primary:hover{background:#534AB7;border-color:#534AB7}
 .btn-sm{padding:5px 10px;font-size:11px;width:auto;margin-bottom:0}
-.btn-danger{border-color:#f0a0a0;color:#c0392b}
-.btn-danger:hover{background:#fdf0f0}
+.btn-danger{border-color:#f0a0a0;color:#c0392b}.btn-danger:hover{background:#fdf0f0}
 .btn-success{background:#EAF3DE;color:#27500A;border-color:#97C459}
 .player-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0ede6}
 .player-row:last-child{border-bottom:none}
@@ -73,8 +967,6 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .si-sm{width:64px!important;margin:0!important;padding:5px 7px!important;font-size:13px!important}
 .hidden{display:none}
 .rnd-hdr{font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.6px;margin:11px 0 5px}
-
-/* Badge styles */
 .badges-wrap{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;border:1px solid transparent}
 .badge-years{background:#EEF2FF;color:#3730a3;border-color:#c7d2fe}
@@ -89,8 +981,6 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .badge-lastplace{background:#FEF2F2;color:#991b1b;border-color:#fca5a5}
 .badge-everyyear{background:#FFF7ED;color:#7c2d12;border-color:#fb923c}
 .badge-firsttimer{background:#F0F9FF;color:#0c4a6e;border-color:#7dd3fc}
-
-/* Player history modal */
 .modal-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:100;padding:1rem}
 .modal{background:#fff;border-radius:14px;padding:1.2rem;width:100%;max-width:400px;max-height:80vh;overflow-y:auto}
 .modal-title{font-size:16px;font-weight:700;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
@@ -98,10 +988,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 </head>
 <body>
 <div class="app">
-  <div class="logo">
-    <h1>⚜️ Gentleman's Games</h1>
-    <p>Annual tournament organizer</p>
-  </div>
+  <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Annual tournament organizer</p></div>
 
   <div id="view-home">
     <div class="card">
@@ -109,7 +996,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <input type="text" id="tourney-name" placeholder="Tournament name (e.g. Summer Classic 2025)">
       <div class="sec-label">Tournament year</div>
       <input type="number" id="tourney-year" placeholder="e.g. 2025" value="2025">
-      <div class="sec-label">Founding year (for founding member badge)</div>
+      <div class="sec-label">Founding year</div>
       <input type="number" id="founding-year" placeholder="e.g. 2019" value="2019">
       <div class="sec-label">Admin code (keep secret)</div>
       <input type="text" id="admin-code" placeholder="4–6 character code" maxlength="6">
@@ -131,7 +1018,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
   <div id="view-admin" class="hidden">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.8rem">
       <div style="font-size:13px;font-weight:600;color:#534AB7" id="admin-tourney-label"></div>
-      <button class="btn btn-sm" onclick="goHome()" style="width:auto;font-size:11px">← Home</button>
+      <button class="btn btn-sm" onclick="goHome()" style="width:auto">← Home</button>
     </div>
     <div class="phase-tabs">
       <div class="phase-tab active" data-phase="setup" onclick="showAdminPhase('setup')">Setup</div>
@@ -140,7 +1027,6 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div class="phase-tab" data-phase="board" onclick="showAdminPhase('board')">Leaderboard</div>
       <div class="phase-tab" data-phase="history" onclick="showAdminPhase('history')">History</div>
     </div>
-
     <div id="admin-setup">
       <div class="card">
         <div class="card-title">👥 Players <span style="background:#EEEDFE;color:#3C3489;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700" id="player-count-badge">0</span></div>
@@ -151,7 +1037,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       </div>
       <div class="card">
         <div class="card-title">📤 Player join code</div>
-        <div class="alert alert-info">Share this with players so they can submit rankings from their own phones before the day.</div>
+        <div class="alert alert-info">Share this with players — they open the same URL on their phone and join with this code.</div>
         <div class="join-code" id="join-code-display">—</div>
         <div id="ranking-progress" style="font-size:11px;color:#888;margin-bottom:8px;text-align:center"></div>
         <button class="btn btn-primary" onclick="lockRankings()">🔒 Lock rankings & generate teams</button>
@@ -159,7 +1045,6 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       </div>
       <div id="teams-preview-area"></div>
     </div>
-
     <div id="admin-games" class="hidden">
       <div class="card">
         <div class="card-title">+ Add game</div>
@@ -201,7 +1086,6 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
         <div id="games-list"><p style="font-size:12px;color:#aaa">No games yet.</p></div>
       </div>
     </div>
-
     <div id="admin-scores" class="hidden">
       <div class="card">
         <div class="card-title">🎯 Select game to score</div>
@@ -209,7 +1093,6 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       </div>
       <div id="score-panel"></div>
     </div>
-
     <div id="admin-board" class="hidden">
       <div class="card">
         <div class="card-title">🏅 Overall leaderboard</div>
@@ -227,27 +1110,25 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       </div>
       <div class="card">
         <div class="card-title">🏆 Declare tournament champion</div>
-        <div class="alert alert-warn" style="font-size:11px">Do this at the end of the day. It will save results to history and award badges.</div>
+        <div class="alert alert-warn" style="font-size:11px">Do this at the end of the day. Saves results to history and awards all badges automatically.</div>
         <button class="btn btn-primary" onclick="declareTournamentWinner()">🏆 Finalize tournament & save to history</button>
         <div id="declare-status"></div>
       </div>
     </div>
-
     <div id="admin-history" class="hidden">
       <div class="card">
         <div class="card-title">📜 Player history & badges</div>
-        <div class="alert alert-info" style="font-size:11px">Manage each player's all-time record. Admin manually adjusts years played and wins for returning players.</div>
+        <div class="alert alert-info" style="font-size:11px">Manage returning players' all-time records. History carries forward each year automatically when you finalize.</div>
         <div id="history-list"></div>
         <div class="divider"></div>
         <button class="btn btn-sm btn-primary" onclick="openAddHistoryPlayer()" style="width:auto">+ Add player history</button>
       </div>
       <div class="card">
         <div class="card-title">⚙️ Custom badges</div>
-        <div class="sec-label">Add a custom badge (shown to all players)</div>
+        <div class="sec-label">Badge name</div>
         <input type="text" id="custom-badge-name" placeholder="e.g. Commissioner, Lucky Duck">
-        <select id="custom-badge-player">
-          <option value="">— assign to player —</option>
-        </select>
+        <div class="sec-label">Assign to player</div>
+        <select id="custom-badge-player"><option value="">— select player —</option></select>
         <button class="btn btn-sm btn-primary" onclick="addCustomBadge()" style="width:auto">+ Add badge</button>
         <div class="divider"></div>
         <div id="custom-badges-list"></div>
@@ -258,7 +1139,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
   <div id="view-player" class="hidden">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.8rem">
       <div style="font-size:13px;font-weight:600;color:#534AB7" id="player-tourney-label"></div>
-      <button class="btn btn-sm" onclick="goHome()" style="width:auto;font-size:11px">← Home</button>
+      <button class="btn btn-sm" onclick="goHome()" style="width:auto">← Home</button>
     </div>
     <div class="card">
       <div style="display:flex;align-items:center;gap:10px">
@@ -277,7 +1158,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     <div id="pview-rank">
       <div class="card">
         <div class="card-title">↕️ Rank players — drag to reorder</div>
-        <div class="alert alert-info" style="font-size:11px">1 = best, last = weakest. Used to build balanced teams each game.</div>
+        <div class="alert alert-info" style="font-size:11px">1 = best, last = weakest. Drag to reorder then hit submit. The host uses everyone's rankings to build balanced teams.</div>
         <div id="ranking-drag-list"></div>
         <div class="divider"></div>
         <button class="btn btn-primary" onclick="submitRankings()">✓ Submit rankings</button>
@@ -301,713 +1182,12 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       </div>
     </div>
   </div>
-
   <div id="modal-area"></div>
 </div>
-
 <script>
-var S={tourneyName:'',tourneyYear:2025,foundingYear:2018,joinCode:'',adminCode:'',players:[],rankings:{},rankingsLocked:false,games:[],teams:{},scores:{},bs:{},points:{},history:{},customBadges:[],tournamentFinalized:false,currentView:'home',playerName:'',_ap:'setup',_pt:'rank'};
-
-function save(){try{localStorage.setItem('gg5',JSON.stringify(S));}catch(e){}}
-function load(){try{var d=localStorage.getItem('gg5');if(d)S=JSON.parse(d);}catch(e){}}
-function uid(){return Math.random().toString(36).substr(2,6).toUpperCase();}
-function esc(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
-function initials(n){return n.split(' ').map(function(w){return w[0]||'';}).join('').toUpperCase().substr(0,2);}
-function teamLabel(t){if(!t)return'BYE';return t.p2?t.p1+' & '+t.p2:t.p1;}
-function ordinal(n){return n+(n===1?'st':n===2?'nd':n===3?'rd':'th');}
-
-var fmtL={'single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools','round-robin':'Round robin','pool-playoff':'Pools+playoff','score-low':'Low score','score-high':'High score','multi-round-high':'Multi-round hi','multi-round-low':'Multi-round lo','h2h-points':'H2H points','h2h-wins':'H2H wins'};
-
-load();
-if(S.currentView==='admin')showAdmin();
-else if(S.currentView==='player')showPlayer();
-
 document.getElementById('game-format').addEventListener('change',function(){
   document.getElementById('rounds-option').classList.toggle('hidden',this.value!=='multi-round-high'&&this.value!=='multi-round-low');
 });
-
-/* ── BADGE ENGINE ── */
-function getPlayerBadges(name){
-  var h=S.history[name]||{years:0,wins:0,podiums:0,gameWins:{}};
-  var badges=[];
-  var yr=S.tourneyYear||2025;
-  var fy=S.foundingYear||2019;
-  // Total years tournaments have run (2019 to current year inclusive)
-  var totalYears=yr-fy+1;
-
-  // First timer — only 1 year attended
-  if(h.years===1) badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
-  // Years attended (show if more than 1)
-  if(h.years>=1) badges.push({cls:'badge-years',icon:'📅',text:h.years+' year'+(h.years!==1?'s':'')});
-  // Every year — attended all tournaments since founding
-  if(h.years>=totalYears&&totalYears>=2) badges.push({cls:'badge-everyyear',icon:'🔥',text:'Every Year'});
-  // Champion / Dynasty
-  if(h.wins===1) badges.push({cls:'badge-champ',icon:'👑',text:'Champion'});
-  if(h.wins>=2) badges.push({cls:'badge-dynasty',icon:'🔱',text:'Dynasty ('+h.wins+'x)'});
-  // Podium (top 3 but never won)
-  if(h.podiums>=1&&h.wins===0) badges.push({cls:'badge-podium',icon:'🥉',text:'Podium x'+h.podiums});
-  // Veteran — 5+ years
-  if(h.years>=5) badges.push({cls:'badge-veteran',icon:'⭐',text:'Veteran'});
-  // Founding member — attended the first year (2019)
-  if(h.yearsAttended&&h.yearsAttended.includes(fy)) badges.push({cls:'badge-founder',icon:'🏛️',text:'Founding Member'});
-  // Winless wonder — 3+ years, never won or podiumed
-  if(h.years>=3&&h.wins===0&&h.podiums===0) badges.push({cls:'badge-winless',icon:'😅',text:'Winless Wonder'});
-  // Last place — tracked via lastPlaces count
-  if(h.lastPlaces&&h.lastPlaces>=1) badges.push({cls:'badge-lastplace',icon:'🪣',text:'Last Place'+(h.lastPlaces>1?' x'+h.lastPlaces:'')});
-
-  if(h.gameWins){
-    Object.entries(h.gameWins).forEach(function(e){
-      if(e[1]>=2) badges.push({cls:'badge-specialist',icon:'🎯',text:e[0]+' Specialist'});
-    });
-  }
-
-  (S.customBadges||[]).filter(function(b){return b.player===name;}).forEach(function(b){
-    badges.push({cls:'badge-custom',icon:'✨',text:b.name});
-  });
-
-  return badges;
-}
-function renderBadges(badges){
-  if(!badges.length)return'<span style="font-size:11px;color:#aaa">No badges yet</span>';
-  return badges.map(function(b){return'<span class="badge '+b.cls+'">'+b.icon+' '+b.text+'</span>';}).join('');
-}
-
-/* ── HISTORY ── */
-function renderHistoryList(){
-  var el=document.getElementById('history-list');if(!el)return;
-  if(!S.players.length){el.innerHTML='<p style="font-size:12px;color:#aaa">Add players first.</p>';return;}
-  el.innerHTML=S.players.map(function(p){
-    var h=S.history[p]||{years:0,wins:0,podiums:0,yearsAttended:[]};
-    var badges=getPlayerBadges(p);
-    return'<div style="padding:10px 0;border-bottom:1px solid #f0ede6"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px"><span style="font-size:13px;font-weight:600">'+p+'</span><button class="btn btn-sm" onclick="openEditHistory(\''+esc(p)+'\')" style="width:auto">Edit</button></div><div style="font-size:11px;color:#888;margin-bottom:5px">'+h.years+' years attended · '+h.wins+' wins · '+h.podiums+' podiums</div><div class="badges-wrap">'+renderBadges(badges)+'</div></div>';
-  }).join('');
-}
-function openEditHistory(name){
-  var h=S.history[name]||{years:0,wins:0,podiums:0,yearsAttended:[]};
-  var modal=document.getElementById('modal-area');
-  modal.innerHTML='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-title"><span>Edit history: '+name+'</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div><div class="sec-label">Years attended (total count)</div><input type="number" id="eh-years" value="'+h.years+'" min="0"><div class="sec-label">Tournament wins</div><input type="number" id="eh-wins" value="'+h.wins+'" min="0"><div class="sec-label">Podium finishes (top 3, not including wins)</div><input type="number" id="eh-podiums" value="'+h.podiums+'" min="0"><div class="sec-label">Last place finishes</div><input type="number" id="eh-last" value="'+(h.lastPlaces||0)+'" min="0"><div class="sec-label">Years attended (comma-separated, e.g. 2019,2020,2022)</div><input type="text" id="eh-ylist" value="'+(h.yearsAttended||[]).join(',')+'"><div class="sec-label">Game specialisms (game=wins, comma-separated)</div><input type="text" id="eh-gw" placeholder="e.g. Cornhole=3,Bocce=2" value="'+Object.entries(h.gameWins||{}).map(function(e){return e[0]+'='+e[1];}).join(',')+'"><div class="divider"></div><button class="btn btn-primary" onclick="saveHistory(\''+esc(name)+'\')">✓ Save</button></div></div>';
-}
-function saveHistory(name){
-  var years=parseInt(document.getElementById('eh-years').value)||0;
-  var wins=parseInt(document.getElementById('eh-wins').value)||0;
-  var podiums=parseInt(document.getElementById('eh-podiums').value)||0;
-  var ylist=document.getElementById('eh-ylist').value.split(',').map(function(y){return parseInt(y.trim());}).filter(Boolean);
-  var gwRaw=document.getElementById('eh-gw').value;
-  var gameWins={};
-  gwRaw.split(',').forEach(function(part){var kv=part.split('=');if(kv.length===2&&kv[0].trim())gameWins[kv[0].trim()]=parseInt(kv[1])||0;});
-  var lastPlaces=parseInt(document.getElementById('eh-last').value)||0;
-  S.history[name]={years:years,wins:wins,podiums:podiums,lastPlaces:lastPlaces,yearsAttended:ylist,gameWins:gameWins};
-  save();closeModal();renderHistoryList();
-}
-function openAddHistoryPlayer(){
-  var modal=document.getElementById('modal-area');
-  modal.innerHTML='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-title"><span>Add player history</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div><div class="sec-label">Player name</div><input type="text" id="ahp-name" placeholder="Name"><div class="sec-label">Years attended</div><input type="number" id="ahp-years" value="0" min="0"><div class="sec-label">Wins</div><input type="number" id="ahp-wins" value="0" min="0"><div class="sec-label">Podiums</div><input type="number" id="ahp-podiums" value="0" min="0"><div class="divider"></div><button class="btn btn-primary" onclick="saveNewHistory()">+ Add</button></div></div>';
-}
-function saveNewHistory(){
-  var name=document.getElementById('ahp-name').value.trim();
-  if(!name){alert('Enter a name.');return;}
-  S.history[name]={years:parseInt(document.getElementById('ahp-years').value)||0,wins:parseInt(document.getElementById('ahp-wins').value)||0,podiums:parseInt(document.getElementById('ahp-podiums').value)||0,yearsAttended:[],gameWins:{}};
-  if(!S.players.includes(name)){S.players.push(name);}
-  save();closeModal();renderHistoryList();renderPlayerList();
-}
-function closeModal(){document.getElementById('modal-area').innerHTML='';}
-
-function addCustomBadge(){
-  var name=document.getElementById('custom-badge-name').value.trim();
-  var player=document.getElementById('custom-badge-player').value;
-  if(!name||!player){alert('Enter badge name and select a player.');return;}
-  if(!S.customBadges)S.customBadges=[];
-  S.customBadges.push({name:name,player:player});
-  document.getElementById('custom-badge-name').value='';
-  document.getElementById('custom-badge-player').value='';
-  save();renderCustomBadges();
-}
-function removeCustomBadge(i){
-  S.customBadges.splice(i,1);save();renderCustomBadges();
-}
-function renderCustomBadges(){
-  var el=document.getElementById('custom-badges-list');if(!el)return;
-  if(!S.customBadges||!S.customBadges.length){el.innerHTML='<p style="font-size:12px;color:#aaa">No custom badges yet.</p>';return;}
-  el.innerHTML=S.customBadges.map(function(b,i){
-    return'<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0ede6"><span class="badge badge-custom">✨ '+b.name+'</span><span style="flex:1;font-size:12px;color:#888">→ '+b.player+'</span><button class="btn btn-sm btn-danger" onclick="removeCustomBadge('+i+')" style="width:auto">✕</button></div>';
-  }).join('');
-}
-function renderCustomBadgePlayerSelect(){
-  var sel=document.getElementById('custom-badge-player');if(!sel)return;
-  sel.innerHTML='<option value="">— assign to player —</option>'+S.players.map(function(p){return'<option value="'+esc(p)+'">'+p+'</option>';}).join('');
-}
-
-function declareTournamentWinner(){
-  var sorted=S.players.slice().sort(function(a,b){return getTotalPts(b)-getTotalPts(a);});
-  if(!sorted.length){alert('No players.');return;}
-  var winner=sorted[0];
-  var lastPlace=sorted[sorted.length-1];
-  var podium=sorted.slice(0,3);
-  if(!S.history[winner])S.history[winner]={years:0,wins:0,podiums:0,yearsAttended:[],gameWins:{},lastPlaces:0};
-  S.history[winner].wins=(S.history[winner].wins||0)+1;
-  podium.slice(1).forEach(function(p){
-    if(!S.history[p])S.history[p]={years:0,wins:0,podiums:0,yearsAttended:[],gameWins:{},lastPlaces:0};
-    S.history[p].podiums=(S.history[p].podiums||0)+1;
-  });
-  // Track last place
-  if(lastPlace&&lastPlace!==winner){
-    if(!S.history[lastPlace])S.history[lastPlace]={years:0,wins:0,podiums:0,yearsAttended:[],gameWins:{},lastPlaces:0};
-    S.history[lastPlace].lastPlaces=(S.history[lastPlace].lastPlaces||0)+1;
-  }
-  S.players.forEach(function(p){
-    if(!S.history[p])S.history[p]={years:0,wins:0,podiums:0,yearsAttended:[],gameWins:{},lastPlaces:0};
-    S.history[p].years=(S.history[p].years||0)+1;
-    if(!S.history[p].yearsAttended)S.history[p].yearsAttended=[];
-    if(!S.history[p].yearsAttended.includes(S.tourneyYear))S.history[p].yearsAttended.push(S.tourneyYear);
-  });
-  S.tournamentFinalized=true;
-  save();
-  document.getElementById('declare-status').innerHTML='<div class="alert alert-success" style="margin-top:8px">🏆 Champion: <strong>'+winner+'</strong> · 🪣 Last place: <strong>'+lastPlace+'</strong><br>History saved & badges updated.</div>';
-}
-
-/* ── CORE APP ── */
-function createTournament(){
-  var n=document.getElementById('tourney-name').value.trim();
-  var c=document.getElementById('admin-code').value.trim();
-  var yr=parseInt(document.getElementById('tourney-year').value)||2025;
-  var fy=parseInt(document.getElementById('founding-year').value)||2018;
-  if(!n||!c){alert('Enter a name and admin code.');return;}
-  var prevHistory=S.history||{};
-  var prevCustom=S.customBadges||[];
-  S={tourneyName:n,tourneyYear:yr,foundingYear:fy,adminCode:c,joinCode:uid(),players:[],rankings:{},rankingsLocked:false,games:[],teams:{},scores:{},bs:{},points:{},history:prevHistory,customBadges:prevCustom,tournamentFinalized:false,currentView:'admin',playerName:'',_ap:'setup',_pt:'rank'};
-  save();showAdmin();
-}
-function adminLogin(){
-  var c=document.getElementById('admin-login-code').value.trim();
-  if(c!==S.adminCode){alert('Incorrect admin code.');return;}
-  S.currentView='admin';save();showAdmin();
-}
-function joinTournament(){
-  var code=document.getElementById('join-code-input').value.trim().toUpperCase();
-  var name=document.getElementById('join-name').value.trim();
-  if(!code||!name){alert('Enter code and name.');return;}
-  if(code!==S.joinCode){alert('Join code not found. Check with your host.');return;}
-  if(!S.players.includes(name)){S.players.push(name);save();}
-  S.playerName=name;S.currentView='player';save();showPlayer();
-}
-function goHome(){S.currentView='home';save();document.getElementById('view-home').classList.remove('hidden');document.getElementById('view-admin').classList.add('hidden');document.getElementById('view-player').classList.add('hidden');}
-
-function showAdmin(){
-  document.getElementById('view-home').classList.add('hidden');
-  document.getElementById('view-player').classList.add('hidden');
-  document.getElementById('view-admin').classList.remove('hidden');
-  if(!S.bs)S.bs={};if(!S.history)S.history={};if(!S.customBadges)S.customBadges=[];
-  document.getElementById('join-code-display').textContent=S.joinCode||'—';
-  document.getElementById('admin-tourney-label').textContent=S.tourneyName+' '+S.tourneyYear;
-  renderPlayerList();renderGames();renderSGS();renderLeaderboard();renderGPB();
-  showAdminPhase(S._ap||'setup');
-}
-function showPlayer(){
-  document.getElementById('view-home').classList.add('hidden');
-  document.getElementById('view-admin').classList.add('hidden');
-  document.getElementById('view-player').classList.remove('hidden');
-  document.getElementById('player-welcome-name').textContent=S.playerName;
-  document.getElementById('player-tourney-label').textContent=S.tourneyName+' '+S.tourneyYear;
-  document.getElementById('player-avatar').textContent=initials(S.playerName);
-  var myBadges=getPlayerBadges(S.playerName);
-  document.getElementById('player-own-badges').innerHTML=renderBadges(myBadges);
-  renderRankingList();showPlayerTab(S._pt||'rank');
-}
-function showAdminPhase(phase){
-  S._ap=phase;
-  ['setup','games','scores','board','history'].forEach(function(p){
-    document.getElementById('admin-'+p).classList.add('hidden');
-    document.querySelectorAll('.phase-tab').forEach(function(t){if(t.dataset.phase===p)t.classList.remove('active');});
-  });
-  document.getElementById('admin-'+phase).classList.remove('hidden');
-  document.querySelectorAll('.phase-tab').forEach(function(t){if(t.dataset.phase===phase)t.classList.add('active');});
-  if(phase==='scores'){renderSGS();loadScorePanel();}
-  if(phase==='board'){renderLeaderboard();renderGPB();updateStats();}
-  if(phase==='history'){renderHistoryList();renderCustomBadges();renderCustomBadgePlayerSelect();}
-}
-function showPlayerTab(tab){
-  S._pt=tab;
-  ['rank','teams','lb'].forEach(function(t){
-    document.getElementById('pview-'+t).classList.add('hidden');
-    document.getElementById('ptab-'+t).classList.remove('active');
-  });
-  document.getElementById('pview-'+tab).classList.remove('hidden');
-  document.getElementById('ptab-'+tab).classList.add('active');
-  if(tab==='teams')renderMyTeams();
-  if(tab==='lb'){renderPlayerLB();renderAllPlayerBadges();}
-}
-
-function addPlayer(){
-  var inp=document.getElementById('new-player-name');
-  var n=inp.value.trim();if(!n)return;
-  if(S.players.includes(n)){alert('Already added.');return;}
-  S.players.push(n);inp.value='';save();renderPlayerList();updateRankProg();
-}
-function removePlayer(n){
-  if(S.rankingsLocked){alert('Rankings locked.');return;}
-  S.players=S.players.filter(function(p){return p!==n;});
-  save();renderPlayerList();
-}
-function renderPlayerList(){
-  var el=document.getElementById('player-list');
-  document.getElementById('player-count-badge').textContent=S.players.length;
-  if(!S.players.length){el.innerHTML='<p style="font-size:12px;color:#aaa">No players yet.</p>';return;}
-  el.innerHTML=S.players.map(function(p){
-    var badges=getPlayerBadges(p);
-    return'<div class="player-row"><div class="avatar">'+initials(p)+'</div><div style="flex:1"><div style="font-size:13px;font-weight:600">'+p+'</div><div class="badges-wrap" style="margin-top:3px">'+renderBadges(badges)+'</div></div><span style="font-size:10px;color:#aaa;margin-right:6px">'+(S.rankings[p]?'<span style="color:#27500A;font-weight:600">✓ ranked</span>':'pending')+'</span><button class="btn btn-sm btn-danger" onclick="removePlayer(\''+esc(p)+'\')">✕</button></div>';
-  }).join('');
-}
-function updateRankProg(){
-  var el=document.getElementById('ranking-progress');if(!el)return;
-  var done=S.players.filter(function(p){return S.rankings[p];}).length;
-  el.textContent=done+' of '+S.players.length+' players have submitted rankings';
-}
-function getAvgRank(player){
-  var others=S.players.filter(function(p){return p!==player;});
-  var total=0,count=0;
-  others.forEach(function(r){var rk=S.rankings[r];if(rk){var i=rk.indexOf(player);if(i!==-1){total+=i+1;count++;}}});
-  return count?total/count:S.players.length;
-}
-function lockRankings(){
-  if(S.players.length<4){alert('Need at least 4 players.');return;}
-  S.rankingsLocked=true;genAllTeams();save();renderTeamsPreview();
-  document.getElementById('lock-status').innerHTML='<div class="alert alert-success">🔒 Locked! Teams generated for all games.</div>';
-  renderPlayerList();
-}
-function genAllTeams(){
-  S.games.forEach(function(g){S.teams[g.id]=makePairs();S.bs[g.id]={};initBracket(g);});
-}
-function makePairs(){
-  var sorted=S.players.slice().sort(function(a,b){return getAvgRank(a)-getAvgRank(b);});
-  var n=sorted.length,pairs=[],half=Math.floor(n/2);
-  for(var i=0;i<half;i++)pairs.push({id:uid(),p1:sorted[i],p2:sorted[n-1-i]});
-  if(n%2!==0)pairs.push({id:uid(),p1:sorted[half],p2:null});
-  return pairs;
-}
-function initStandings(teams){var st={};teams.forEach(function(t){st[t.id]={w:0,l:0,pf:0,pa:0};});return st;}
-function rrMatches(teams){var m=[];for(var i=0;i<teams.length;i++)for(var j=i+1;j<teams.length;j++)m.push({id:uid(),t1:teams[i],t2:teams[j],winner:null,score1:null,score2:null});return m;}
-function buildSE(teams){
-  var t=teams.slice(),rounds=[],r=0;
-  while(t.length>1){
-    var matches=[];
-    for(var i=0;i<t.length;i+=2){
-      if(i+1<t.length)matches.push({id:uid(),t1:t[i],t2:t[i+1],winner:null,score1:null,score2:null,round:r});
-      else matches.push({id:uid(),t1:t[i],t2:null,winner:t[i],score1:null,score2:null,round:r,bye:true});
-    }
-    rounds.push(matches);
-    t=matches.map(function(m){return m.bye?m.winner:null;}).filter(Boolean).concat(matches.filter(function(m){return!m.bye;}).map(function(){return null;}));
-    r++;
-  }
-  return rounds;
-}
-function initBracket(game){
-  var teams=S.teams[game.id]||[],b=S.bs[game.id]={},fmt=game.format;
-  if(fmt==='single-elim'){b.type='single-elim';b.rounds=buildSE(teams);}
-  else if(fmt==='double-elim'){b.type='double-elim';b.winners=buildSE(teams);b.losers=[];b.losersQ=[];}
-  else if(fmt==='two-pool'){
-    b.type='two-pool';var half=Math.ceil(teams.length/2);
-    b.poolA=teams.slice(0,half);b.poolB=teams.slice(half);
-    b.poolAM=rrMatches(b.poolA);b.poolBM=rrMatches(b.poolB);
-    b.poolASt=initStandings(b.poolA);b.poolBSt=initStandings(b.poolB);
-    b.crossover=[];b.crossoverBuilt=false;
-  }
-  else if(fmt==='round-robin'){b.type='round-robin';b.matches=rrMatches(teams);b.standings=initStandings(teams);}
-  else if(fmt==='pool-playoff'){
-    b.type='pool-playoff';
-    var gs=Math.max(2,Math.ceil(teams.length/Math.ceil(teams.length/3)));
-    b.pools=[];
-    for(var i=0;i<Math.ceil(teams.length/gs);i++){
-      var pool=teams.slice(i*gs,(i+1)*gs);
-      b.pools.push({name:'Pool '+String.fromCharCode(65+i),teams:pool,matches:rrMatches(pool),standings:initStandings(pool)});
-    }
-    b.knockout=[];b.knockoutBuilt=false;
-  }
-}
-function addGame(){
-  var name=document.getElementById('game-name-input').value.trim();
-  var format=document.getElementById('game-format').value;
-  var tiebreak=document.getElementById('game-tiebreak').value;
-  var rounds=(format==='multi-round-high'||format==='multi-round-low')?parseInt(document.getElementById('game-rounds').value)||2:1;
-  if(!name){alert('Enter a game name.');return;}
-  var g={id:uid(),name:name,format:format,tiebreak:tiebreak,rounds:rounds};
-  S.games.push(g);
-  if(S.rankingsLocked){S.teams[g.id]=makePairs();S.bs[g.id]={};initBracket(g);}
-  document.getElementById('game-name-input').value='';
-  save();renderGames();renderSGS();
-}
-function removeGame(id){
-  S.games=S.games.filter(function(g){return g.id!==id;});
-  delete S.teams[id];delete S.scores[id];delete S.points[id];delete S.bs[id];
-  save();renderGames();renderSGS();
-}
-function renderGames(){
-  var el=document.getElementById('games-list');
-  if(!S.games.length){el.innerHTML='<p style="font-size:12px;color:#aaa">No games yet.</p>';return;}
-  el.innerHTML=S.games.map(function(g){return'<div class="game-row"><div class="gname">'+g.name+'</div><span class="fbadge">'+(fmtL[g.format]||g.format)+'</span><button class="btn btn-sm btn-danger" onclick="removeGame(\''+g.id+'\')">✕</button></div>';}).join('');
-}
-function renderSGS(){
-  var sel=document.getElementById('score-game-select');
-  sel.innerHTML='<option value="">— choose a game —</option>'+S.games.map(function(g){return'<option value="'+g.id+'">'+g.name+' ('+(fmtL[g.format]||g.format)+')</option>';}).join('');
-}
-
-/* ── MATCH / STANDINGS HELPERS ── */
-function setResult(m,s1,s2){
-  if(isNaN(s1)||isNaN(s2)){alert('Enter scores for both teams.');return false;}
-  if(s1===s2){alert('Scores cannot be equal — no draws allowed.');return false;}
-  m.score1=s1;m.score2=s2;m.winner=s1>s2?m.t1:m.t2;return true;
-}
-function updSt(st,m){
-  if(!st[m.t1.id])st[m.t1.id]={w:0,l:0,pf:0,pa:0};
-  if(!st[m.t2.id])st[m.t2.id]={w:0,l:0,pf:0,pa:0};
-  st[m.t1.id].pf+=m.score1;st[m.t1.id].pa+=m.score2;
-  st[m.t2.id].pf+=m.score2;st[m.t2.id].pa+=m.score1;
-  if(m.score1>m.score2){st[m.t1.id].w++;st[m.t2.id].l++;}else{st[m.t2.id].w++;st[m.t1.id].l++;}
-}
-function sortBySt(teams,st){
-  return teams.slice().sort(function(a,b){
-    var sa=st[a.id]||{w:0,pf:0,pa:0},sb=st[b.id]||{w:0,pf:0,pa:0};
-    if(sb.w!==sa.w)return sb.w-sa.w;
-    return(sb.pf-sb.pa)-(sa.pf-sa.pa);
-  });
-}
-function stHTML(teams,st){
-  var h='<div class="st-row" style="font-weight:700"><span class="st-name">Team</span><span class="st-col">W</span><span class="st-col">L</span><span class="st-col">PF</span><span class="st-col">PA</span><span class="st-col hi">+/-</span></div>';
-  sortBySt(teams,st).forEach(function(t){
-    var s=st[t.id]||{w:0,l:0,pf:0,pa:0},diff=s.pf-s.pa;
-    h+='<div class="st-row"><span class="st-name">'+teamLabel(t)+'</span><span class="st-col">'+s.w+'</span><span class="st-col">'+s.l+'</span><span class="st-col">'+s.pf+'</span><span class="st-col">'+s.pa+'</span><span class="st-col hi">'+(diff>0?'+':'')+diff+'</span></div>';
-  });
-  return h;
-}
-function mHTML(gid,m,pfx,onSave){
-  if(m.bye)return'<div class="match-block"><div class="match-label">Bye</div><div class="match-team winner">'+teamLabel(m.t1)+' — advances</div></div>';
-  var w=m.winner?m.winner.id:null,t2=m.t2||{id:'tbd',p1:'TBD',p2:null};
-  return'<div class="match-block"><div class="match-team '+(w===m.t1.id?'winner':w?'loser':'')+'">'+teamLabel(m.t1)+'<input type="number" class="si-sm" id="'+pfx+'-'+m.id+'-1" value="'+(m.score1!==null?m.score1:'')+'" placeholder="Score"></div><div class="match-team '+(w===t2.id?'winner':w?'loser':'')+'">'+teamLabel(t2)+'<input type="number" class="si-sm" id="'+pfx+'-'+m.id+'-2" value="'+(m.score2!==null?m.score2:'')+'" placeholder="Score"></div>'+(m.winner?'<div style="font-size:10px;color:#27500A;margin-top:3px;font-weight:600">✓ '+teamLabel(m.winner)+' ('+m.score1+'–'+m.score2+')</div>':'<button class="btn btn-sm btn-success" style="margin-top:6px;width:100%" onclick="'+onSave+'">✓ Set result</button>')+'</div>';
-}
-
-/* ── SCORE PANEL ── */
-function loadScorePanel(){
-  renderSGS();
-  var gameId=document.getElementById('score-game-select').value,panel=document.getElementById('score-panel');
-  if(!gameId){panel.innerHTML='';return;}
-  var game=S.games.find(function(g){return g.id===gameId;});
-  if(!game){panel.innerHTML='';return;}
-  var teams=S.teams[gameId]||[];
-  if(!teams.length){panel.innerHTML='<div class="card"><div class="alert alert-warn">Lock rankings first to generate teams.</div></div>';return;}
-  if(!S.scores[gameId])S.scores[gameId]={};
-  if(!S.bs[gameId])S.bs[gameId]={};
-  var fmt=game.format;
-  if(fmt==='single-elim')renderSE(game,panel);
-  else if(fmt==='double-elim')renderDE(game,panel);
-  else if(fmt==='two-pool')renderTP(game,panel);
-  else if(fmt==='round-robin')renderRR(game,panel);
-  else if(fmt==='pool-playoff')renderPP(game,panel);
-  else renderScoreInput(game,teams,panel);
-}
-
-function renderSE(game,panel){
-  var b=S.bs[game.id];
-  if(!b||!b.rounds){panel.innerHTML='<div class="card"><div class="alert alert-warn">No bracket data.</div></div>';return;}
-  var rNames=['Round 1','Round 2','Quarterfinals','Semifinals','Final'];
-  var html='<div class="card"><div class="card-title">🏆 '+game.name+' — single elimination</div>';
-  b.rounds.forEach(function(round,ri){
-    html+='<div class="rnd-hdr">'+(rNames[ri]||'Round '+(ri+1))+'</div>';
-    round.forEach(function(m){html+=mHTML(game.id,m,'se-'+game.id,"saveSE('"+game.id+"','"+m.id+"',"+ri+")");});
-  });
-  var fin=S.scores[game.id]&&S.scores[game.id]._fin,allDone=b.rounds.every(function(r){return r.every(function(m){return m.winner||m.bye;});});
-  if(allDone&&!fin)html+='<div class="divider"></div><button class="btn btn-primary" onclick="finSE(\''+game.id+'\')">🏅 Finalize & award points</button>';
-  if(fin)html+='<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>';
-  html+='</div>';panel.innerHTML=html;
-}
-function saveSE(gid,mid,ri){
-  var b=S.bs[gid],m=b.rounds[ri].find(function(x){return x.id===mid;});if(!m)return;
-  var s1=parseFloat(document.getElementById('se-'+gid+'-'+mid+'-1').value),s2=parseFloat(document.getElementById('se-'+gid+'-'+mid+'-2').value);
-  if(!setResult(m,s1,s2))return;
-  if(ri+1<b.rounds.length){var nr=b.rounds[ri+1],mi=b.rounds[ri].indexOf(m),nm=nr[Math.floor(mi/2)];if(nm&&!nm.bye){if(mi%2===0)nm.t1=m.winner;else nm.t2=m.winner;}}
-  save();loadScorePanel();
-}
-function finSE(gid){
-  var b=S.bs[gid],teams=S.teams[gid]||[],n=teams.length,pl={};
-  b.rounds[b.rounds.length-1].forEach(function(m){if(m.winner){pl[m.winner.id]=1;var l=m.winner.id===m.t1.id?m.t2:m.t1;if(l)pl[l.id]=2;}});
-  if(b.rounds.length>1)b.rounds[b.rounds.length-2].forEach(function(m,i){if(m.winner){var l=m.winner.id===m.t1.id?m.t2:m.t1;if(l&&!pl[l.id])pl[l.id]=3+i;}});
-  teams.forEach(function(t,i){if(!pl[t.id])pl[t.id]=n-i;});
-  S.scores[gid]={_fin:true};awardPts(gid,pl,teams);save();renderLeaderboard();updateStats();loadScorePanel();
-}
-
-function renderDE(game,panel){
-  var b=S.bs[game.id];if(!b||!b.winners){panel.innerHTML='<div class="card"><div class="alert alert-warn">No bracket data.</div></div>';return;}
-  var html='<div class="card"><div class="card-title">🏆 '+game.name+' — double elimination</div><div class="alert alert-info" style="font-size:11px">One loss drops to losers bracket. Two losses = eliminated.</div><div class="rnd-hdr">Winners bracket</div>';
-  b.winners.forEach(function(round,ri){
-    html+='<div style="font-size:10px;color:#aaa;margin-bottom:3px">Round '+(ri+1)+'</div>';
-    round.forEach(function(m){if(!m.bye)html+=mHTML(game.id,m,'de-w-'+game.id,"saveDEW('"+game.id+"','"+m.id+"',"+ri+")");});
-  });
-  if(b.losers&&b.losers.length){
-    html+='<div class="rnd-hdr">Losers bracket</div>';
-    b.losers.forEach(function(round,ri){html+='<div style="font-size:10px;color:#aaa;margin-bottom:3px">L-Round '+(ri+1)+'</div>';round.forEach(function(m){html+=mHTML(game.id,m,'de-l-'+game.id,"saveDEL('"+game.id+"','"+m.id+"',"+ri+")");});});
-  }
-  if(b.grandFinal){html+='<div class="rnd-hdr">Grand final</div>';html+=mHTML(game.id,b.grandFinal,'de-gf-'+game.id,"saveDEGF('"+game.id+"')");}
-  var fin=S.scores[game.id]&&S.scores[game.id]._fin;
-  if(b.grandFinal&&b.grandFinal.winner&&!fin)html+='<div class="divider"></div><button class="btn btn-primary" onclick="finDE(\''+game.id+'\')">🏅 Finalize & award points</button>';
-  if(fin)html+='<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>';
-  html+='</div>';panel.innerHTML=html;
-}
-function saveDEW(gid,mid,ri){
-  var b=S.bs[gid],m=b.winners[ri].find(function(x){return x.id===mid;});if(!m)return;
-  var s1=parseFloat(document.getElementById('de-w-'+gid+'-'+mid+'-1').value),s2=parseFloat(document.getElementById('de-w-'+gid+'-'+mid+'-2').value);
-  if(!setResult(m,s1,s2))return;
-  var loser=m.winner.id===m.t1.id?m.t2:m.t1;
-  if(!b.losers)b.losers=[];if(!b.losersQ)b.losersQ=[];
-  b.losersQ.push(loser);
-  if(b.losersQ.length>=2){var a=b.losersQ.shift(),bq=b.losersQ.shift();b.losers.push([{id:uid(),t1:a,t2:bq,winner:null,score1:null,score2:null}]);}
-  var wDone=b.winners.every(function(r){return r.every(function(x){return x.winner||x.bye;});});
-  if(wDone&&!b.grandFinal){var wC=b.winners[b.winners.length-1][0].winner,lC=b.losers.length&&b.losers[b.losers.length-1][0].winner;if(wC)b.grandFinal={id:uid(),t1:wC,t2:lC||{id:uid(),p1:'L-Bracket Winner',p2:null},winner:null,score1:null,score2:null};}
-  save();loadScorePanel();
-}
-function saveDEL(gid,mid,ri){
-  var b=S.bs[gid],m=b.losers[ri].find(function(x){return x.id===mid;});if(!m)return;
-  var s1=parseFloat(document.getElementById('de-l-'+gid+'-'+mid+'-1').value),s2=parseFloat(document.getElementById('de-l-'+gid+'-'+mid+'-2').value);
-  if(!setResult(m,s1,s2))return;save();loadScorePanel();
-}
-function saveDEGF(gid){
-  var b=S.bs[gid],gf=b.grandFinal;
-  var s1=parseFloat(document.getElementById('de-gf-'+gid+'-'+gf.id+'-1').value),s2=parseFloat(document.getElementById('de-gf-'+gid+'-'+gf.id+'-2').value);
-  if(!setResult(gf,s1,s2))return;save();loadScorePanel();
-}
-function finDE(gid){
-  var b=S.bs[gid],teams=S.teams[gid]||[],pl={},gf=b.grandFinal;
-  if(gf&&gf.winner){pl[gf.winner.id]=1;var ru=gf.winner.id===gf.t1.id?gf.t2:gf.t1;if(ru)pl[ru.id]=2;}
-  teams.forEach(function(t,i){if(!pl[t.id])pl[t.id]=3+i;});
-  S.scores[gid]={_fin:true};awardPts(gid,pl,teams);save();renderLeaderboard();updateStats();loadScorePanel();
-}
-
-function renderTP(game,panel){
-  var b=S.bs[game.id];if(!b||b.type!=='two-pool'){panel.innerHTML='<div class="card"><div class="alert alert-warn">No pool data.</div></div>';return;}
-  var html='<div class="card"><div class="card-title">🏆 '+game.name+' — 2 pools</div>';
-  [{key:'A',teams:b.poolA,matches:b.poolAM,st:b.poolASt,idx:0},{key:'B',teams:b.poolB,matches:b.poolBM,st:b.poolBSt,idx:1}].forEach(function(pool){
-    html+='<div class="pool-header">Pool '+pool.key+'</div><div style="margin-bottom:8px">'+stHTML(pool.teams,pool.st)+'</div>';
-    pool.matches.forEach(function(m){html+=mHTML(game.id,m,'pool-'+game.id+'-'+pool.idx,"saveTPM('"+game.id+"','"+m.id+"','"+pool.key+"')");});
-    html+='<div class="divider"></div>';
-  });
-  var pd=b.poolAM.every(function(m){return m.winner;})&&b.poolBM.every(function(m){return m.winner;});
-  if(pd&&!b.crossoverBuilt)html+='<button class="btn btn-primary" onclick="buildCrossover(\''+game.id+'\')">🔀 Generate crossover finals</button>';
-  if(b.crossover&&b.crossover.length){
-    html+='<div class="pool-header teal" style="margin-top:8px">Crossover finals</div>';
-    b.crossover.forEach(function(m){html+='<div style="font-size:10px;color:#aaa;margin-bottom:3px">'+(m.label||'')+'</div>'+mHTML(game.id,m,'co-'+game.id,"saveCoMatch('"+game.id+"','"+m.id+"')");});
-  }
-  var cd=b.crossover&&b.crossover.length&&b.crossover.every(function(m){return m.winner;}),fin=S.scores[game.id]&&S.scores[game.id]._fin;
-  if(cd&&!fin)html+='<div class="divider"></div><button class="btn btn-primary" onclick="finTP(\''+game.id+'\')">🏅 Finalize & award points</button>';
-  if(fin)html+='<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>';
-  html+='</div>';panel.innerHTML=html;
-}
-function saveTPM(gid,mid,pk){
-  var b=S.bs[gid],matches=pk==='A'?b.poolAM:b.poolBM,st=pk==='A'?b.poolASt:b.poolBSt,idx=pk==='A'?0:1;
-  var m=matches.find(function(x){return x.id===mid;});if(!m)return;
-  var s1=parseFloat(document.getElementById('pool-'+gid+'-'+idx+'-'+mid+'-1').value),s2=parseFloat(document.getElementById('pool-'+gid+'-'+idx+'-'+mid+'-2').value);
-  if(!setResult(m,s1,s2))return;updSt(st,m);save();loadScorePanel();
-}
-function buildCrossover(gid){
-  var b=S.bs[gid],rA=sortBySt(b.poolA,b.poolASt),rB=sortBySt(b.poolB,b.poolBSt);
-  b.crossover=[];var len=Math.min(rA.length,rB.length);
-  for(var i=0;i<len;i++)b.crossover.push({id:uid(),t1:rA[i],t2:rB[i],winner:null,score1:null,score2:null,label:ordinal(i*2+1)+' vs '+ordinal(i*2+2)+' place match'});
-  b.crossoverBuilt=true;save();loadScorePanel();
-}
-function saveCoMatch(gid,mid){
-  var b=S.bs[gid],m=b.crossover.find(function(x){return x.id===mid;});if(!m)return;
-  var s1=parseFloat(document.getElementById('co-'+gid+'-'+mid+'-1').value),s2=parseFloat(document.getElementById('co-'+gid+'-'+mid+'-2').value);
-  if(!setResult(m,s1,s2))return;save();loadScorePanel();
-}
-function finTP(gid){
-  var b=S.bs[gid],teams=S.teams[gid]||[],pl={};
-  b.crossover.forEach(function(m,i){if(m.winner){pl[m.winner.id]=i*2+1;var l=m.winner.id===m.t1.id?m.t2:m.t1;if(l)pl[l.id]=i*2+2;}});
-  teams.forEach(function(t,i){if(!pl[t.id])pl[t.id]=teams.length-i;});
-  S.scores[gid]={_fin:true};awardPts(gid,pl,teams);save();renderLeaderboard();updateStats();loadScorePanel();
-}
-
-function renderRR(game,panel){
-  var b=S.bs[game.id];if(!b||!b.matches){panel.innerHTML='<div class="card"><div class="alert alert-warn">No RR data.</div></div>';return;}
-  var teams=S.teams[game.id]||[];
-  var html='<div class="card"><div class="card-title">🔄 '+game.name+' — round robin</div><div class="pool-header">Standings</div><div style="margin-bottom:8px">'+stHTML(teams,b.standings)+'</div><div class="alert alert-info" style="font-size:11px">Tiebreaker: wins → point differential → head-to-head. No draws.</div><div class="divider"></div><div style="font-size:11px;font-weight:600;color:#aaa;margin-bottom:6px">Matches</div>';
-  b.matches.forEach(function(m){html+=mHTML(game.id,m,'rr-'+game.id,"saveRRM('"+game.id+"','"+m.id+"')");});
-  var allDone=b.matches.every(function(m){return m.winner;}),fin=S.scores[game.id]&&S.scores[game.id]._fin;
-  if(allDone&&!fin)html+='<div class="divider"></div><button class="btn btn-primary" onclick="finRR(\''+game.id+'\')">🏅 Finalize & award points</button>';
-  if(fin)html+='<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>';
-  html+='</div>';panel.innerHTML=html;
-}
-function saveRRM(gid,mid){
-  var b=S.bs[gid],m=b.matches.find(function(x){return x.id===mid;});if(!m)return;
-  var s1=parseFloat(document.getElementById('rr-'+gid+'-'+mid+'-1').value),s2=parseFloat(document.getElementById('rr-'+gid+'-'+mid+'-2').value);
-  if(!setResult(m,s1,s2))return;updSt(b.standings,m);save();loadScorePanel();
-}
-function finRR(gid){
-  var b=S.bs[gid],teams=S.teams[gid]||[],sorted=sortBySt(teams,b.standings),pl={};
-  sorted.forEach(function(t,i){pl[t.id]=i+1;});
-  S.scores[gid]={_fin:true};awardPts(gid,pl,teams);save();renderLeaderboard();updateStats();loadScorePanel();
-}
-
-function renderPP(game,panel){
-  var b=S.bs[game.id];if(!b||!b.pools){panel.innerHTML='<div class="card"><div class="alert alert-warn">No data.</div></div>';return;}
-  var html='<div class="card"><div class="card-title">🏆 '+game.name+' — pools + playoff</div>';
-  b.pools.forEach(function(pool,pi){
-    html+='<div class="pool-header">'+pool.name+'</div><div style="margin-bottom:7px">'+stHTML(pool.teams,pool.standings)+'</div>';
-    pool.matches.forEach(function(m){html+=mHTML(game.id,m,'pp-'+game.id+'-'+pi,"savePPM('"+game.id+"','"+m.id+"',"+pi+")");});
-    html+='<div class="divider"></div>';
-  });
-  var pd=b.pools.every(function(p){return p.matches.every(function(m){return m.winner;});});
-  if(pd&&!b.knockoutBuilt)html+='<button class="btn btn-primary" onclick="buildKO(\''+game.id+'\')">🏆 Build knockout round</button>';
-  if(b.knockout&&b.knockout.length){
-    html+='<div class="pool-header teal" style="margin-top:8px">Knockout round</div>';
-    b.knockout.forEach(function(m){html+='<div style="font-size:10px;color:#aaa;margin-bottom:3px">'+(m.label||'')+'</div>'+mHTML(game.id,m,'ko-'+game.id,"saveKOM('"+game.id+"','"+m.id+"')");});
-  }
-  var kd=b.knockout&&b.knockout.length&&b.knockout.every(function(m){return m.winner;}),fin=S.scores[game.id]&&S.scores[game.id]._fin;
-  if(kd&&!fin)html+='<div class="divider"></div><button class="btn btn-primary" onclick="finPP(\''+game.id+'\')">🏅 Finalize & award points</button>';
-  if(fin)html+='<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>';
-  html+='</div>';panel.innerHTML=html;
-}
-function savePPM(gid,mid,pi){
-  var b=S.bs[gid],pool=b.pools[pi],m=pool.matches.find(function(x){return x.id===mid;});if(!m)return;
-  var s1=parseFloat(document.getElementById('pp-'+gid+'-'+pi+'-'+mid+'-1').value),s2=parseFloat(document.getElementById('pp-'+gid+'-'+pi+'-'+mid+'-2').value);
-  if(!setResult(m,s1,s2))return;updSt(pool.standings,m);save();loadScorePanel();
-}
-function buildKO(gid){
-  var b=S.bs[gid],ranked=b.pools.map(function(p){return sortBySt(p.teams,p.standings);});
-  b.knockout=[];var maxR=ranked[0].length;
-  for(var r=0;r<maxR;r++){var mt=ranked.filter(function(p){return p[r];}).map(function(p){return p[r];});for(var i=0;i+1<mt.length;i+=2)b.knockout.push({id:uid(),t1:mt[i],t2:mt[i+1],winner:null,score1:null,score2:null,label:ordinal(r+1)+'-place playoff'});}
-  b.knockoutBuilt=true;save();loadScorePanel();
-}
-function saveKOM(gid,mid){
-  var b=S.bs[gid],m=b.knockout.find(function(x){return x.id===mid;});if(!m)return;
-  var s1=parseFloat(document.getElementById('ko-'+gid+'-'+mid+'-1').value),s2=parseFloat(document.getElementById('ko-'+gid+'-'+mid+'-2').value);
-  if(!setResult(m,s1,s2))return;save();loadScorePanel();
-}
-function finPP(gid){
-  var b=S.bs[gid],teams=S.teams[gid]||[],pl={};
-  b.knockout.forEach(function(m,i){if(m.winner){pl[m.winner.id]=i*2+1;var l=m.winner.id===m.t1.id?m.t2:m.t1;if(l)pl[l.id]=i*2+2;}});
-  teams.forEach(function(t,i){if(!pl[t.id])pl[t.id]=teams.length-i;});
-  S.scores[gid]={_fin:true};awardPts(gid,pl,teams);save();renderLeaderboard();updateStats();loadScorePanel();
-}
-
-function renderScoreInput(game,teams,panel){
-  var scores=S.scores[game.id]||{},isMulti=game.format==='multi-round-high'||game.format==='multi-round-low';
-  var html='<div class="card"><div class="card-title">✏️ '+game.name+'</div>';
-  teams.forEach(function(t){
-    html+='<div style="margin-bottom:10px"><div class="sec-label">'+teamLabel(t)+'</div>';
-    if(isMulti){for(var r=1;r<=game.rounds;r++){var key=t.id+'_r'+r;html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:#888;width:65px">Round '+r+'</span><input type="number" id="sc-'+game.id+'-'+key+'" value="'+(scores[key]!==undefined?scores[key]:'')+'" placeholder="Score" style="width:120px;margin:0"></div>';}}
-    else html+='<input type="number" id="sc-'+game.id+'-'+t.id+'" value="'+(scores[t.id]!==undefined?scores[t.id]:'')+'" placeholder="Score">';
-    html+='</div>';
-  });
-  if(game.tiebreak==='host-score')html+='<div class="sec-label">Tiebreaker score (if needed)</div><input type="text" id="tb-'+game.id+'" value="'+(game.tiebreaker||'')+'" placeholder="e.g. extra hole result">';
-  var fin=S.scores[game.id]&&S.scores[game.id]._fin;
-  html+='<button class="btn btn-primary" onclick="saveScoreGame(\''+game.id+'\')">💾 Save & award points</button>';
-  if(fin)html+='<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>';
-  html+='</div>';panel.innerHTML=html;
-}
-function saveScoreGame(gid){
-  var game=S.games.find(function(g){return g.id===gid;}),teams=S.teams[gid]||[];
-  if(!S.scores[gid])S.scores[gid]={};
-  var isMulti=game.format==='multi-round-high'||game.format==='multi-round-low',lowWins=game.format==='score-low'||game.format==='multi-round-low',totals={};
-  teams.forEach(function(t){
-    if(isMulti){var total=0;for(var r=1;r<=game.rounds;r++){var key=t.id+'_r'+r;var v=parseFloat(document.getElementById('sc-'+gid+'-'+key).value)||0;S.scores[gid][key]=v;total+=v;}totals[t.id]=total;}
-    else{var v=parseFloat(document.getElementById('sc-'+gid+'-'+t.id).value);if(!isNaN(v)){S.scores[gid][t.id]=v;totals[t.id]=v;}}
-  });
-  if(game.tiebreak==='host-score'){var tb=document.getElementById('tb-'+gid);if(tb)game.tiebreaker=tb.value;}
-  var entries=Object.entries(totals).sort(function(a,b){return lowWins?a[1]-b[1]:b[1]-a[1];}),pl={},place=1;
-  for(var i=0;i<entries.length;){var j=i;while(j<entries.length&&entries[j][1]===entries[i][1])j++;var tied=entries.slice(i,j).map(function(x){return x[0];});tied.forEach(function(tid,k){pl[tid]=place+k;});place+=tied.length;i=j;}
-  S.scores[gid]._fin=true;awardPts(gid,pl,teams);save();renderLeaderboard();updateStats();loadScorePanel();
-}
-
-function awardPts(gid,pl,teams){
-  var n=teams.length;if(!S.points[gid])S.points[gid]={};
-  teams.forEach(function(team){var place=pl[team.id]||n,pts=Math.max(1,n-place+1);[team.p1,team.p2].filter(Boolean).forEach(function(player){S.points[gid][player]=pts;});});
-}
-function getTotalPts(player){return Object.values(S.points).reduce(function(s,gp){return s+(gp[player]||0);},0);}
-function getBreakdown(p){return S.games.filter(function(g){return S.points[g.id]&&S.points[g.id][p]!==undefined;}).map(function(g){return g.name+':'+S.points[g.id][p];}).join(' · ')||'No points yet';}
-
-function renderLeaderboard(){
-  var el=document.getElementById('leaderboard-display');if(!el)return;
-  var sorted=S.players.slice().sort(function(a,b){return getTotalPts(b)-getTotalPts(a);});
-  if(!sorted.length){el.innerHTML='<p style="font-size:12px;color:#aaa">No players yet.</p>';return;}
-  el.innerHTML=sorted.map(function(p,i){
-    return'<div class="lb-row"><div class="lb-pos '+(i===0?'p1':i===1?'p2':i===2?'p3':'pn')+'">'+(i+1)+'</div><div style="flex:1"><div class="lb-name">'+p+'</div><div class="lb-breakdown">'+getBreakdown(p)+'</div></div><div class="lb-pts">'+getTotalPts(p)+'</div></div>';
-  }).join('');
-}
-function renderGPB(){
-  var el=document.getElementById('game-pts-breakdown');if(!el)return;
-  if(!S.games.length){el.innerHTML='<p style="font-size:12px;color:#aaa">No games yet.</p>';return;}
-  el.innerHTML=S.games.map(function(g){
-    var pts=S.points[g.id];
-    if(!pts||!Object.keys(pts).length)return'<div class="game-row"><div class="gname">'+g.name+'</div><span class="fbadge">No results</span></div>';
-    return'<div style="margin-bottom:8px"><div class="sec-label">'+g.name+'</div>'+S.players.slice().sort(function(a,b){return(pts[b]||0)-(pts[a]||0);}).filter(function(p){return pts[p];}).map(function(p){return'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:#1a1a1a"><span>'+p+'</span><span style="color:#534AB7;font-weight:700">'+pts[p]+'pts</span></div>';}).join('')+'</div>';
-  }).join('');
-}
-function updateStats(){
-  var done=Object.keys(S.scores).filter(function(id){return S.scores[id]&&S.scores[id]._fin;}).length;
-  document.getElementById('stat-games').textContent=done;
-  document.getElementById('stat-players').textContent=S.players.length;
-}
-function renderTeamsPreview(){
-  var el=document.getElementById('teams-preview-area');if(!el)return;
-  if(!S.rankingsLocked||!S.games.length){el.innerHTML='';return;}
-  var g=S.games[0],pairs=S.teams[g.id]||[];
-  el.innerHTML='<div class="card"><div class="card-title">👥 Teams for "'+g.name+'"</div>'+pairs.map(function(t,i){return'<div class="player-row"><div class="avatar" style="background:#E1F5EE;color:#085041">'+(i+1)+'</div><div style="flex:1;font-size:13px;font-weight:500">'+teamLabel(t)+'</div></div>';}).join('')+'</div>';
-}
-
-/* ── PLAYER VIEW ── */
-function renderRankingList(){
-  var el=document.getElementById('ranking-drag-list');
-  var others=S.players.filter(function(p){return p!==S.playerName;});
-  if(!others.length){el.innerHTML='<p style="font-size:12px;color:#aaa">No other players yet.</p>';return;}
-  var ranked=S.rankings[S.playerName]||others.slice();
-  ranked=ranked.filter(function(p){return others.includes(p);});
-  others.forEach(function(p){if(!ranked.includes(p))ranked.push(p);});
-  el.innerHTML=ranked.map(function(p,i){
-    var badges=getPlayerBadges(p);
-    return'<div class="rank-item" draggable="true" data-player="'+esc(p)+'" ondragstart="dstart(event)" ondragover="dover(event)" ondrop="ddrop(event)" ondragleave="dleave(event)"><span style="color:#ccc;font-size:18px">⠿</span><span style="width:20px;font-size:11px;color:#aaa;text-align:center">'+(i+1)+'</span><div class="avatar">'+initials(p)+'</div><div style="flex:1"><div style="font-size:13px;font-weight:500">'+p+'</div><div class="badges-wrap" style="margin-top:2px">'+renderBadges(badges)+'</div></div></div>';
-  }).join('');
-}
-var _ds=null;
-function dstart(e){_ds=e.currentTarget;e.currentTarget.classList.add('dragging');e.dataTransfer.effectAllowed='move';}
-function dover(e){e.preventDefault();if(e.currentTarget!==_ds)e.currentTarget.classList.add('drag-over');}
-function dleave(e){e.currentTarget.classList.remove('drag-over');}
-function ddrop(e){
-  e.preventDefault();e.currentTarget.classList.remove('drag-over');
-  if(!_ds||_ds===e.currentTarget)return;
-  var list=document.getElementById('ranking-drag-list');
-  var si=Array.from(list.children).indexOf(_ds),ti=Array.from(list.children).indexOf(e.currentTarget);
-  if(si<ti)e.currentTarget.after(_ds);else e.currentTarget.before(_ds);
-  _ds.classList.remove('dragging');
-  Array.from(list.children).forEach(function(el,i){var sp=el.querySelectorAll('span')[0];if(sp)sp.textContent=i+1;});
-}
-function submitRankings(){
-  var items=Array.from(document.getElementById('ranking-drag-list').querySelectorAll('.rank-item'));
-  S.rankings[S.playerName]=items.map(function(el){return el.dataset.player;});
-  save();document.getElementById('rank-submit-msg').innerHTML='<div class="alert alert-success" style="margin-top:8px">✓ Rankings submitted!</div>';
-}
-function renderMyTeams(){
-  var el=document.getElementById('my-teams-list');if(!el)return;
-  if(!S.rankingsLocked){el.innerHTML='<p style="font-size:12px;color:#aaa">Teams appear once rankings are locked.</p>';return;}
-  var rows=S.games.map(function(g){
-    var teams=S.teams[g.id]||[],myTeam=teams.find(function(t){return t.p1===S.playerName||t.p2===S.playerName;});
-    if(!myTeam)return'';
-    var partner=myTeam.p1===S.playerName?myTeam.p2:myTeam.p1,pts=S.points[g.id]&&S.points[g.id][S.playerName];
-    return'<div class="player-row"><div class="avatar" style="background:#E1F5EE;color:#085041">🛡</div><div style="flex:1"><div style="font-size:13px;font-weight:600">'+g.name+'</div><div style="font-size:11px;color:#888">'+(partner?'With '+partner:'Solo')+' · '+(fmtL[g.format]||g.format)+'</div></div>'+(pts!==undefined?'<span style="background:#EEEDFE;color:#3C3489;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700">'+pts+'pts</span>':'')+'</div>';
-  }).join('');
-  el.innerHTML=rows||'<p style="font-size:12px;color:#aaa">No games yet.</p>';
-}
-function renderPlayerLB(){
-  var el=document.getElementById('player-lb-display');if(!el)return;
-  var sorted=S.players.slice().sort(function(a,b){return getTotalPts(b)-getTotalPts(a);});
-  if(!sorted.length){el.innerHTML='<p style="font-size:12px;color:#aaa">No data yet.</p>';return;}
-  el.innerHTML=sorted.map(function(p,i){
-    return'<div class="lb-row"><div class="lb-pos '+(i===0?'p1':i===1?'p2':i===2?'p3':'pn')+'">'+(i+1)+'</div><div class="lb-name">'+p+(p===S.playerName?' <span style="font-size:10px;color:#534AB7;font-weight:700">(you)</span>':'')+'</div><div class="lb-pts">'+getTotalPts(p)+'</div></div>';
-  }).join('');
-}
-function renderAllPlayerBadges(){
-  var el=document.getElementById('all-player-badges');if(!el)return;
-  if(!S.players.length){el.innerHTML='<p style="font-size:12px;color:#aaa">No players yet.</p>';return;}
-  el.innerHTML=S.players.map(function(p){
-    var badges=getPlayerBadges(p);
-    return'<div style="padding:8px 0;border-bottom:1px solid #f0ede6"><div style="font-size:13px;font-weight:600;margin-bottom:4px">'+p+'</div><div class="badges-wrap">'+renderBadges(badges)+'</div></div>';
-  }).join('');
-}
 </script>
 </body>
 </html>
