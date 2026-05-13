@@ -49,6 +49,8 @@ let tourneyId = null;   // current tournament key
 let localRole = null;   // 'admin' | 'player'
 let localName = null;   // player name if role=player
 let unsubscribe = null; // Firebase listener cleanup
+let _phase = 'setup';   // local — tracks current admin tab, never saved to Firebase
+let _tab   = 'rank';    // local — tracks current player tab, never saved to Firebase
 
 // ── Firebase read / write ────────────────────────────────
 async function fbSet(path, val){
@@ -102,6 +104,7 @@ function startListening(){
     if(!S.teams) S.teams={};
     if(!S.rankings) S.rankings={};
     if(!S.gameRankings) S.gameRankings={};
+    if(!S.tiebreaker) S.tiebreaker={};
     if(localRole==='admin') renderAdminView();
     else renderPlayerView();
   });
@@ -113,7 +116,7 @@ function showView(v){
   show('view-'+v);
 }
 function showAdminPhase(phase){
-  if(S) S._ap=phase;
+  _phase=phase;
   ['setup','games','scores','board','history'].forEach(p=>{
     hide('admin-'+p);
     document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===p) t.classList.remove('active'); });
@@ -121,13 +124,13 @@ function showAdminPhase(phase){
   show('admin-'+phase);
   document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===phase) t.classList.add('active'); });
   if(phase==='scores'){ renderMatchFeed(); }
-  if(phase==='board'){ renderLeaderboard(); renderGPB(); updateStats(); }
+  if(phase==='board'){ renderLeaderboard(); renderGPB(); updateStats(); renderTiebreakerPanel(); }
   if(phase==='history'){ renderHistoryList(); renderCustomBadges(); renderCustomBadgePlayerSelect(); }
   if(phase==='games'){ renderGames(); }
 }
 window.showAdminPhase = showAdminPhase;
 function showPlayerTab(tab){
-  if(S) S._pt=tab;
+  _tab=tab;
   ['rank','teams','lb'].forEach(t=>{ hide('pview-'+t); el('ptab-'+t).classList.remove('active'); });
   show('pview-'+tab);
   el('ptab-'+tab).classList.add('active');
@@ -152,7 +155,7 @@ window.createTournament = async ()=>{
     adminCode:code, joinCode:uid().substr(0,6),
     players:[], rankings:{}, rankingsLocked:false,
     games:[], teams:{}, scores:{}, bs:{}, points:{},
-    history:{}, customBadges:[], tournamentFinalized:false,
+    history:{}, customBadges:[], tiebreaker:{}, tournamentFinalized:false,
     gameRankings:{},
     _ap:'setup', _pt:'rank'
   };
@@ -209,7 +212,7 @@ function renderAdminView(){
   el('join-code-display').textContent   = S.joinCode||'—';
   renderPlayerList();
   renderGames();
-  showAdminPhase(S._ap||'setup');
+  showAdminPhase(_phase||'setup');
 }
 
 // ── PLAYERS ──────────────────────────────────────────────
@@ -914,6 +917,76 @@ function renderLeaderboard(){
     <div class="lb-pts">${getTotalPts(p)}</div>
   </div>`).join('');
 }
+function renderTiebreakerPanel(){
+  const e=el('tiebreaker-panel'); if(!e) return;
+  const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
+  if(!sorted.length){ e.innerHTML=''; return; }
+  const topScore=getTotalPts(sorted[0]);
+  const tied=sorted.filter(p=>getTotalPts(p)===topScore);
+  const tb=S.tiebreaker||{};
+
+  if(tied.length<=1){
+    e.innerHTML='<p style="font-size:12px;color:#27500A;font-weight:600">✓ No tie at the top — clear winner!</p>';
+    return;
+  }
+
+  let html=`<div class="alert alert-warn" style="font-size:11px;margin-bottom:10px">
+    <strong>${tied.length} players tied at ${topScore} pts:</strong> ${tied.join(', ')}<br>
+    Tiebreaker: 1v1 beer pong. Enter results below to determine final order.
+  </div>`;
+
+  // Generate all 1v1 matchups among tied players
+  const matchups=[];
+  for(let i=0;i<tied.length;i++) for(let j=i+1;j<tied.length;j++) matchups.push([tied[i],tied[j]]);
+
+  matchups.forEach(([p1,p2])=>{
+    const key=p1+'___'+p2;
+    const res=tb[key];
+    html+=`<div style="background:#fff;border:1px solid #e8e6df;border-radius:10px;padding:10px;margin-bottom:8px">
+      <div style="font-size:11px;color:#aaa;font-weight:700;margin-bottom:6px">🏓 Beer pong</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;font-size:13px;font-weight:500">${p1}</div>
+        <input type="number" id="tb-${key}-1" placeholder="Cups" value="${res?res.s1:''}" style="width:60px;padding:6px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center">
+        <span style="font-size:12px;color:#aaa">vs</span>
+        <input type="number" id="tb-${key}-2" placeholder="Cups" value="${res?res.s2:''}" style="width:60px;padding:6px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center">
+        <div style="flex:1;font-size:13px;font-weight:500;text-align:right">${p2}</div>
+      </div>
+      ${res?`<div style="font-size:11px;color:#27500A;margin-top:5px;font-weight:600">✓ Winner: ${res.winner}</div>`:''}
+      <button class="btn btn-success btn-sm" style="width:100%;margin-top:6px" onclick="saveTBMatch('${key}','${esc(p1)}','${esc(p2)}')">✓ Save result</button>
+    </div>`;
+  });
+
+  // Show tiebreaker standings if any results recorded
+  const wins={};
+  tied.forEach(p=>wins[p]=0);
+  Object.values(tb).forEach(r=>{ if(r&&r.winner&&wins[r.winner]!==undefined) wins[r.winner]++; });
+  const anyDone=Object.values(tb).some(r=>r&&r.winner);
+  if(anyDone){
+    const tbSorted=tied.slice().sort((a,b)=>wins[b]-wins[a]);
+    html+=`<div class="pool-header" style="margin-top:10px">Tiebreaker standings</div>`;
+    tbSorted.forEach((p,i)=>{
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0ede6">
+        <div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div>
+        <div style="flex:1;font-size:13px;font-weight:500">${p}</div>
+        <div style="font-size:13px;font-weight:700;color:#534AB7">${wins[p]}W</div>
+      </div>`;
+    });
+  }
+
+  e.innerHTML=html;
+}
+
+window.saveTBMatch=async(key,p1,p2)=>{
+  const s1=parseFloat(el('tb-'+key+'-1')&&el('tb-'+key+'-1').value);
+  const s2=parseFloat(el('tb-'+key+'-2')&&el('tb-'+key+'-2').value);
+  if(isNaN(s1)||isNaN(s2)){ alert('Enter cups for both players.'); return; }
+  if(s1===s2){ alert('No ties in beer pong tiebreaker!'); return; }
+  const winner=s1>s2?p1:p2;
+  const tiebreaker=JSON.parse(JSON.stringify(S.tiebreaker||{}));
+  tiebreaker[key]={s1,s2,winner};
+  await fbUpdate('tournaments/'+tourneyId,{tiebreaker});
+};
+
 function renderGPB(){
   const e=el('game-pts-breakdown'); if(!e) return;
   if(!(S.games||[]).length){ e.innerHTML='<p style="font-size:12px;color:#aaa">No games yet.</p>'; return; }
@@ -1052,7 +1125,7 @@ function renderPlayerView(){
   el('player-tourney-label').textContent=S.tourneyName+' '+S.tourneyYear;
   el('player-avatar').textContent=initials(localName);
   el('player-own-badges').innerHTML=renderBadges(getPlayerBadges(localName));
-  showPlayerTab(S._pt||'rank');
+  showPlayerTab(_tab||'rank');
 }
 
 // Shows a card per game — tap to rank for that game
@@ -1443,6 +1516,10 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div class="card">
         <div class="card-title">📊 Points per game</div>
         <div id="game-pts-breakdown"></div>
+      </div>
+      <div class="card" id="tiebreaker-card">
+        <div class="card-title">🏓 Overall tiebreaker</div>
+        <div id="tiebreaker-panel"></div>
       </div>
       <div class="card">
         <div class="card-title">🏆 Declare tournament champion</div>
