@@ -101,6 +101,7 @@ function startListening(){
     if(!S.scores) S.scores={};
     if(!S.teams) S.teams={};
     if(!S.rankings) S.rankings={};
+    if(!S.gameRankings) S.gameRankings={};
     if(localRole==='admin') renderAdminView();
     else renderPlayerView();
   });
@@ -128,6 +129,7 @@ function showPlayerTab(tab){
   ['rank','teams','lb'].forEach(t=>{ hide('pview-'+t); el('ptab-'+t).classList.remove('active'); });
   show('pview-'+tab);
   el('ptab-'+tab).classList.add('active');
+  if(tab==='rank') renderRankingList();
   if(tab==='teams') renderMyTeams();
   if(tab==='lb'){ renderPlayerLB(); renderAllPlayerBadges(); }
 }
@@ -148,6 +150,7 @@ window.createTournament = async ()=>{
     players:[], rankings:{}, rankingsLocked:false,
     games:[], teams:{}, scores:{}, bs:{}, points:{},
     history:{}, customBadges:[], tournamentFinalized:false,
+    gameRankings:{},
     _ap:'setup', _pt:'rank'
   };
   await fbSet('tournaments/'+tourneyId, doc);
@@ -247,42 +250,36 @@ function updateRankProg(){
   e.textContent = done+' of '+(S.players||[]).length+' players have submitted rankings';
 }
 
-// ── LOCK & TEAMS ─────────────────────────────────────────
-window.lockRankings = async ()=>{
-  if((S.players||[]).length<4){ alert('Need at least 4 players.'); return; }
-  const teams = {};
-  const pairs = makePairs();
-  const bs    = {};
-  const games = S.games||[];
-  games.forEach(g=>{
-    teams[g.id] = pairs;
-    bs[g.id]    = buildBracket(g, pairs);
-  });
-  await fbUpdate('tournaments/'+tourneyId, {rankingsLocked:true, teams, bs});
+// ── LOCK GAME RANKINGS → GENERATE TEAMS ──────────────────
+window.lockGameRankings = async (gameId)=>{
+  const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
+  const gRanks=(S.gameRankings&&S.gameRankings[gameId])||{};
+  const total=(S.players||[]).length;
+  if(Object.keys(gRanks).length<total){ alert('Not all players have ranked yet.'); return; }
+  const pairs=makePairsFromGameRankings(gameId);
+  const bracket=buildBracket(game,pairs);
+  const games=(S.games||[]).map(g=>g.id===gameId?{...g,status:'locked'}:g);
+  const teams={...(S.teams||{}), [gameId]:pairs};
+  const bs={...(S.bs||{}), [gameId]:bracket};
+  await fbUpdate('tournaments/'+tourneyId,{games,teams,bs});
 };
-function getAvgRank(player){
+function getAvgRankForGame(gameId,player){
+  const gRanks=(S.gameRankings&&S.gameRankings[gameId])||{};
   const others=(S.players||[]).filter(p=>p!==player);
   let total=0,count=0;
-  others.forEach(r=>{ const rk=S.rankings&&S.rankings[r]; if(rk){ const i=rk.indexOf(player); if(i!==-1){total+=i+1;count++;} } });
+  others.forEach(rater=>{ const rk=gRanks[rater]; if(rk){ const i=rk.indexOf(player); if(i!==-1){total+=i+1;count++;} } });
   return count?total/count:(S.players||[]).length;
 }
-function makePairs(){
-  const sorted=(S.players||[]).slice().sort((a,b)=>getAvgRank(a)-getAvgRank(b));
+function makePairsFromGameRankings(gameId){
+  const sorted=(S.players||[]).slice().sort((a,b)=>getAvgRankForGame(gameId,a)-getAvgRankForGame(gameId,b));
   const n=sorted.length,pairs=[],half=Math.floor(n/2);
   for(let i=0;i<half;i++) pairs.push({id:uid(),p1:sorted[i],p2:sorted[n-1-i]});
   if(n%2!==0) pairs.push({id:uid(),p1:sorted[half],p2:null});
   return pairs;
 }
-function renderTeamsPreview(){
-  const e = el('teams-preview-area'); if(!e) return;
-  if(!S.rankingsLocked||!(S.games||[]).length){ e.innerHTML=''; return; }
-  const g = S.games[0], pairs = (S.teams&&S.teams[g.id])||[];
-  e.innerHTML=`<div class="card"><div class="card-title">👥 Teams for "${g.name}"</div>
-    ${pairs.map((t,i)=>`<div class="player-row">
-      <div class="avatar" style="background:#E1F5EE;color:#085041">${i+1}</div>
-      <div style="flex:1;font-size:13px;font-weight:500">${teamLabel(t)}</div>
-    </div>`).join('')}</div>`;
-}
+// kept for legacy but not used in new flow
+function makePairs(){ return makePairsFromGameRankings(null); }
+function renderTeamsPreview(){}
 
 // ── BRACKET INIT ─────────────────────────────────────────
 function initStandings(teams){ const st={}; teams.forEach(t=>{st[t.id]={w:0,l:0,pf:0,pa:0};}); return st; }
@@ -333,17 +330,10 @@ window.addGame = async ()=>{
   const tb     = el('game-tiebreak').value;
   const rounds = (format==='multi-round-high'||format==='multi-round-low') ? parseInt(el('game-rounds').value)||2 : 1;
   if(!name){ alert('Enter a game name.'); return; }
-  const g = {id:uid(), name, format, tiebreak:tb, rounds};
+  // status:'ranking' means players need to rank before teams generate
+  const g = {id:uid(), name, format, tiebreak:tb, rounds, status:'ranking'};
   const games = [...(S.games||[]), g];
-  const update_obj = {games};
-  if(S.rankingsLocked){
-    const pairs = makePairs();
-    const teams = {...(S.teams||{}), [g.id]: pairs};
-    const bs    = {...(S.bs||{}),    [g.id]: buildBracket(g, pairs)};
-    update_obj.teams = teams;
-    update_obj.bs    = bs;
-  }
-  await fbUpdate('tournaments/'+tourneyId, update_obj);
+  await fbUpdate('tournaments/'+tourneyId, {games});
   el('game-name-input').value='';
 };
 window.removeGame = async (id)=>{
@@ -352,20 +342,35 @@ window.removeGame = async (id)=>{
   const scores = {...(S.scores||{})}; delete scores[id];
   const points = {...(S.points||{})}; delete points[id];
   const bs     = {...(S.bs||{})}; delete bs[id];
-  await fbUpdate('tournaments/'+tourneyId, {games,teams,scores,points,bs});
+  const gameRankings = {...(S.gameRankings||{})}; delete gameRankings[id];
+  await fbUpdate('tournaments/'+tourneyId, {games,teams,scores,points,bs,gameRankings});
 };
 function renderGames(){
   const e=el('games-list');
   if(!(S.games||[]).length){ e.innerHTML='<p style="font-size:12px;color:#aaa">No games yet.</p>'; return; }
-  e.innerHTML=(S.games||[]).map(g=>`<div class="game-row">
-    <div class="gname">${g.name}</div>
-    <span class="fbadge">${fmtL[g.format]||g.format}</span>
-    <button class="btn btn-sm btn-danger" onclick="removeGame('${g.id}')">✕</button>
-  </div>`).join('');
+  e.innerHTML=(S.games||[]).map(g=>{
+    const gRanks=(S.gameRankings&&S.gameRankings[g.id])||{};
+    const rankedCount=Object.keys(gRanks).length;
+    const total=(S.players||[]).length;
+    const allRanked=total>0&&rankedCount>=total;
+    const isLocked=g.status==='locked'||g.status==='scoring';
+    const statusTag=isLocked
+      ?`<span style="background:#EAF3DE;color:#27500A;font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700">🔒 Teams set</span>`
+      :`<span style="background:${allRanked?'#EAF3DE':'#FEF3E2'};color:${allRanked?'#27500A':'#7a4f00'};font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700">${rankedCount}/${total} ranked</span>`;
+    return`<div class="game-row" style="flex-wrap:wrap;gap:6px">
+      <div style="flex:1;min-width:0">
+        <div class="gname">${g.name}</div>
+        <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">${statusTag}<span class="fbadge">${fmtL[g.format]||g.format}</span></div>
+      </div>
+      ${!isLocked?`<button class="btn btn-sm btn-primary" onclick="lockGameRankings('${g.id}')" ${!allRanked?'disabled style="opacity:.45;cursor:not-allowed"':''}>Generate teams</button>`:''}
+      <button class="btn btn-sm btn-danger" onclick="removeGame('${g.id}')">✕</button>
+    </div>`;
+  }).join('');
 }
 function renderSGS(){
   const sel=el('score-game-select');
-  sel.innerHTML='<option value="">— choose a game —</option>'+(S.games||[]).map(g=>`<option value="${g.id}">${g.name} (${fmtL[g.format]||g.format})</option>`).join('');
+  // Only show games that have been locked (teams exist)
+  sel.innerHTML='<option value="">— choose a game —</option>'+(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring').map(g=>`<option value="${g.id}">${g.name} (${fmtL[g.format]||g.format})</option>`).join('');
 }
 
 // ── MATCH / STANDINGS HELPERS ────────────────────────────
@@ -820,50 +825,95 @@ function renderPlayerView(){
   el('player-tourney-label').textContent=S.tourneyName+' '+S.tourneyYear;
   el('player-avatar').textContent=initials(localName);
   el('player-own-badges').innerHTML=renderBadges(getPlayerBadges(localName));
-  renderRankingList();
   showPlayerTab(S._pt||'rank');
 }
+
+// Shows a card per game — tap to rank for that game
 function renderRankingList(){
   const e=el('ranking-drag-list');
+  const games=S.games||[];
   const others=(S.players||[]).filter(p=>p!==localName);
-  if(!others.length){ e.innerHTML='<p style="font-size:12px;color:#aaa">No other players yet. Check back soon.</p>'; return; }
-  let ranked=(S.rankings&&S.rankings[localName])||others.slice();
+  if(!games.length){ e.innerHTML='<p style="font-size:12px;color:#aaa">No games added yet. Check back soon!</p>'; return; }
+  if(!others.length){ e.innerHTML='<p style="font-size:12px;color:#aaa">Waiting for more players to join...</p>'; return; }
+  let html='<div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Each game has its own ranking. Tap a game to rank players for it.</div>';
+  games.forEach(g=>{
+    const gRanks=(S.gameRankings&&S.gameRankings[g.id])||{};
+    const myRank=gRanks[localName];
+    const rankedCount=Object.keys(gRanks).length, total=(S.players||[]).length;
+    const isLocked=g.status==='locked'||g.status==='scoring';
+    if(isLocked){
+      html+=`<div style="background:#EAF3DE;border:1px solid #b2d88a;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
+        <div style="font-size:22px">✅</div>
+        <div><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#27500A;margin-top:2px">Teams locked — you're all set</div></div>
+      </div>`;
+    } else if(myRank){
+      html+=`<div style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
+        <div style="font-size:22px">👍</div>
+        <div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e;margin-top:2px">Submitted · ${rankedCount}/${total} players done</div></div>
+        <button class="btn btn-sm" onclick="openGameRanking('${g.id}')" style="width:auto">Edit</button>
+      </div>`;
+    } else {
+      html+=`<div style="background:#FFFBEB;border:1px solid #fcd34d;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
+        <div style="font-size:22px">🎯</div>
+        <div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#7a4f00;margin-top:2px">Needs your ranking · ${rankedCount}/${total} done</div></div>
+        <button class="btn btn-sm btn-primary" onclick="openGameRanking('${g.id}')" style="width:auto">Rank now</button>
+      </div>`;
+    }
+  });
+  e.innerHTML=html;
+}
+
+window.openGameRanking=(gameId)=>{
+  const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
+  const others=(S.players||[]).filter(p=>p!==localName);
+  const gRanks=(S.gameRankings&&S.gameRankings[gameId])||{};
+  let ranked=gRanks[localName]||others.slice();
   ranked=ranked.filter(p=>others.includes(p));
   others.forEach(p=>{ if(!ranked.includes(p)) ranked.push(p); });
-  e.innerHTML=ranked.map((p,i)=>{
-    const badges=getPlayerBadges(p);
-    return`<div class="rank-item" draggable="true" data-player="${esc(p)}" ondragstart="dstart(event)" ondragover="dover(event)" ondrop="ddrop(event)" ondragleave="dleave(event)">
+  el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-title"><span>Rank for: ${game.name}</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
+    <div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Drag to reorder — 1 = best player</div>
+    <div id="game-rank-list">${ranked.map((p,i)=>`<div class="rank-item" draggable="true" data-player="${esc(p)}"
+      ondragstart="dstart(event)" ondragover="dover(event,'game-rank-list')" ondrop="ddrop(event,'game-rank-list')" ondragleave="dleave(event)">
       <span style="color:#ccc;font-size:18px">⠿</span>
-      <span style="width:20px;font-size:11px;color:#aaa;text-align:center">${i+1}</span>
+      <span class="rn" style="width:20px;font-size:11px;color:#aaa;text-align:center">${i+1}</span>
       <div class="avatar">${initials(p)}</div>
-      <div style="flex:1"><div style="font-size:13px;font-weight:500">${p}</div><div class="badges-wrap" style="margin-top:2px">${renderBadges(badges)}</div></div>
-    </div>`;
-  }).join('');
-}
+      <div style="flex:1"><div style="font-size:13px;font-weight:500">${p}</div><div class="badges-wrap" style="margin-top:2px">${renderBadges(getPlayerBadges(p))}</div></div>
+    </div>`).join('')}</div>
+    <div class="divider"></div>
+    <button class="btn btn-primary" onclick="submitGameRanking('${gameId}')">✓ Submit ranking for ${game.name}</button>
+    <div id="game-rank-msg"></div>
+  </div></div>`;
+};
+window.submitGameRanking=async(gameId)=>{
+  const items=Array.from(el('game-rank-list').querySelectorAll('.rank-item'));
+  const ranked=items.map(e=>e.dataset.player);
+  const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
+  if(!gameRankings[gameId]) gameRankings[gameId]={};
+  gameRankings[gameId][localName]=ranked;
+  await fbUpdate('tournaments/'+tourneyId,{gameRankings});
+  el('game-rank-msg').innerHTML='<div class="alert alert-success" style="margin-top:8px">✓ Submitted!</div>';
+  setTimeout(()=>closeModal(),700);
+};
+
 let _ds=null;
 window.dstart=(e)=>{ _ds=e.currentTarget; e.currentTarget.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; };
-window.dover=(e)=>{ e.preventDefault(); if(e.currentTarget!==_ds) e.currentTarget.classList.add('drag-over'); };
+window.dover=(e,listId)=>{ e.preventDefault(); if(e.currentTarget!==_ds) e.currentTarget.classList.add('drag-over'); };
 window.dleave=(e)=>{ e.currentTarget.classList.remove('drag-over'); };
-window.ddrop=(e)=>{
+window.ddrop=(e,listId)=>{
   e.preventDefault(); e.currentTarget.classList.remove('drag-over');
   if(!_ds||_ds===e.currentTarget) return;
-  const list=el('ranking-drag-list'), si=Array.from(list.children).indexOf(_ds), ti=Array.from(list.children).indexOf(e.currentTarget);
+  const list=el(listId||'ranking-drag-list');
+  const si=Array.from(list.children).indexOf(_ds), ti=Array.from(list.children).indexOf(e.currentTarget);
   if(si<ti) e.currentTarget.after(_ds); else e.currentTarget.before(_ds);
   _ds.classList.remove('dragging');
-  Array.from(list.children).forEach((el2,i)=>{ const sp=el2.querySelectorAll('span')[0]; if(sp) sp.textContent=i+1; });
-};
-window.submitRankings = async ()=>{
-  const items=Array.from(el('ranking-drag-list').querySelectorAll('.rank-item'));
-  const ranked=items.map(e=>e.dataset.player);
-  const rankings=JSON.parse(JSON.stringify(S.rankings||{}));
-  rankings[localName]=ranked;
-  await fbUpdate('tournaments/'+tourneyId,{rankings});
-  el('rank-submit-msg').innerHTML='<div class="alert alert-success" style="margin-top:8px">✓ Rankings submitted! The host will see your ranking.</div>';
+  Array.from(list.querySelectorAll('.rank-item')).forEach((el2,i)=>{ const sp=el2.querySelector('.rn'); if(sp) sp.textContent=i+1; });
 };
 function renderMyTeams(){
   const e=el('my-teams-list'); if(!e) return;
-  if(!S.rankingsLocked){ e.innerHTML='<p style="font-size:12px;color:#aaa">Teams appear once the host locks rankings.</p>'; return; }
-  const rows=(S.games||[]).map(g=>{
+  const lockedGames=(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring');
+  if(!lockedGames.length){ e.innerHTML='<p style="font-size:12px;color:#aaa">Teams appear here once the host locks rankings for each game.</p>'; return; }
+  const rows=lockedGames.map(g=>{
     const teams=(S.teams&&S.teams[g.id])||[];
     const myTeam=teams.find(t=>t.p1===localName||t.p2===localName); if(!myTeam) return'';
     const partner=myTeam.p1===localName?myTeam.p2:myTeam.p1;
@@ -875,7 +925,7 @@ function renderMyTeams(){
       ${pts!==undefined?`<span style="background:#EEEDFE;color:#3C3489;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700">${pts}pts</span>`:''}
     </div>`;
   }).join('');
-  e.innerHTML=rows||'<p style="font-size:12px;color:#aaa">No games yet.</p>';
+  e.innerHTML=rows||'<p style="font-size:12px;color:#aaa">No teams yet.</p>';
 }
 function renderPlayerLB(){
   const e=el('player-lb-display'); if(!e) return;
@@ -1037,17 +1087,13 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       </div>
       <div class="card">
         <div class="card-title">📤 Player join code</div>
-        <div class="alert alert-info">Share this with players — they open the same URL on their phone and join with this code.</div>
+        <div class="alert alert-info">Share this with players — they open the same URL on their phone and join with this code. Rankings happen per game in the Games tab.</div>
         <div class="join-code" id="join-code-display">—</div>
-        <div id="ranking-progress" style="font-size:11px;color:#888;margin-bottom:8px;text-align:center"></div>
-        <button class="btn btn-primary" onclick="lockRankings()">🔒 Lock rankings & generate teams</button>
-        <div id="lock-status"></div>
-      </div>
-      <div id="teams-preview-area"></div>
     </div>
     <div id="admin-games" class="hidden">
       <div class="card">
         <div class="card-title">+ Add game</div>
+        <div class="alert alert-info" style="font-size:11px">As soon as you add a game, all players see a "Rank now" prompt on their phones. Once everyone ranks, hit "Generate teams".</div>
         <input type="text" id="game-name-input" placeholder="Game name (e.g. Cornhole)">
         <div class="sec-label">Format</div>
         <select id="game-format">
@@ -1157,12 +1203,8 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
     <div id="pview-rank">
       <div class="card">
-        <div class="card-title">↕️ Rank players — drag to reorder</div>
-        <div class="alert alert-info" style="font-size:11px">1 = best, last = weakest. Drag to reorder then hit submit. The host uses everyone's rankings to build balanced teams.</div>
+        <div class="card-title">🎯 Game rankings</div>
         <div id="ranking-drag-list"></div>
-        <div class="divider"></div>
-        <button class="btn btn-primary" onclick="submitRankings()">✓ Submit rankings</button>
-        <div id="rank-submit-msg"></div>
       </div>
     </div>
     <div id="pview-teams" class="hidden">
