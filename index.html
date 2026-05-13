@@ -123,7 +123,9 @@ function showAdminPhase(phase){
   if(phase==='scores'){ renderSGS(); loadScorePanel(); }
   if(phase==='board'){ renderLeaderboard(); renderGPB(); updateStats(); }
   if(phase==='history'){ renderHistoryList(); renderCustomBadges(); renderCustomBadgePlayerSelect(); }
+  if(phase==='games'){ renderGames(); }
 }
+window.showAdminPhase = showAdminPhase;
 function showPlayerTab(tab){
   if(S) S._pt=tab;
   ['rank','teams','lb'].forEach(t=>{ hide('pview-'+t); el('ptab-'+t).classList.remove('active'); });
@@ -133,6 +135,7 @@ function showPlayerTab(tab){
   if(tab==='teams') renderMyTeams();
   if(tab==='lb'){ renderPlayerLB(); renderAllPlayerBadges(); }
 }
+window.showPlayerTab = showPlayerTab;
 
 // ── HOME ACTIONS ─────────────────────────────────────────
 window.createTournament = async ()=>{
@@ -946,9 +949,7 @@ function renderAllPlayerBadges(){
   </div>`).join('');
 }
 
-// expose phase/tab switchers globally
-window.showAdminPhase = showAdminPhase;
-window.showPlayerTab  = showPlayerTab;
+
 </script>
 
 <style>
