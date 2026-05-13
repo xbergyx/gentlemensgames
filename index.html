@@ -120,7 +120,7 @@ function showAdminPhase(phase){
   });
   show('admin-'+phase);
   document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===phase) t.classList.add('active'); });
-  if(phase==='scores'){ renderSGS(); loadScorePanel(); }
+  if(phase==='scores'){ renderMatchFeed(); }
   if(phase==='board'){ renderLeaderboard(); renderGPB(); updateStats(); }
   if(phase==='history'){ renderHistoryList(); renderCustomBadges(); renderCustomBadgePlayerSelect(); }
   if(phase==='games'){ renderGames(); }
@@ -209,7 +209,6 @@ function renderAdminView(){
   el('join-code-display').textContent   = S.joinCode||'—';
   renderPlayerList();
   renderGames();
-  renderSGS();
   showAdminPhase(S._ap||'setup');
 }
 
@@ -301,6 +300,7 @@ function buildSE(teams){
   }
   return rounds;
 }
+function shuffle(arr){ return arr.slice().sort(()=>Math.random()-0.5); }
 function buildBracket(game, teams){
   const fmt=game.format, b={};
   if(fmt==='single-elim'){ b.type='single-elim'; b.rounds=buildSE(teams); }
@@ -311,8 +311,14 @@ function buildBracket(game, teams){
     b.poolAM=rrMatches(b.poolA); b.poolBM=rrMatches(b.poolB);
     b.poolASt=initStandings(b.poolA); b.poolBSt=initStandings(b.poolB);
     b.crossover=[]; b.crossoverBuilt=false;
+    // randomised play order saved once
+    b.matchOrderA=shuffle(b.poolAM.map(m=>m.id));
+    b.matchOrderB=shuffle(b.poolBM.map(m=>m.id));
   }
-  else if(fmt==='round-robin'){ b.type='round-robin'; b.matches=rrMatches(teams); b.standings=initStandings(teams); }
+  else if(fmt==='round-robin'){
+    b.type='round-robin'; b.matches=rrMatches(teams); b.standings=initStandings(teams);
+    b.matchOrder=shuffle(b.matches.map(m=>m.id));
+  }
   else if(fmt==='pool-playoff'){
     b.type='pool-playoff';
     const gs=Math.max(2,Math.ceil(teams.length/Math.ceil(teams.length/3)));
@@ -418,23 +424,241 @@ function mHTML(gid,m,pfx,onSave){
   </div>`;
 }
 
-// ── SCORE PANEL ──────────────────────────────────────────
-window.loadScorePanel = ()=>{
-  renderSGS();
-  const gameId=el('score-game-select').value, panel=el('score-panel');
-  if(!gameId){ panel.innerHTML=''; return; }
-  const game=(S.games||[]).find(g=>g.id===gameId);
-  if(!game){ panel.innerHTML=''; return; }
-  const teams=(S.teams&&S.teams[gameId])||[];
-  if(!teams.length){ panel.innerHTML='<div class="card"><div class="alert alert-warn">Lock rankings first to generate teams.</div></div>'; return; }
-  const fmt=game.format;
-  if(fmt==='single-elim') renderSE(game,panel);
-  else if(fmt==='double-elim') renderDE(game,panel);
-  else if(fmt==='two-pool') renderTP(game,panel);
-  else if(fmt==='round-robin') renderRR(game,panel);
-  else if(fmt==='pool-playoff') renderPP(game,panel);
-  else renderScoreInput(game,teams,panel);
+// ── SCORE PANEL — unified match feed ─────────────────────
+// Called from showAdminPhase('scores') and after any score is saved
+function renderMatchFeed(){
+  const feed=el('match-feed'); if(!feed) return;
+  const lockedGames=(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring');
+  if(!lockedGames.length){
+    feed.innerHTML='<div class="card"><div class="alert alert-info">No games with locked teams yet. Go to the Games tab to add games and lock rankings.</div></div>';
+    return;
+  }
+  let html='';
+  lockedGames.forEach(game=>{
+    const teams=(S.teams&&S.teams[game.id])||[];
+    const b=S.bs&&S.bs[game.id];
+    const scores=S.scores&&S.scores[game.id]||{};
+    const fin=scores._fin;
+    const fmt=game.format;
+    // collect pending matches for this game
+    let pendingHTML='', doneHTML='', totalMatches=0, doneMatches=0;
+
+    if(fmt==='round-robin'&&b&&b.matches){
+      const all=b.matches;
+      totalMatches=all.length;
+      // randomised order stored in bracketState, or generate and store it
+      const order=b.matchOrder||all.map(m=>m.id);
+      const ordered=order.map(id=>all.find(m=>m.id===id)).filter(Boolean);
+      ordered.forEach((m,i)=>{
+        if(m.winner){ doneMatches++; doneHTML+=matchRowDone(game,m,i+1); }
+        else pendingHTML+=matchRowPending(game,m,fmt,i+1);
+      });
+    } else if((fmt==='two-pool'||fmt==='pool-playoff')&&b){
+      const pools=fmt==='two-pool'
+        ?[{name:'Pool A',matches:b.poolAM||[],st:b.poolASt,poolKey:'A'},{name:'Pool B',matches:b.poolBM||[],st:b.poolBSt,poolKey:'B'}]
+        :(b.pools||[]).map((p,i)=>({name:p.name,matches:p.matches||[],st:p.standings,poolIdx:i}));
+      pools.forEach(pool=>{
+        const all=pool.matches;
+        totalMatches+=all.length;
+        const pOrder=(pool.poolKey==='A'?b.matchOrderA:pool.poolKey==='B'?b.matchOrderB:null)||all.map(m=>m.id);
+        const ordered=pOrder.map(id=>all.find(m=>m.id===id)).filter(Boolean);
+        ordered.forEach((m,i)=>{
+          if(m.winner){ doneMatches++; doneHTML+=matchRowDone(game,m,i+1,pool.name); }
+          else pendingHTML+=matchRowPending(game,m,fmt,i+1,pool.name,pool.poolKey,pool.poolIdx);
+        });
+      });
+      // crossover / knockout
+      const xover=b.crossover||[];
+      xover.forEach((m,i)=>{
+        if(m.winner) doneHTML+=matchRowDone(game,m,i+1,'Crossover');
+        else pendingHTML+=matchRowPending(game,m,fmt,i+1,'Crossover','cross');
+      });
+      const ko=b.knockout||[];
+      ko.forEach((m,i)=>{
+        if(m.winner) doneHTML+=matchRowDone(game,m,i+1,'Knockout');
+        else pendingHTML+=matchRowPending(game,m,fmt,i+1,'Knockout','ko');
+      });
+    } else if(fmt==='single-elim'&&b&&b.rounds){
+      const rNames=['Round 1','Round 2','QF','SF','Final'];
+      b.rounds.forEach((round,ri)=>{
+        round.forEach((m,mi)=>{
+          totalMatches++;
+          if(m.bye) return;
+          if(m.winner){ doneMatches++; doneHTML+=matchRowDone(game,m,mi+1,rNames[ri]||'R'+(ri+1)); }
+          else pendingHTML+=matchRowPending(game,m,fmt,mi+1,rNames[ri]||'R'+(ri+1),null,null,ri,mi);
+        });
+      });
+    } else if(fmt==='double-elim'&&b){
+      (b.winners||[]).forEach((round,ri)=>round.forEach((m,mi)=>{
+        if(m.bye) return; totalMatches++;
+        if(m.winner){ doneMatches++; doneHTML+=matchRowDone(game,m,mi+1,'W-R'+(ri+1)); }
+        else pendingHTML+=matchRowPending(game,m,fmt,mi+1,'W-R'+(ri+1),'dew',null,ri,mi);
+      }));
+      (b.losers||[]).forEach((round,ri)=>round.forEach((m,mi)=>{
+        if(m.bye) return; totalMatches++;
+        if(m.winner){ doneMatches++; doneHTML+=matchRowDone(game,m,mi+1,'L-R'+(ri+1)); }
+        else pendingHTML+=matchRowPending(game,m,fmt,mi+1,'L-R'+(ri+1),'del',null,ri,mi);
+      }));
+      if(b.grandFinal){ totalMatches++;
+        if(b.grandFinal.winner) doneHTML+=matchRowDone(game,b.grandFinal,1,'Grand Final');
+        else pendingHTML+=matchRowPending(game,b.grandFinal,fmt,1,'Grand Final','degf');
+      }
+    } else {
+      // score-based format
+      const sc=S.scores&&S.scores[game.id]||{};
+      html+=`<div class="card"><div class="card-title">✏️ ${game.name} <span class="fbadge">${fmtL[fmt]||fmt}</span></div>`;
+      teams.forEach(t=>{
+        const isMulti=fmt==='multi-round-high'||fmt==='multi-round-low';
+        html+=`<div style="margin-bottom:10px"><div class="sec-label">${teamLabel(t)}</div>`;
+        if(isMulti){ for(let r=1;r<=game.rounds;r++){ const key=t.id+'_r'+r; html+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:#888;width:65px">Round ${r}</span><input type="number" id="sc-${game.id}-${key}" value="${sc[key]!==undefined?sc[key]:''}" placeholder="Score" style="width:120px;margin:0"></div>`; } }
+        else html+=`<input type="number" id="sc-${game.id}-${t.id}" value="${sc[t.id]!==undefined?sc[t.id]:''}" placeholder="Score">`;
+        html+='</div>';
+      });
+      html+=`<button class="btn btn-primary" onclick="saveScoreGame('${game.id}')">💾 Save & award points</button>`;
+      if(fin) html+=`<div class="alert alert-success" style="margin-top:8px">✓ Points awarded!</div>`;
+      html+='</div>';
+      return;
+    }
+
+    const progress=totalMatches>0?Math.round(doneMatches/totalMatches*100):0;
+    html+=`<div class="card">
+      <div class="card-title">🎯 ${game.name} <span class="fbadge">${fmtL[fmt]||fmt}</span>
+        <span style="margin-left:auto;font-size:11px;color:#888">${doneMatches}/${totalMatches}</span>
+      </div>
+      <div style="height:4px;background:#f0ede6;border-radius:4px;margin-bottom:10px">
+        <div style="height:4px;background:#7F77DD;border-radius:4px;width:${progress}%;transition:width .3s"></div>
+      </div>
+      ${fin?'<div class="alert alert-success" style="margin-bottom:8px">✓ Points awarded!</div>':''}
+      ${pendingHTML}
+      ${doneHTML?`<div style="font-size:11px;color:#aaa;margin-top:8px;margin-bottom:5px;font-weight:600">COMPLETED</div>${doneHTML}`:''}
+      ${totalMatches>0&&doneMatches===totalMatches&&!fin?`<button class="btn btn-primary" onclick="finalizeGame('${game.id}')">🏅 Finalize & award points</button>`:''}
+    </div>`;
+  });
+  feed.innerHTML=html||'<div class="card"><div class="alert alert-info">No pending matches.</div></div>';
+}
+
+function matchRowPending(game,m,fmt,num,label,poolKey,poolIdx,ri,mi){
+  if(!m.t1||(!m.t2&&!m.bye)) return'';
+  const t2=m.t2||{id:'tbd',p1:'TBD',p2:null};
+  const pfx=`mf-${game.id}-${m.id}`;
+  let saveCall='';
+  if(fmt==='round-robin') saveCall=`saveMFMatch('${game.id}','${m.id}','rr')`;
+  else if(fmt==='two-pool') saveCall=`saveMFMatch('${game.id}','${m.id}','pool','${poolKey}')`;
+  else if(fmt==='pool-playoff') saveCall=`saveMFMatch('${game.id}','${m.id}','pppool',${poolIdx})`;
+  else if(fmt==='single-elim') saveCall=`saveMFMatch('${game.id}','${m.id}','se',null,${ri})`;
+  else if(fmt==='double-elim'&&poolKey==='dew') saveCall=`saveMFMatch('${game.id}','${m.id}','dew',null,${ri})`;
+  else if(fmt==='double-elim'&&poolKey==='del') saveCall=`saveMFMatch('${game.id}','${m.id}','del',null,${ri})`;
+  else if(fmt==='double-elim'&&poolKey==='degf') saveCall=`saveMFMatch('${game.id}','${m.id}','degf')`;
+  else if(poolKey==='cross') saveCall=`saveMFMatch('${game.id}','${m.id}','cross')`;
+  else if(poolKey==='ko') saveCall=`saveMFMatch('${game.id}','${m.id}','ko')`;
+  return`<div style="background:#fff;border:1px solid #e8e6df;border-radius:10px;padding:10px;margin-bottom:8px">
+    ${label?`<div style="font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${label} · Match ${num}</div>`:''}
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="flex:1;font-size:13px;font-weight:500">${teamLabel(m.t1)}</div>
+      <input type="number" id="${pfx}-1" placeholder="Score" style="width:70px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center">
+      <span style="font-size:12px;color:#aaa">vs</span>
+      <input type="number" id="${pfx}-2" placeholder="Score" style="width:70px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center">
+      <div style="flex:1;font-size:13px;font-weight:500;text-align:right">${teamLabel(t2)}</div>
+    </div>
+    <button class="btn btn-success btn-sm" style="width:100%" onclick="${saveCall}">✓ Save result</button>
+  </div>`;
+}
+
+function matchRowDone(game,m,num,label){
+  const loser=m.winner.id===m.t1.id?m.t2:m.t1;
+  return`<div style="background:#f8f7f4;border:1px solid #eee;border-radius:10px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+    ${label?`<span style="font-size:10px;color:#aaa;font-weight:700">${label}</span>`:''}
+    <span style="font-size:12px;font-weight:600;color:#27500A">✓ ${teamLabel(m.winner)}</span>
+    <span style="font-size:11px;color:#aaa">${m.score1}–${m.score2}</span>
+    <span style="font-size:11px;color:#aaa">def. ${teamLabel(loser)}</span>
+  </div>`;
+}
+
+// Universal save handler for match feed
+window.saveMFMatch=async(gameId,matchId,type,poolKey,ri)=>{
+  const pfx=`mf-${gameId}-${matchId}`;
+  const s1=parseFloat(el(pfx+'-1')&&el(pfx+'-1').value);
+  const s2=parseFloat(el(pfx+'-2')&&el(pfx+'-2').value);
+  if(isNaN(s1)||isNaN(s2)){ alert('Enter scores for both teams.'); return; }
+  if(s1===s2){ alert('Scores cannot be equal — no draws allowed.'); return; }
+  const b=JSON.parse(JSON.stringify(S.bs[gameId]));
+  let m=null;
+  if(type==='rr') m=b.matches.find(x=>x.id===matchId);
+  else if(type==='pool') m=(poolKey==='A'?b.poolAM:b.poolBM).find(x=>x.id===matchId);
+  else if(type==='pppool') m=b.pools[ri].matches.find(x=>x.id===matchId);
+  else if(type==='se') m=b.rounds[ri].find(x=>x.id===matchId);
+  else if(type==='dew') m=b.winners[ri].find(x=>x.id===matchId);
+  else if(type==='del') m=b.losers[ri].find(x=>x.id===matchId);
+  else if(type==='degf') m=b.grandFinal;
+  else if(type==='cross') m=b.crossover.find(x=>x.id===matchId);
+  else if(type==='ko') m=b.knockout.find(x=>x.id===matchId);
+  if(!m){ alert('Match not found.'); return; }
+  m.score1=s1; m.score2=s2; m.winner=s1>s2?m.t1:m.t2;
+  // Update standings for pool-based formats
+  if(type==='rr') updSt(b.standings,m);
+  else if(type==='pool'){ updSt(poolKey==='A'?b.poolASt:b.poolBSt,m); }
+  else if(type==='pppool'){ updSt(b.pools[ri].standings,m); }
+  // SE bracket advancement
+  if(type==='se'&&ri+1<b.rounds.length){
+    const nr=b.rounds[ri+1],mi=b.rounds[ri].indexOf(m),nm=nr[Math.floor(mi/2)];
+    if(nm&&!nm.bye){ if(mi%2===0) nm.t1=m.winner; else nm.t2=m.winner; }
+  }
+  // DE loser drop
+  if(type==='dew'){
+    const loser=m.winner.id===m.t1.id?m.t2:m.t1;
+    if(!b.losers) b.losers=[]; if(!b.losersQ) b.losersQ=[];
+    b.losersQ.push(loser);
+    if(b.losersQ.length>=2){ const a=b.losersQ.shift(),bq=b.losersQ.shift(); b.losers.push([{id:uid(),t1:a,t2:bq,winner:null,score1:null,score2:null}]); }
+    const wDone=b.winners.every(r=>r.every(x=>x.winner||x.bye));
+    if(wDone&&!b.grandFinal){ const wC=b.winners[b.winners.length-1][0].winner,lC=b.losers.length&&b.losers[b.losers.length-1][0].winner; if(wC) b.grandFinal={id:uid(),t1:wC,t2:lC||{id:uid(),p1:'L-Bracket Winner',p2:null},winner:null,score1:null,score2:null}; }
+  }
+  // Pool → crossover / knockout triggers
+  if((type==='pool'||type==='pppool')){
+    const poolsDone = type==='pool'
+      ? b.poolAM.every(x=>x.winner)&&b.poolBM.every(x=>x.winner)
+      : b.pools.every(p=>p.matches.every(x=>x.winner));
+    if(poolsDone&&!b.crossoverBuilt&&!b.knockoutBuilt){
+      if(type==='pool'){
+        const rA=sortBySt(b.poolA,b.poolASt),rB=sortBySt(b.poolB,b.poolBSt);
+        b.crossover=[];const len=Math.min(rA.length,rB.length);
+        for(let i=0;i<len;i++) b.crossover.push({id:uid(),t1:rA[i],t2:rB[i],winner:null,score1:null,score2:null,label:ordinal(i*2+1)+' vs '+ordinal(i*2+2)+' place'});
+        b.crossoverBuilt=true;
+      } else {
+        const ranked=b.pools.map(p=>sortBySt(p.teams,p.standings));
+        b.knockout=[];const maxR=ranked[0].length;
+        for(let r=0;r<maxR;r++){ const mt=ranked.filter(p=>p[r]).map(p=>p[r]); for(let i=0;i+1<mt.length;i+=2) b.knockout.push({id:uid(),t1:mt[i],t2:mt[i+1],winner:null,score1:null,score2:null,label:ordinal(r+1)+'-place playoff'}); }
+        b.knockoutBuilt=true;
+      }
+    }
+  }
+  await saveBs(gameId,b);
 };
+
+window.finalizeGame=async(gameId)=>{
+  const game=(S.games||[]).find(g=>g.id===gameId);
+  const teams=(S.teams&&S.teams[gameId])||[];
+  const b=S.bs&&S.bs[gameId];
+  const fmt=game.format;
+  const pl={},n=teams.length;
+  if(fmt==='round-robin'){
+    sortBySt(teams,b.standings).forEach((t,i)=>{ pl[t.id]=i+1; });
+  } else if(fmt==='single-elim'){
+    const last=b.rounds[b.rounds.length-1];
+    last.forEach(m=>{ if(m.winner){ pl[m.winner.id]=1; const l=m.winner.id===m.t1.id?m.t2:m.t1; if(l)pl[l.id]=2; } });
+    if(b.rounds.length>1) b.rounds[b.rounds.length-2].forEach((m,i)=>{ if(m.winner){ const l=m.winner.id===m.t1.id?m.t2:m.t1; if(l&&!pl[l.id])pl[l.id]=3+i; } });
+  } else if(fmt==='double-elim'){
+    const gf=b.grandFinal;
+    if(gf&&gf.winner){ pl[gf.winner.id]=1; const ru=gf.winner.id===gf.t1.id?gf.t2:gf.t1; if(ru)pl[ru.id]=2; }
+  } else if(fmt==='two-pool'){
+    (b.crossover||[]).forEach((m,i)=>{ if(m.winner){ pl[m.winner.id]=i*2+1; const l=m.winner.id===m.t1.id?m.t2:m.t1; if(l)pl[l.id]=i*2+2; } });
+  } else if(fmt==='pool-playoff'){
+    (b.knockout||[]).forEach((m,i)=>{ if(m.winner){ pl[m.winner.id]=i*2+1; const l=m.winner.id===m.t1.id?m.t2:m.t1; if(l)pl[l.id]=i*2+2; } });
+  }
+  teams.forEach((t,i)=>{ if(!pl[t.id])pl[t.id]=n-i; });
+  await saveScores(gameId,{_fin:true}); await awardPts(gameId,pl,teams);
+};
+
+window.loadScorePanel=()=>{ renderMatchFeed(); };
 
 async function saveBs(gameId, newBs){
   await fbUpdate('tournaments/'+tourneyId+'/bs', {[gameId]: newBs});
@@ -870,9 +1094,24 @@ window.openGameRanking=(gameId)=>{
   const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
   const others=(S.players||[]).filter(p=>p!==localName);
   const gRanks=(S.gameRankings&&S.gameRankings[gameId])||{};
-  let ranked=gRanks[localName]||others.slice();
-  ranked=ranked.filter(p=>others.includes(p));
-  others.forEach(p=>{ if(!ranked.includes(p)) ranked.push(p); });
+  // If player already ranked, use their previous ranking; otherwise smart-sort by history
+  let ranked;
+  if(gRanks[localName]){
+    ranked=gRanks[localName].filter(p=>others.includes(p));
+    others.forEach(p=>{ if(!ranked.includes(p)) ranked.push(p); });
+  } else {
+    // Smart default: last year's winner → other champs → podium → everyone else
+    const lastYr=(S.tourneyYear||2026)-1;
+    function rankScore(p){
+      const h=(S.history&&S.history[p])||{wins:0,podiums:0,yearsAttended:[]};
+      if(h.yearsAttended&&h.yearsAttended.includes(lastYr)&&h.wins>0) return 0; // last year winner
+      if(h.wins>=2) return 1; // dynasty
+      if(h.wins===1) return 2; // champion
+      if(h.podiums>0) return 3; // podium
+      return 4; // no wins/podiums or new
+    }
+    ranked=others.slice().sort((a,b)=>rankScore(a)-rankScore(b));
+  }
   el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-title"><span>Rank for: ${game.name}</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
     <div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Hold and drag to reorder — 1 = best player</div>
@@ -1188,11 +1427,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       </div>
     </div>
     <div id="admin-scores" class="hidden">
-      <div class="card">
-        <div class="card-title">🎯 Select game to score</div>
-        <select id="score-game-select" onchange="loadScorePanel()"><option value="">— choose a game —</option></select>
-      </div>
-      <div id="score-panel"></div>
+      <div id="match-feed"></div>
     </div>
     <div id="admin-board" class="hidden">
       <div class="card">
