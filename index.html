@@ -267,6 +267,120 @@ window.startTournament = async ()=>{
   await fbUpdate('tournaments/'+tourneyId, {tournamentStarted:true, games});
 };
 
+// ── XLSX FULL UPLOAD ─────────────────────────────────────
+window.handleXlsxUpload = async (event)=>{
+  const file=event.target.files[0]; if(!file) return;
+  const statusEl=el('xlsx-upload-status');
+  statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">📂 Reading file...</div>';
+
+  // Load SheetJS dynamically
+  if(!window.XLSX){
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload=res; s.onerror=()=>rej(new Error('Failed to load SheetJS'));
+      document.head.appendChild(s);
+    });
+  }
+
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=window.XLSX.read(buf,{type:'array'});
+    const players=S.players||[];
+    const games=S.games||[];
+
+    if(!players.length||!games.length){
+      statusEl.innerHTML='<div class="alert alert-warn" style="font-size:11px">Add players and games to the tournament first.</div>';
+      return;
+    }
+
+    function norm(s){ return String(s||'').toLowerCase().replace(/[\s\-_.]/g,''); }
+    function isDash(v){ const s=String(v||'').trim(); return !s||s.replace(/-/g,'').replace(/\s/g,'')===''; }
+
+    // gameRankings[gameId][raterPlayer] = [ranked player list in order]
+    const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
+    const loadedPlayers=[], errors=[];
+
+    // Each player's sheet name matches their name
+    players.forEach(rater=>{
+      // Find matching sheet (fuzzy)
+      const sheetName=wb.SheetNames.find(s=>norm(s)===norm(rater)||norm(s).includes(norm(rater))||norm(rater).includes(norm(s)));
+      if(!sheetName){ errors.push(rater+' (no sheet found)'); return; }
+
+      const ws=wb.Sheets[sheetName];
+      const rows=window.XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+
+      // Find header row with game names
+      let headerRowIdx=-1, gameCols=[];
+      rows.forEach((row,i)=>{
+        if(headerRowIdx>=0) return;
+        const vals=row.map(v=>String(v||'').trim());
+        if(vals.some(v=>norm(v)==='golf'||norm(v)==='bowling')){
+          headerRowIdx=i;
+          vals.forEach((v,ci)=>{
+            if(ci===0) return;
+            if(!v||isDash(v)) return;
+            if(norm(v).startsWith('avg')||norm(v).startsWith('rank')) return;
+            // Match to tournament game
+            const match=games.find(g=>norm(g.name)===norm(v)||norm(g.name).includes(norm(v))||norm(v).includes(norm(g.name)));
+            if(match) gameCols.push({ci, gameId:match.id, gameName:match.name});
+          });
+        }
+      });
+
+      if(headerRowIdx<0||!gameCols.length){ errors.push(rater+' (no game columns found)'); return; }
+
+      // Parse data rows — collect {rankedPlayer: {gameId: rank}}
+      const rankData={}; // gameId -> {rankedPlayer: rank}
+      gameCols.forEach(({gameId})=>{ rankData[gameId]={}; });
+
+      rows.slice(headerRowIdx+1).forEach(row=>{
+        const rowPlayer=String(row[0]||'').trim();
+        if(!rowPlayer) return;
+        if(isDash(String(row[gameCols[0].ci]||''))) return; // own row
+
+        // Find matching tournament player
+        const matched=players.find(p=>norm(p)===norm(rowPlayer)||norm(p).includes(norm(rowPlayer))||norm(rowPlayer).includes(norm(p)));
+        if(!matched) return;
+
+        gameCols.forEach(({ci,gameId})=>{
+          const val=row[ci];
+          if(val===''||val===null||val===undefined) return;
+          const rank=parseInt(String(val));
+          if(!isNaN(rank)&&rank>0) rankData[gameId][matched]=rank;
+        });
+      });
+
+      // Convert to ordered arrays
+      let gamesLoaded=0;
+      gameCols.forEach(({gameId})=>{
+        const pr=rankData[gameId];
+        if(!Object.keys(pr).length) return;
+        const sorted=Object.entries(pr).sort((a,b)=>a[1]-b[1]).map(e=>e[0]);
+        if(!gameRankings[gameId]) gameRankings[gameId]={};
+        gameRankings[gameId][rater]=sorted;
+        gamesLoaded++;
+      });
+
+      if(gamesLoaded>0) loadedPlayers.push(rater+' ('+gamesLoaded+' games)');
+      else errors.push(rater+' (no rankings found in sheet)');
+    });
+
+    if(!loadedPlayers.length){
+      statusEl.innerHTML='<div class="alert alert-warn" style="font-size:11px">❌ Could not load any rankings. Make sure sheet names match player names.<br>Sheets found: '+wb.SheetNames.join(', ')+'</div>';
+      return;
+    }
+
+    await fbUpdate('tournaments/'+tourneyId,{gameRankings});
+    statusEl.innerHTML='<div class="alert alert-success" style="font-size:11px">✓ Loaded rankings for <strong>'+loadedPlayers.length+' players</strong>:<br>'+loadedPlayers.join(', ')+(errors.length?'<br>⚠️ Skipped: '+errors.join(', '):'')+'</div>';
+    event.target.value=''; // reset file input
+
+  } catch(err){
+    statusEl.innerHTML='<div class="alert alert-warn" style="font-size:11px">❌ Error reading file: '+err.message+'</div>';
+    console.error(err);
+  }
+};
+
 // ── TEST HELPER — fills random rankings for all players/games ──
 window.fillTestRankings = async ()=>{
   const players=S.players||[], games=S.games||[];
@@ -296,7 +410,8 @@ window.renderRankingGrid = ()=>{
   if(!playerName){ wrap.innerHTML=''; return; }
   const games=S.games||[];
   const players=S.players||[];
-  const others=players.filter(p=>p!==playerName);
+  // Sort alphabetically to match spreadsheet order
+  const others=players.filter(p=>p!==playerName).sort((a,b)=>a.localeCompare(b));
   if(!games.length||!others.length){ wrap.innerHTML='<p style="font-size:12px;color:#aaa">Add players and games first.</p>'; return; }
 
   // Pre-fill existing rankings if any
@@ -345,7 +460,7 @@ window.renderRankingGrid = ()=>{
     <button class="btn btn-primary btn-sm" style="width:auto" onclick="saveRankingGrid()">💾 Save rankings for ${playerName}</button>
     <button class="btn btn-sm" style="width:auto;color:#888" onclick="clearRankingGrid()">✕ Clear grid</button>
   </div>
-  <div style="font-size:10px;color:#aaa;margin-top:5px">Tip: Tab between cells. Duplicate numbers in a column are highlighted red.</div>`;
+  <div style="font-size:10px;color:#aaa;margin-top:5px">Players are sorted A–Z to match your spreadsheet. Duplicate numbers in a column turn red.</div>`;
 
   wrap.innerHTML=html;
 };
@@ -373,7 +488,8 @@ window.pasteIntoGrid = ()=>{
 
   const games=S.games||[];
   const players=S.players||[];
-  const others=players.filter(p=>p!==playerName);
+  // Sort alphabetically — MUST match the grid order
+  const others=players.filter(p=>p!==playerName).sort((a,b)=>a.localeCompare(b));
 
   // Parse pasted rows — tab or space separated
   const pastedRows=raw.split('\n').map(r=>r.trim()).filter(r=>r);
@@ -1916,7 +2032,15 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
         <div class="divider"></div>
         <div style="font-size:11px;color:#aaa;margin-bottom:6px;font-weight:600">🧪 TESTING / BULK IMPORT</div>
         <button class="btn btn-sm" onclick="fillTestRankings()" style="width:auto;border-color:#ccc;color:#888;font-size:11px;margin-bottom:8px">⚡ Fill random rankings for all players</button>
-        <div style="font-size:11px;color:#888;margin-bottom:6px">Enter rankings for one player using the grid below:</div>
+        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:5px">📊 Upload full Excel ranking sheet</div>
+        <div style="font-size:11px;color:#aaa;margin-bottom:6px">Upload your GG spreadsheet — reads every player's sheet at once and loads all rankings automatically.</div>
+        <label class="btn btn-sm" style="width:auto;cursor:pointer;background:#EAF3DE;border-color:#97C459;color:#27500A;margin-bottom:8px">
+          📂 Choose Excel file (.xlsx)
+          <input type="file" id="xlsx-upload-input" accept=".xlsx,.xls" style="display:none" onchange="handleXlsxUpload(event)">
+        </label>
+        <div id="xlsx-upload-status" style="margin-bottom:8px"></div>
+        <div class="divider"></div>
+        <div style="font-size:11px;color:#888;margin-bottom:6px">Or enter rankings for one player using the grid below:</div>
         <select id="upload-ranking-player" style="margin-bottom:8px;font-size:12px;padding:5px 8px" onchange="renderRankingGrid()">
           <option value="">— select player to enter rankings for —</option>
         </select>
