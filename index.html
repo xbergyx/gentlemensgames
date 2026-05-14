@@ -381,6 +381,27 @@ window.handleXlsxUpload = async (event)=>{
   }
 };
 
+// ── RESET TOURNAMENT (keep players & games) ──────────────
+window.resetTournament = async ()=>{
+  if(!confirm('Reset tournament? This clears all rankings, teams, scores and points. Players and games are kept.')) return;
+  // Reset games back to pending status
+  const games=(S.games||[]).map(g=>({...g, status:'pending'}));
+  await fbUpdate('tournaments/'+tourneyId, {
+    rankings: {},
+    gameRankings: {},
+    teams: {},
+    scores: {},
+    points: {},
+    bs: {},
+    tiebreaker: {},
+    rankingsLocked: false,
+    tournamentStarted: false,
+    tournamentFinalized: false,
+    games: games,
+  });
+  alert('✓ Tournament reset! Players and games kept.');
+};
+
 // ── TEST HELPER — fills random rankings for all players/games ──
 window.fillTestRankings = async ()=>{
   const players=S.players||[], games=S.games||[];
@@ -2071,6 +2092,8 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
         <div id="start-tourney-body"></div>
         <div class="divider"></div>
         <div style="font-size:11px;color:#aaa;margin-bottom:6px;font-weight:600">🧪 TESTING / BULK IMPORT</div>
+        <button class="btn btn-sm" onclick="resetTournament()" style="width:auto;border-color:#f0a0a0;color:#c0392b;font-size:11px;margin-bottom:5px">🔄 Reset tournament (keep players &amp; games)</button>
+        <div style="font-size:10px;color:#aaa;margin-bottom:8px">Clears rankings, teams, scores, and points. Players and games stay.</div>
         <button class="btn btn-sm" onclick="fillTestRankings()" style="width:auto;border-color:#ccc;color:#888;font-size:11px;margin-bottom:8px">⚡ Fill random rankings for all players</button>
         <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:5px">📊 Upload full Excel ranking sheet</div>
         <div style="font-size:11px;color:#aaa;margin-bottom:6px">Upload your GG spreadsheet — reads every player's sheet at once and loads all rankings automatically.</div>
