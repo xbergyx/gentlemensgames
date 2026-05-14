@@ -1,0 +1,32 @@
+{
+  "rules": {
+    "admins": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "settings": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email === 'bergman.bryant@gmail.com'"
+    },
+    "smsLog": {
+      ".read": "auth != null && auth.token.email === 'bergman.bryant@gmail.com'",
+      ".write": "auth != null"
+    },
+    "players": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'bergman.bryant@gmail.com')"
+      }
+    },
+    "preAssignments": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email === 'bergman.bryant@gmail.com'"
+    },
+    "tournaments": {
+      ".read": "auth != null",
+      "$tid": {
+        ".write": "auth != null && (auth.token.email === 'bergman.bryant@gmail.com' || (data.exists() && data.child('playerUids').child(auth.uid).exists()))"
+      }
+    }
+  }
+}

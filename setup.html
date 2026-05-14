@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GG Admin Setup</title>
+<style>
+body{font-family:-apple-system,sans-serif;padding:2rem;max-width:500px;margin:0 auto;background:#f5f4f0}
+h1{font-size:20px;margin-bottom:1rem}
+.card{background:#fff;border-radius:12px;padding:1.2rem;margin-bottom:1rem;border:1px solid #e0ddd6}
+.btn{width:100%;padding:10px;background:#7F77DD;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px}
+.alert{padding:10px;border-radius:9px;font-size:13px;margin-top:8px}
+.alert-success{background:#EAF3DE;color:#27500A}
+.alert-warn{background:#FEF3E2;color:#7a4f00}
+pre{background:#f0ede6;padding:10px;border-radius:8px;font-size:12px;overflow-x:auto;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<h1>⚜️ GG Admin Setup</h1>
+
+<div class="card">
+  <h2 style="font-size:15px;margin-bottom:10px">Step 1 — Sign in as Bryant</h2>
+  <p style="font-size:13px;color:#666;margin-bottom:12px">Sign in with bergman.bryant@gmail.com first, then come back here.</p>
+  <div id="auth-status" style="font-size:13px;color:#888">Checking auth...</div>
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin-bottom:10px">Step 2 — Apply Firebase security rules</h2>
+  <p style="font-size:13px;color:#666;margin-bottom:10px">Go to Firebase Console → Realtime Database → Rules tab → paste this:</p>
+  <pre id="rules-display"></pre>
+  <button class="btn" onclick="copyRules()">📋 Copy rules</button>
+  <div id="rules-status"></div>
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin-bottom:10px">Step 3 — Load GG history</h2>
+  <p style="font-size:13px;color:#666;margin-bottom:10px">This loads all-time history for Bryant, Chett, Colin, Adam, Aaron and everyone else from GG III–VII.</p>
+  <input type="text" id="tid" placeholder="Paste your Tournament ID here" style="width:100%;padding:9px;border:1px solid #ddd;border-radius:9px;font-size:14px;margin-bottom:8px">
+  <button class="btn" onclick="loadHistory()">📥 Load history</button>
+  <div id="history-status"></div>
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin-bottom:10px">Step 4 — Initialize SMS settings</h2>
+  <p style="font-size:13px;color:#666;margin-bottom:10px">Sets SMS to ON with 20/day limit.</p>
+  <button class="btn" onclick="initSettings()">⚙️ Initialize settings</button>
+  <div id="settings-status"></div>
+</div>
+
+<script type="module">
+import { initializeApp }     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkaj_5DQm2VFx9VCXcHFBBSAJKlquC1yM",
+  authDomain: "gentlemans-games.firebaseapp.com",
+  databaseURL: "https://gentlemans-games-default-rtdb.firebaseio.com",
+  projectId: "gentlemans-games",
+  storageBucket: "gentlemans-games.firebasestorage.app",
+  messagingSenderId: "868270239422",
+  appId: "1:868270239422:web:66d165e01e97706404f8ef"
+};
+
+const app  = initializeApp(firebaseConfig);
+const db   = getDatabase(app);
+const auth = getAuth(app);
+
+const rules = {
+  rules: {
+    admins:   { ".read": "auth != null", ".write": false },
+    settings: { ".read": "auth != null", ".write": "auth != null && auth.token.email === 'bergman.bryant@gmail.com'" },
+    smsLog:   { ".read": "auth != null && auth.token.email === 'bergman.bryant@gmail.com'", ".write": "auth != null" },
+    players:  { ".read": "auth != null", "$uid": { ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'bergman.bryant@gmail.com')" } },
+    preAssignments: { ".read": "auth != null", ".write": "auth != null && auth.token.email === 'bergman.bryant@gmail.com'" },
+    tournaments: { ".read": "auth != null", "$tid": { ".write": "auth != null && (auth.token.email === 'bergman.bryant@gmail.com' || (data.exists() && data.child('playerUids').child(auth.uid).exists()))" } }
+  }
+};
+
+document.getElementById('rules-display').textContent = JSON.stringify(rules, null, 2);
+
+onAuthStateChanged(auth, user => {
+  const el = document.getElementById('auth-status');
+  if(user) {
+    if(user.email === 'bergman.bryant@gmail.com') {
+      el.innerHTML = '<div class="alert alert-success">✓ Signed in as Bryant. You have admin access.</div>';
+    } else {
+      el.innerHTML = `<div class="alert alert-warn">⚠️ Signed in as ${user.email} — not the super admin account. Sign in as bergman.bryant@gmail.com.</div>`;
+    }
+  } else {
+    el.innerHTML = '<div class="alert alert-warn">Not signed in. Open the main app and sign in first, then come back here.</div>';
+  }
+});
+
+window.copyRules = () => {
+  navigator.clipboard.writeText(JSON.stringify(rules, null, 2)).then(() => {
+    document.getElementById('rules-status').innerHTML = '<div class="alert alert-success">✓ Copied! Paste into Firebase Console → Realtime Database → Rules.</div>';
+  });
+};
+
+window.initSettings = async () => {
+  const el = document.getElementById('settings-status');
+  try {
+    await set(ref(db, 'settings/smsEnabled'), true);
+    await set(ref(db, 'settings/smsDailyLimit'), 20);
+    el.innerHTML = '<div class="alert alert-success">✓ Settings initialized. SMS is ON, limit = 20/day.</div>';
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-warn">❌ ${e.message}</div>`;
+  }
+};
+
+window.loadHistory = async () => {
+  const tid = document.getElementById('tid').value.trim();
+  const el  = document.getElementById('history-status');
+  if(!tid) { el.innerHTML = '<div class="alert alert-warn">Enter a Tournament ID.</div>'; return; }
+
+  const history = {
+    "Bryant":      { years:7, wins:2, podiums:0, lastPlaces:1, yearsAttended:[2019,2020,2021,2022,2023,2024,2025], gameWins:{} },
+    "Adam":        { years:7, wins:2, podiums:0, lastPlaces:2, yearsAttended:[2019,2020,2021,2022,2023,2024,2025], gameWins:{"Golf":1,"Bowling":1,"BeerDarts":2,"BeerDie":2,"Cocaine":2} },
+    "Chett":       { years:7, wins:1, podiums:1, lastPlaces:0, yearsAttended:[2019,2020,2021,2022,2023,2024,2025], gameWins:{"Cornhole":1,"KanJam":1} },
+    "Colin":       { years:7, wins:0, podiums:4, lastPlaces:0, yearsAttended:[2019,2020,2021,2022,2023,2024,2025], gameWins:{"Golf":4,"Bowling":4,"Cornhole":2,"KanJam":1,"Spikeball":2} },
+    "Aaron":       { years:7, wins:0, podiums:1, lastPlaces:1, yearsAttended:[2019,2020,2021,2022,2023,2024,2025], gameWins:{} },
+    "Dane":        { years:3, wins:1, podiums:2, lastPlaces:0, yearsAttended:[2021,2023,2024], gameWins:{} },
+    "Keagan":      { years:1, wins:1, podiums:0, lastPlaces:0, yearsAttended:[2023], gameWins:{} },
+    "Ryan":        { years:2, wins:0, podiums:1, lastPlaces:0, yearsAttended:[2021,2023], gameWins:{} },
+    "Cody":        { years:3, wins:0, podiums:1, lastPlaces:0, yearsAttended:[2021,2022,2023], gameWins:{} },
+    "Marc":        { years:4, wins:0, podiums:1, lastPlaces:0, yearsAttended:[2022,2023,2024,2025], gameWins:{} },
+    "Justin":      { years:4, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2021,2022,2023,2025], gameWins:{} },
+    "AJ":          { years:4, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2021,2022,2023,2024], gameWins:{} },
+    "Andrew":      { years:2, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2021,2022], gameWins:{} },
+    "Andy":        { years:3, wins:0, podiums:0, lastPlaces:2, yearsAttended:[2021,2022,2025], gameWins:{} },
+    "Doug":        { years:3, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2023,2024,2025], gameWins:{} },
+    "Jordan":      { years:2, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2022,2025], gameWins:{} },
+    "Magoto":      { years:2, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2022,2023], gameWins:{} },
+    "AndrewD":     { years:1, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2023], gameWins:{} },
+    "Barga":       { years:1, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2025], gameWins:{} },
+    "Barry":       { years:1, wins:0, podiums:0, lastPlaces:1, yearsAttended:[2025], gameWins:{} },
+    "Bill":        { years:1, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2021], gameWins:{} },
+    "Keagan-Brent":{ years:1, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2021], gameWins:{} },
+    "Luke":        { years:1, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2022], gameWins:{} },
+    "Luke-Tony":   { years:1, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2023], gameWins:{} },
+    "Max":         { years:1, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2022], gameWins:{} },
+    "Mitch":       { years:1, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2022], gameWins:{} },
+    "Scotty":      { years:1, wins:0, podiums:0, lastPlaces:0, yearsAttended:[2021], gameWins:{} },
+    "Zach":        { years:1, wins:0, podiums:0, lastPlaces:1, yearsAttended:[2021], gameWins:{} },
+    "Andy-Steven": { years:1, wins:0, podiums:0, lastPlaces:1, yearsAttended:[2024], gameWins:{} },
+  };
+
+  try {
+    await set(ref(db, 'tournaments/'+tid+'/history'), history);
+    el.innerHTML = `<div class="alert alert-success">✓ History loaded for ${Object.keys(history).length} players!</div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-warn">❌ ${e.message}</div>`;
+  }
+};
+</script>
+</body>
+</html>
