@@ -286,32 +286,115 @@ window.fillTestRankings = async ()=>{
 // ── RANKING FILE UPLOAD ──────────────────────────────────
 function renderRankingUploadPlayerSelect(){
   const sel=el('upload-ranking-player'); if(!sel) return;
-  sel.innerHTML='<option value="">— select player —</option>'+(S.players||[]).map(p=>`<option value="${esc(p)}">${p}</option>`).join('');
+  sel.innerHTML='<option value="">— select player to enter rankings for —</option>'+(S.players||[]).map(p=>`<option value="${esc(p)}">${p}</option>`).join('');
 }
 
-window.handleRankingPaste = async ()=>{
+window.renderRankingGrid = ()=>{
+  const wrap=el('ranking-grid-wrap'); if(!wrap) return;
   const playerName=el('upload-ranking-player').value;
-  const pasteText=el('ranking-paste-area').value.trim();
+  const status=el('ranking-upload-status'); if(status) status.innerHTML='';
+  if(!playerName){ wrap.innerHTML=''; return; }
+  const games=S.games||[];
+  const players=S.players||[];
+  const others=players.filter(p=>p!==playerName);
+  if(!games.length||!others.length){ wrap.innerHTML='<p style="font-size:12px;color:#aaa">Add players and games first.</p>'; return; }
+
+  // Pre-fill existing rankings if any
+  function existingRank(gameId, otherPlayer){
+    const gRanks=(S.gameRankings&&S.gameRankings[gameId])||{};
+    const ranked=gRanks[playerName]||[];
+    const idx=ranked.indexOf(otherPlayer);
+    return idx>=0?idx+1:'';
+  }
+
+  let html=`<div style="overflow-x:auto;margin-bottom:8px">
+  <table id="ranking-grid-table" style="border-collapse:collapse;font-size:12px;width:100%">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:6px 8px;background:#f8f7f4;border:1px solid #e0ddd6;font-weight:700;position:sticky;left:0;min-width:80px">Player</th>
+        ${games.map(g=>`<th style="padding:6px 8px;background:#EEEDFE;border:1px solid #e0ddd6;font-weight:700;color:#3C3489;text-align:center;white-space:nowrap">${g.name}</th>`).join('')}
+      </tr>
+    </thead>
+    <tbody>`;
+
+  others.forEach((p,ri)=>{
+    html+=`<tr>
+      <td style="padding:5px 8px;border:1px solid #e0ddd6;font-weight:600;background:#f8f7f4;position:sticky;left:0;white-space:nowrap">${p}</td>
+      ${games.map(g=>{
+        const existing=existingRank(g.id,p);
+        return`<td style="border:1px solid #e0ddd6;padding:2px">
+          <input type="number" min="1" max="${others.length}"
+            data-player="${esc(p)}" data-game="${g.id}"
+            value="${existing}"
+            placeholder="—"
+            style="width:100%;min-width:44px;border:none;padding:5px 4px;font-size:13px;text-align:center;background:transparent;outline:none"
+            oninput="highlightDupes('${g.id}')">
+        </td>`;
+      }).join('')}
+    </tr>`;
+  });
+
+  html+=`</tbody></table></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <button class="btn btn-primary btn-sm" style="width:auto" onclick="saveRankingGrid()">💾 Save rankings for ${playerName}</button>
+    <button class="btn btn-sm" style="width:auto;color:#888" onclick="clearRankingGrid()">✕ Clear</button>
+  </div>
+  <div style="font-size:10px;color:#aaa;margin-top:5px">Tip: Tab between cells. Duplicate numbers in a column are highlighted red.</div>`;
+
+  wrap.innerHTML=html;
+};
+
+window.highlightDupes=(gameId)=>{
+  const inputs=document.querySelectorAll(`#ranking-grid-table input[data-game="${gameId}"]`);
+  const vals={};
+  inputs.forEach(inp=>{ const v=inp.value.trim(); if(v) vals[v]=(vals[v]||0)+1; });
+  inputs.forEach(inp=>{
+    const v=inp.value.trim();
+    inp.style.background=v&&vals[v]>1?'#FEF2F2':'transparent';
+    inp.style.color=v&&vals[v]>1?'#c0392b':'';
+  });
+};
+
+window.clearRankingGrid=()=>{
+  document.querySelectorAll('#ranking-grid-table input[type="number"]').forEach(inp=>{ inp.value=''; inp.style.background='transparent'; inp.style.color=''; });
+};
+
+window.saveRankingGrid = async ()=>{
+  const playerName=el('upload-ranking-player').value;
   const statusEl=el('ranking-upload-status');
   if(!playerName){ alert('Select a player first.'); return; }
-  if(!pasteText){ alert('Paste some data first.'); return; }
-  statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">Parsing...</div>';
-  try{
-    // Parse tab-separated (copy from Excel/Sheets = TSV)
-    const rows=pasteText.split('\n').map(row=>row.split('\t').map(c=>c.trim().replace(/^"|"$/g,'')));
-    const result=processRankingSheet(playerName, rows);
-    if(result.error){ statusEl.innerHTML=`<div class="alert alert-warn" style="font-size:11px">❌ ${result.error}</div>`; return; }
-    const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
-    Object.entries(result.rankings).forEach(([gameId,ranked])=>{
-      if(!gameRankings[gameId]) gameRankings[gameId]={};
-      gameRankings[gameId][playerName]=ranked; // always overwrites
+  const games=S.games||[];
+  const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
+  const summaryParts=[];
+  let hasError=false;
+
+  games.forEach(g=>{
+    const inputs=document.querySelectorAll(`#ranking-grid-table input[data-game="${g.id}"]`);
+    if(!inputs.length) return;
+    const rankData=[];
+    let dupeFound=false;
+    const seen={};
+    inputs.forEach(inp=>{
+      const v=inp.value.trim();
+      const rank=parseInt(v);
+      if(!isNaN(rank)&&rank>0){
+        if(seen[rank]) dupeFound=true;
+        seen[rank]=true;
+        rankData.push({player:inp.dataset.player, rank});
+      }
     });
-    await fbUpdate('tournaments/'+tourneyId,{gameRankings});
-    statusEl.innerHTML=`<div class="alert alert-success" style="font-size:11px">✓ Rankings loaded for <strong>${playerName}</strong> across ${Object.keys(result.rankings).length} game(s).<br>${result.summary}</div>`;
-    el('ranking-paste-area').value='';
-  } catch(err){
-    statusEl.innerHTML=`<div class="alert alert-warn" style="font-size:11px">❌ Error: ${err.message}</div>`;
-  }
+    if(dupeFound){ hasError=true; statusEl.innerHTML=`<div class="alert alert-warn" style="font-size:11px">⚠️ Duplicate ranks found in ${g.name} — please fix before saving.</div>`; return; }
+    if(!rankData.length) return;
+    const sorted=rankData.sort((a,b)=>a.rank-b.rank).map(r=>r.player);
+    if(!gameRankings[g.id]) gameRankings[g.id]={};
+    gameRankings[g.id][playerName]=sorted;
+    summaryParts.push(`${g.name}: ${sorted.length} players`);
+  });
+
+  if(hasError) return;
+  if(!summaryParts.length){ statusEl.innerHTML='<div class="alert alert-warn" style="font-size:11px">No rankings entered yet.</div>'; return; }
+  await fbUpdate('tournaments/'+tourneyId,{gameRankings});
+  statusEl.innerHTML=`<div class="alert alert-success" style="font-size:11px">✓ Saved rankings for <strong>${playerName}</strong>: ${summaryParts.join(' · ')}</div>`;
 };
 
 function processRankingSheet(playerName, rows){
@@ -326,6 +409,9 @@ function processRankingSheet(playerName, rows){
   header.forEach((h,ci)=>{
     if(ci===0) return;
     if(!h) return;
+    // Skip non-game columns like "Avg Ranking", "Average", "Total" etc.
+    const skip=['avg','average','total','rank','ranking','pts','points','score'];
+    if(skip.some(s=>norm(h).startsWith(s)||norm(h).endsWith(s))) return;
     // Match to tournament game (fuzzy)
     const match=(S.games||[]).find(g=>
       norm(g.name)===norm(h)||
@@ -1780,13 +1866,12 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
         <div id="start-tourney-body"></div>
         <div class="divider"></div>
         <div style="font-size:11px;color:#aaa;margin-bottom:6px;font-weight:600">🧪 TESTING / BULK IMPORT</div>
-        <button class="btn btn-sm" onclick="fillTestRankings()" style="width:auto;border-color:#ccc;color:#888;font-size:11px;margin-bottom:5px">⚡ Fill random rankings for all players</button>
-        <div style="font-size:11px;color:#888;margin-bottom:6px;margin-top:4px">Paste a player's ranking sheet (copy from Excel/Sheets, paste below):</div>
-        <select id="upload-ranking-player" style="margin-bottom:6px;font-size:12px;padding:5px 8px">
-          <option value="">— select player —</option>
+        <button class="btn btn-sm" onclick="fillTestRankings()" style="width:auto;border-color:#ccc;color:#888;font-size:11px;margin-bottom:8px">⚡ Fill random rankings for all players</button>
+        <div style="font-size:11px;color:#888;margin-bottom:6px">Enter rankings for one player using the grid below:</div>
+        <select id="upload-ranking-player" style="margin-bottom:8px;font-size:12px;padding:5px 8px" onchange="renderRankingGrid()">
+          <option value="">— select player to enter rankings for —</option>
         </select>
-        <textarea id="ranking-paste-area" rows="6" placeholder="Paste spreadsheet data here (copy from Excel/Google Sheets)..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:9px;font-size:11px;font-family:monospace;resize:vertical;margin-bottom:6px"></textarea>
-        <button class="btn btn-sm" onclick="handleRankingPaste()" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">📥 Load rankings</button>
+        <div id="ranking-grid-wrap"></div>
         <div id="ranking-upload-status" style="margin-top:6px"></div>
       </div>
     </div>
