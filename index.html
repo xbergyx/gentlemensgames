@@ -1086,8 +1086,9 @@ function renderMatchFeed(){
       // crossover / knockout
       const xover=b.crossover||[];
       xover.forEach((m,i)=>{
-        if(m.winner) doneHTML+=matchRowDone(game,m,i+1,'Crossover');
-        else pendingHTML+=matchRowPending(game,m,fmt,i+1,'Crossover','cross');
+        const xLabel=m.label||(ordinal(i*2+1)+'/'+ordinal(i*2+2)+' place');
+        if(m.winner) doneHTML+=matchRowDone(game,m,i+1,xLabel);
+        else pendingHTML+=matchRowPending(game,m,fmt,i+1,xLabel,'cross');
       });
       const ko=b.knockout||[];
       ko.forEach((m,i)=>{
@@ -1368,13 +1369,23 @@ function renderTP(game,panel){
   if(b.type!=='two-pool'){ panel.innerHTML='<div class="card"><div class="alert alert-warn">No pool data.</div></div>'; return; }
   let html=`<div class="card"><div class="card-title">🏆 ${game.name} — 2 pools</div>`;
   [{key:'A',teams:b.poolA,matches:b.poolAM,st:b.poolASt,idx:0},{key:'B',teams:b.poolB,matches:b.poolBM,st:b.poolBSt,idx:1}].forEach(pool=>{
-    html+=`<div class="pool-header">Pool ${pool.key}</div><div style="margin-bottom:8px">${stHTML(pool.teams,pool.st)}</div>`;
+    const allDone=pool.matches.every(m=>m.winner);
+    html+=`<div class="pool-header">Pool ${pool.key} — Round Robin ${allDone?'✓ Complete':'(in progress)'}</div>`;
+    html+=`<div style="margin-bottom:8px">${stHTML(pool.teams,pool.st)}</div>`;
+    html+=`<div style="font-size:11px;font-weight:600;color:#aaa;margin-bottom:5px">Matches</div>`;
     pool.matches.forEach(m=>{ html+=mHTML(game.id,m,'pool-'+game.id+'-'+pool.idx,`saveTPM('${game.id}','${m.id}','${pool.key}')`); });
     html+='<div class="divider"></div>';
   });
   const pd=b.poolAM.every(m=>m.winner)&&b.poolBM.every(m=>m.winner);
   if(pd&&!b.crossoverBuilt) html+=`<button class="btn btn-primary" onclick="buildCrossover('${game.id}')">🔀 Generate crossover finals</button>`;
-  if(b.crossover&&b.crossover.length){ html+=`<div class="pool-header teal" style="margin-top:8px">Crossover finals</div>`; b.crossover.forEach(m=>{ html+=`<div style="font-size:10px;color:#aaa;margin-bottom:3px">${m.label||''}</div>`+mHTML(game.id,m,'co-'+game.id,`saveCoMatch('${game.id}','${m.id}')`); }); }
+  if(b.crossover&&b.crossover.length){
+    html+=`<div class="pool-header teal" style="margin-top:8px">Crossover finals — Pool A vs Pool B by position</div>`;
+    html+=`<div class="alert alert-info" style="font-size:11px;margin-bottom:8px">1st in Pool A plays 1st in Pool B for 1st/2nd place, 2nd vs 2nd for 3rd/4th, etc.</div>`;
+    b.crossover.forEach(m=>{
+      html+=`<div style="font-size:10px;font-weight:700;color:#085041;margin-bottom:3px">${m.label||''}</div>`;
+      html+=mHTML(game.id,m,'co-'+game.id,`saveCoMatch('${game.id}','${m.id}')`);
+    });
+  }
   const cd=b.crossover&&b.crossover.length&&b.crossover.every(m=>m.winner);
   const fin=(S.scores&&S.scores[game.id]&&S.scores[game.id]._fin);
   if(cd&&!fin) html+=`<div class="divider"></div><button class="btn btn-primary" onclick="finTP('${game.id}')">🏅 Finalize & award points</button>`;
@@ -1392,7 +1403,18 @@ window.buildCrossover = async (gid)=>{
   const b=JSON.parse(JSON.stringify(S.bs[gid]));
   const rA=sortBySt(b.poolA,b.poolASt), rB=sortBySt(b.poolB,b.poolBSt);
   b.crossover=[]; const len=Math.min(rA.length,rB.length);
-  for(let i=0;i<len;i++) b.crossover.push({id:uid(),t1:rA[i],t2:rB[i],winner:null,score1:null,score2:null,label:ordinal(i*2+1)+' vs '+ordinal(i*2+2)+' place match'});
+  for(let i=0;i<len;i++){
+    const winPlace=ordinal(i*2+1), losePlaceStr=ordinal(i*2+2);
+    const poolAFinish=ordinal(i+1), poolBFinish=ordinal(i+1);
+    b.crossover.push({
+      id:uid(),
+      t1:rA[i], t2:rB[i],
+      winner:null, score1:null, score2:null,
+      label:`🏆 ${winPlace}/${losePlaceStr} place — Pool A ${poolAFinish} vs Pool B ${poolBFinish}`,
+      winPlace: i*2+1,
+      losePlace: i*2+2
+    });
+  }
   b.crossoverBuilt=true; await saveBs(gid,b);
 };
 window.saveCoMatch = async (gid,mid)=>{
@@ -1403,7 +1425,15 @@ window.saveCoMatch = async (gid,mid)=>{
 };
 window.finTP = async (gid)=>{
   const b=S.bs[gid], teams=(S.teams&&S.teams[gid])||[], pl={};
-  b.crossover.forEach((m,i)=>{ if(m.winner){ pl[m.winner.id]=i*2+1; const l=m.winner.id===m.t1.id?m.t2:m.t1; if(l)pl[l.id]=i*2+2; } });
+  b.crossover.forEach((m,i)=>{
+    if(m.winner){
+      const winPlace=m.winPlace||(i*2+1);
+      const losePlace=m.losePlace||(i*2+2);
+      pl[m.winner.id]=winPlace;
+      const loser=m.winner.id===m.t1.id?m.t2:m.t1;
+      if(loser) pl[loser.id]=losePlace;
+    }
+  });
   teams.forEach((t,i)=>{ if(!pl[t.id])pl[t.id]=teams.length-i; });
   await saveScores(gid,{_fin:true}); await awardPts(gid,pl,teams);
 };
