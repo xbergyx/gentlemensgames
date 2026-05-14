@@ -126,12 +126,16 @@ function showView(v){
 }
 function showAdminPhase(phase){
   _phase=phase;
-  ['setup','games','scores','board','history'].forEach(p=>{
-    hide('admin-'+p);
-    document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===p) t.classList.remove('active'); });
+  // hide all admin panels
+  ['setup','games','scores','board','history','rankings','power'].forEach(p=>{
+    const panel=el('admin-'+p); if(panel) panel.classList.add('hidden');
   });
-  show('admin-'+phase);
-  document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===phase) t.classList.add('active'); });
+  // clear all phase-tab active states
+  document.querySelectorAll('.phase-tabs .phase-tab').forEach(t=>t.classList.remove('active'));
+  // show target panel
+  const target=el('admin-'+phase); if(target) target.classList.remove('hidden');
+  // set active tab
+  document.querySelectorAll('.phase-tabs .phase-tab').forEach(t=>{ if(t.dataset.phase===phase) t.classList.add('active'); });
   if(phase==='scores'){ renderMatchFeed(); }
   if(phase==='board'){ renderLeaderboard(); renderGPB(); updateStats(); renderTiebreakerPanel(); }
   if(phase==='history'){ renderHistoryList(); renderCustomBadges(); renderCustomBadgePlayerSelect(); }
@@ -300,7 +304,7 @@ window.handleRankingPaste = async ()=>{
     const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
     Object.entries(result.rankings).forEach(([gameId,ranked])=>{
       if(!gameRankings[gameId]) gameRankings[gameId]={};
-      gameRankings[gameId][playerName]=ranked;
+      gameRankings[gameId][playerName]=ranked; // always overwrites
     });
     await fbUpdate('tournaments/'+tourneyId,{gameRankings});
     statusEl.innerHTML=`<div class="alert alert-success" style="font-size:11px">✓ Rankings loaded for <strong>${playerName}</strong> across ${Object.keys(result.rankings).length} game(s).<br>${result.summary}</div>`;
@@ -311,63 +315,72 @@ window.handleRankingPaste = async ()=>{
 };
 
 function processRankingSheet(playerName, rows){
-  // Expected format:
-  // Row 0: header — first col empty/name, then game names
-  // Row 1+: player name, rank for game1, rank for game2, ...
-  // Rows with "---" or blank in rank cols = that player (skip)
   if(!rows||rows.length<2) return {error:'File appears empty or unreadable.'};
-  
-  const header=rows[0].map(c=>String(c).trim());
-  // Find game columns — skip first col (player names)
-  const gameCols=header.slice(1).map(g=>g.trim()).filter(g=>g);
-  if(!gameCols.length) return {error:'Could not find game columns in first row.'};
 
-  // Match game cols to actual games by name (fuzzy — case insensitive, ignore spaces)
-  function normalize(s){ return String(s).toLowerCase().replace(/[\s\-_]/g,''); }
-  const gameMap={}; // colIndex → gameId
-  gameCols.forEach((colName,ci)=>{
-    const match=(S.games||[]).find(g=>normalize(g.name)===normalize(colName)||normalize(g.name).includes(normalize(colName))||normalize(colName).includes(normalize(g.name)));
-    if(match) gameMap[ci+1]=match.id; // +1 for player name col
+  function norm(s){ return String(s||'').toLowerCase().replace(/[\s\-_.]/g,''); }
+  function isDash(v){ const s=String(v||'').trim(); return !s||s.replace(/-/g,'')===''||s==='------------'; }
+
+  // Row 0: headers — first col is player name col, rest are game names
+  const header=rows[0].map(c=>String(c||'').trim());
+  const gameCols=[]; // {colIdx, gameId, gameName}
+  header.forEach((h,ci)=>{
+    if(ci===0) return;
+    if(!h) return;
+    // Match to tournament game (fuzzy)
+    const match=(S.games||[]).find(g=>
+      norm(g.name)===norm(h)||
+      norm(g.name).includes(norm(h))||
+      norm(h).includes(norm(g.name))
+    );
+    if(match) gameCols.push({colIdx:ci, gameId:match.id, gameName:match.name});
   });
 
-  if(!Object.keys(gameMap).length) return {error:`No matching games found. Sheet columns: ${gameCols.join(', ')}. Tournament games: ${(S.games||[]).map(g=>g.name).join(', ')}`};
+  if(!gameCols.length){
+    const sheetCols=header.slice(1).filter(h=>h).join(', ');
+    const gamenames=(S.games||[]).map(g=>g.name).join(', ');
+    return {error:`No matching games found.<br>Sheet has: ${sheetCols}<br>Tournament has: ${gamenames}`};
+  }
 
-  // Build rankings: for each matched game, collect [player, rank] pairs, sort by rank
-  const gameRankings={}; // gameId → [playerName in rank order]
-  const rankData={}; // gameId → {playerName: rank}
+  // rankData[gameId][playerName] = rank number
+  const rankData={};
+  gameCols.forEach(({gameId})=>{ rankData[gameId]={}; });
 
-  Object.entries(gameMap).forEach(([colIdx,gameId])=>{
-    rankData[gameId]={};
-  });
-
-  // Parse data rows
   rows.slice(1).forEach(row=>{
-    const rowPlayer=String(row[0]||'').trim();
-    if(!rowPlayer) return;
-    // Skip if this is the uploading player's own row
-    if(normalize(rowPlayer)===normalize(playerName)) return;
-    // Find matching player in tournament
-    const matchedPlayer=(S.players||[]).find(p=>normalize(p)===normalize(rowPlayer)||normalize(p).includes(normalize(rowPlayer))||normalize(rowPlayer).includes(normalize(p)));
+    const rowName=String(row[0]||'').trim();
+    if(!rowName) return;
+
+    // Find matching tournament player
+    const matchedPlayer=(S.players||[]).find(p=>
+      norm(p)===norm(rowName)||
+      norm(p).includes(norm(rowName))||
+      norm(rowName).includes(norm(p))
+    );
     if(!matchedPlayer) return;
-    Object.entries(gameMap).forEach(([colIdx,gameId])=>{
-      const val=String(row[parseInt(colIdx)]||'').trim();
-      if(!val||val.includes('-')||val===''||isNaN(parseInt(val))) return;
-      const rank=parseInt(val);
-      if(rank>0) rankData[gameId][matchedPlayer]=rank;
+
+    gameCols.forEach(({colIdx,gameId})=>{
+      const val=row[colIdx];
+      if(isDash(val)) return; // skip dashes (own row or blank)
+      const rank=parseInt(String(val||'').trim());
+      if(!isNaN(rank)&&rank>0) rankData[gameId][matchedPlayer]=rank;
     });
   });
 
-  // Convert rank data to ordered arrays
-  const summaryParts=[];
+  // Convert to sorted arrays and build result
+  const gameRankings={}, summaryParts=[];
   Object.entries(rankData).forEach(([gameId,playerRanks])=>{
     if(!Object.keys(playerRanks).length) return;
-    const sorted=Object.entries(playerRanks).sort((a,b)=>a[1]-b[1]).map(e=>e[0]);
+    // Sort by rank number ascending (1 = best)
+    const sorted=Object.entries(playerRanks)
+      .sort((a,b)=>a[1]-b[1])
+      .map(e=>e[0]);
     gameRankings[gameId]=sorted;
     const game=(S.games||[]).find(g=>g.id===gameId);
-    summaryParts.push(`${game?game.name:gameId}: ${sorted.length} players ranked`);
+    summaryParts.push(`${game?game.name:gameId}: ${sorted.length} players`);
   });
 
-  if(!Object.keys(gameRankings).length) return {error:'Could not parse any rankings. Check the file format.'};
+  if(!Object.keys(gameRankings).length)
+    return {error:'Could not parse any rankings. Make sure game column names match your tournament games.'};
+
   return {rankings:gameRankings, summary:summaryParts.join(' · ')};
 }
 
