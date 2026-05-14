@@ -687,11 +687,11 @@ function renderPowerRankings(){
     e.innerHTML='<p style="font-size:12px;color:#aaa">Add players and games first.</p>'; return;
   }
 
-  // Build avg rank per player per game
-  function avgRankForGame(gameId, player){
+  // avg rank this player received from all others for a specific game
+  function avgForGame(gameId, player){
     const gRanks=(S.gameRankings&&S.gameRankings[gameId])||{};
     const others=players.filter(p=>p!==player);
-    let total=0, count=0;
+    let total=0,count=0;
     others.forEach(rater=>{
       const rk=gRanks[rater];
       if(rk){ const i=rk.indexOf(player); if(i!==-1){total+=i+1;count++;} }
@@ -699,33 +699,47 @@ function renderPowerRankings(){
     return count?total/count:null;
   }
 
-  // Calculate overall average (across all games that have rankings)
+  // integer position rank for a game (1=best) — matches Excel RANK()
+  function posRankForGame(gameId, player){
+    const avgs=players.map(p=>({p,avg:avgForGame(gameId,p)||999}));
+    avgs.sort((a,b)=>a.avg-b.avg);
+    let rank=1;
+    const ranks={};
+    for(let i=0;i<avgs.length;i++){
+      if(i>0&&avgs[i].avg===avgs[i-1].avg) ranks[avgs[i].p]=ranks[avgs[i-1].p];
+      else ranks[avgs[i].p]=rank;
+      rank++;
+    }
+    return ranks[player]||null;
+  }
+
   function overallAvg(player){
-    const avgs=games.map(g=>avgRankForGame(g.id,player)).filter(v=>v!==null);
+    const avgs=games.map(g=>avgForGame(g.id,player)).filter(v=>v!==null);
     return avgs.length?avgs.reduce((a,b)=>a+b,0)/avgs.length:null;
   }
 
-  // Sort players by overall avg
+  // Sort by overall avg (matches spreadsheet POWER RANKINGS sort)
   const sorted=players.slice().sort((a,b)=>{
-    const aa=overallAvg(a), ba=overallAvg(b);
+    const aa=overallAvg(a),ba=overallAvg(b);
     if(aa===null&&ba===null) return 0;
-    if(aa===null) return 1;
-    if(ba===null) return -1;
+    if(aa===null) return 1; if(ba===null) return -1;
     return aa-ba;
   });
 
-  // Header row
   let html=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
     <thead><tr>
-      <th style="text-align:left;padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;color:#1a1a1a;position:sticky;left:0;background:#fff">Player</th>
+      <th style="text-align:left;padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;color:#1a1a1a;position:sticky;left:0;background:#fff;min-width:80px">Player</th>
       ${games.map(g=>`<th style="padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;color:#534AB7;text-align:center;white-space:nowrap">${g.name}</th>`).join('')}
-      <th style="padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;color:#1a1a1a;text-align:center">Avg</th>
+      <th style="padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;color:#1a1a1a;text-align:center;white-space:nowrap">Avg</th>
+      <th style="padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;color:#888;text-align:center;white-space:nowrap;font-size:10px">Pos Rank</th>
     </tr></thead><tbody>`;
 
   sorted.forEach((p,i)=>{
-    const gameAvgs=games.map(g=>avgRankForGame(g.id,p));
+    const gameAvgs=games.map(g=>avgForGame(g.id,p));
+    const gamePosRanks=games.map(g=>posRankForGame(g.id,p));
     const oa=overallAvg(p);
     const rowBg=i%2===0?'#fff':'#f8f7f4';
+    const n=players.length;
     html+=`<tr style="background:${rowBg}">
       <td style="padding:6px 4px;font-weight:600;font-size:12px;position:sticky;left:0;background:${rowBg};white-space:nowrap">
         <div style="display:flex;align-items:center;gap:5px">
@@ -733,16 +747,17 @@ function renderPowerRankings(){
           ${p}
         </div>
       </td>
-      ${gameAvgs.map(avg=>avg!==null
-        ?`<td style="padding:6px 4px;text-align:center;color:${avg<=3?'#27500A':avg>=players.length-2?'#c0392b':'#534AB7'};font-weight:${avg<=3||avg>=players.length-2?'700':'400'}">${avg.toFixed(1)}</td>`
+      ${gameAvgs.map((avg,gi)=>avg!==null
+        ?`<td style="padding:6px 4px;text-align:center;color:${avg<=3?'#27500A':avg>=n-1?'#c0392b':'#534AB7'};font-weight:${avg<=3||avg>=n-1?'700':'400'}" title="Pos rank: ${gamePosRanks[gi]}">${avg.toFixed(2)}</td>`
         :`<td style="padding:6px 4px;text-align:center;color:#ccc">—</td>`
       ).join('')}
-      <td style="padding:6px 4px;text-align:center;font-weight:700;color:#1a1a1a">${oa!==null?oa.toFixed(1):'—'}</td>
+      <td style="padding:6px 4px;text-align:center;font-weight:700;color:#1a1a1a">${oa!==null?oa.toFixed(2):'—'}</td>
+      <td style="padding:6px 4px;text-align:center;font-size:11px;color:#888">${i+1}</td>
     </tr>`;
   });
 
   html+=`</tbody></table></div>
-    <div style="font-size:10px;color:#aaa;margin-top:8px">Lower = ranked better by peers. <span style="color:#27500A;font-weight:600">Green</span> = top 3. <span style="color:#c0392b;font-weight:600">Red</span> = bottom 2.</div>`;
+    <div style="font-size:10px;color:#aaa;margin-top:8px">Avg = average rank received from all other players (lower = better). Pos Rank = overall power ranking position. <span style="color:#27500A;font-weight:600">Green</span> = avg ≤ 3. <span style="color:#c0392b;font-weight:600">Red</span> = avg ≥ n−1.</div>`;
   e.innerHTML=html;
 }
 
@@ -807,14 +822,39 @@ function getAvgRankForGame(gameId,player){
   others.forEach(rater=>{ const rk=gRanks[rater]; if(rk){ const i=rk.indexOf(player); if(i!==-1){total+=i+1;count++;} } });
   return count?total/count:(S.players||[]).length;
 }
+function getPositionRanksForGame(gameId){
+  // Compute avg rank for each player then assign integer position rank
+  // matching Excel RANK() behaviour: ties share the same rank, next rank skips
+  const players=S.players||[];
+  const avgs=players.map(p=>({p,avg:getAvgRankForGame(gameId,p)}));
+  avgs.sort((a,b)=>a.avg-b.avg);
+  const posRank={};
+  let rank=1;
+  for(let i=0;i<avgs.length;i++){
+    if(i>0&&avgs[i].avg===avgs[i-1].avg){
+      posRank[avgs[i].p]=posRank[avgs[i-1].p]; // same rank as tied peer
+    } else {
+      posRank[avgs[i].p]=rank;
+    }
+    rank++;
+  }
+  return posRank;
+}
 function makePairsFromGameRankings(gameId){
-  const sorted=(S.players||[]).slice().sort((a,b)=>getAvgRankForGame(gameId,a)-getAvgRankForGame(gameId,b));
-  const n=sorted.length,pairs=[],half=Math.floor(n/2);
+  const players=S.players||[];
+  const n=players.length;
+  const posRank=getPositionRanksForGame(gameId);
+  // Sort by position rank; break ties by raw avg (secondary)
+  const sorted=players.slice().sort((a,b)=>{
+    const diff=posRank[a]-posRank[b];
+    if(diff!==0) return diff;
+    return getAvgRankForGame(gameId,a)-getAvgRankForGame(gameId,b);
+  });
+  const pairs=[],half=Math.floor(n/2);
   for(let i=0;i<half;i++) pairs.push({id:uid(),p1:sorted[i],p2:sorted[n-1-i]});
   if(n%2!==0) pairs.push({id:uid(),p1:sorted[half],p2:null});
   return pairs;
 }
-// kept for legacy but not used in new flow
 function makePairs(){ return makePairsFromGameRankings(null); }
 function renderTeamsPreview(){}
 
