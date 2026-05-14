@@ -216,6 +216,7 @@ function renderAdminView(){
   renderPlayerList();
   renderGames();
   renderStartTourneyCard();
+  renderRankingUploadPlayerSelect();
   showAdminPhase(_phase||'setup');
 }
 
@@ -253,6 +254,114 @@ window.startTournament = async ()=>{
   const games=(S.games||[]).map(g=>({...g, status:'ranking'}));
   await fbUpdate('tournaments/'+tourneyId, {tournamentStarted:true, games});
 };
+
+// ── TEST HELPER — fills random rankings for all players/games ──
+window.fillTestRankings = async ()=>{
+  const players=S.players||[], games=S.games||[];
+  if(!players.length||!games.length){ alert('Add players and games first.'); return; }
+  const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
+  games.forEach(g=>{
+    if(!gameRankings[g.id]) gameRankings[g.id]={};
+    players.forEach(player=>{
+      const others=players.filter(p=>p!==player).sort(()=>Math.random()-0.5);
+      gameRankings[g.id][player]=others;
+    });
+  });
+  await fbUpdate('tournaments/'+tourneyId,{gameRankings});
+  alert('✓ Random rankings filled for all players across all games!');
+};
+
+// ── RANKING FILE UPLOAD ──────────────────────────────────
+function renderRankingUploadPlayerSelect(){
+  const sel=el('upload-ranking-player'); if(!sel) return;
+  sel.innerHTML='<option value="">— select player —</option>'+(S.players||[]).map(p=>`<option value="${esc(p)}">${p}</option>`).join('');
+}
+
+window.handleRankingPaste = async ()=>{
+  const playerName=el('upload-ranking-player').value;
+  const pasteText=el('ranking-paste-area').value.trim();
+  const statusEl=el('ranking-upload-status');
+  if(!playerName){ alert('Select a player first.'); return; }
+  if(!pasteText){ alert('Paste some data first.'); return; }
+  statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">Parsing...</div>';
+  try{
+    // Parse tab-separated (copy from Excel/Sheets = TSV)
+    const rows=pasteText.split('\n').map(row=>row.split('\t').map(c=>c.trim().replace(/^"|"$/g,'')));
+    const result=processRankingSheet(playerName, rows);
+    if(result.error){ statusEl.innerHTML=`<div class="alert alert-warn" style="font-size:11px">❌ ${result.error}</div>`; return; }
+    const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
+    Object.entries(result.rankings).forEach(([gameId,ranked])=>{
+      if(!gameRankings[gameId]) gameRankings[gameId]={};
+      gameRankings[gameId][playerName]=ranked;
+    });
+    await fbUpdate('tournaments/'+tourneyId,{gameRankings});
+    statusEl.innerHTML=`<div class="alert alert-success" style="font-size:11px">✓ Rankings loaded for <strong>${playerName}</strong> across ${Object.keys(result.rankings).length} game(s).<br>${result.summary}</div>`;
+    el('ranking-paste-area').value='';
+  } catch(err){
+    statusEl.innerHTML=`<div class="alert alert-warn" style="font-size:11px">❌ Error: ${err.message}</div>`;
+  }
+};
+
+function processRankingSheet(playerName, rows){
+  // Expected format:
+  // Row 0: header — first col empty/name, then game names
+  // Row 1+: player name, rank for game1, rank for game2, ...
+  // Rows with "---" or blank in rank cols = that player (skip)
+  if(!rows||rows.length<2) return {error:'File appears empty or unreadable.'};
+  
+  const header=rows[0].map(c=>String(c).trim());
+  // Find game columns — skip first col (player names)
+  const gameCols=header.slice(1).map(g=>g.trim()).filter(g=>g);
+  if(!gameCols.length) return {error:'Could not find game columns in first row.'};
+
+  // Match game cols to actual games by name (fuzzy — case insensitive, ignore spaces)
+  function normalize(s){ return String(s).toLowerCase().replace(/[\s\-_]/g,''); }
+  const gameMap={}; // colIndex → gameId
+  gameCols.forEach((colName,ci)=>{
+    const match=(S.games||[]).find(g=>normalize(g.name)===normalize(colName)||normalize(g.name).includes(normalize(colName))||normalize(colName).includes(normalize(g.name)));
+    if(match) gameMap[ci+1]=match.id; // +1 for player name col
+  });
+
+  if(!Object.keys(gameMap).length) return {error:`No matching games found. Sheet columns: ${gameCols.join(', ')}. Tournament games: ${(S.games||[]).map(g=>g.name).join(', ')}`};
+
+  // Build rankings: for each matched game, collect [player, rank] pairs, sort by rank
+  const gameRankings={}; // gameId → [playerName in rank order]
+  const rankData={}; // gameId → {playerName: rank}
+
+  Object.entries(gameMap).forEach(([colIdx,gameId])=>{
+    rankData[gameId]={};
+  });
+
+  // Parse data rows
+  rows.slice(1).forEach(row=>{
+    const rowPlayer=String(row[0]||'').trim();
+    if(!rowPlayer) return;
+    // Skip if this is the uploading player's own row
+    if(normalize(rowPlayer)===normalize(playerName)) return;
+    // Find matching player in tournament
+    const matchedPlayer=(S.players||[]).find(p=>normalize(p)===normalize(rowPlayer)||normalize(p).includes(normalize(rowPlayer))||normalize(rowPlayer).includes(normalize(p)));
+    if(!matchedPlayer) return;
+    Object.entries(gameMap).forEach(([colIdx,gameId])=>{
+      const val=String(row[parseInt(colIdx)]||'').trim();
+      if(!val||val.includes('-')||val===''||isNaN(parseInt(val))) return;
+      const rank=parseInt(val);
+      if(rank>0) rankData[gameId][matchedPlayer]=rank;
+    });
+  });
+
+  // Convert rank data to ordered arrays
+  const summaryParts=[];
+  Object.entries(rankData).forEach(([gameId,playerRanks])=>{
+    if(!Object.keys(playerRanks).length) return;
+    const sorted=Object.entries(playerRanks).sort((a,b)=>a[1]-b[1]).map(e=>e[0]);
+    gameRankings[gameId]=sorted;
+    const game=(S.games||[]).find(g=>g.id===gameId);
+    summaryParts.push(`${game?game.name:gameId}: ${sorted.length} players ranked`);
+  });
+
+  if(!Object.keys(gameRankings).length) return {error:'Could not parse any rankings. Check the file format.'};
+  return {rankings:gameRankings, summary:summaryParts.join(' · ')};
+}
 
 // ── RANKING STATUS (admin view) ───────────────────────────
 function renderRankingStatus(){
@@ -500,6 +609,16 @@ window.addGame = async ()=>{
   await fbUpdate('tournaments/'+tourneyId, {games});
   el('game-name-input').value='';
 };
+window.toggleSkipGame = async (gameId, skip)=>{
+  const games=(S.games||[]).map(g=>{
+    if(g.id!==gameId) return g;
+    // preserve existing status if unskipping — go back to locked if teams exist, else ranking
+    const newStatus=skip?'skipped':(S.teams&&S.teams[gameId]?'locked':'ranking');
+    return {...g, status:newStatus};
+  });
+  await fbUpdate('tournaments/'+tourneyId,{games});
+};
+
 window.removeGame = async (id)=>{
   const games  = (S.games||[]).filter(g=>g.id!==id);
   const teams  = {...(S.teams||{})}; delete teams[id];
@@ -524,12 +643,18 @@ function renderGames(){
       :isPending
       ?`<span style="background:#f0ede6;color:#888;font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700">⏸ Waiting for start</span>`
       :`<span style="background:${allRanked?'#EAF3DE':'#FEF3E2'};color:${allRanked?'#27500A':'#7a4f00'};font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700">${rankedCount}/${total} ranked</span>`;
-    return`<div class="game-row" style="flex-wrap:wrap;gap:6px">
+    const isSkipped=g.status==='skipped';
+    const skipBtn=isSkipped
+      ?`<button class="btn btn-sm btn-success" onclick="toggleSkipGame('${g.id}',false)" style="width:auto">↩ Unskip</button>`
+      :(!isLocked?`<button class="btn btn-sm" onclick="toggleSkipGame('${g.id}',true)" style="width:auto;border-color:#f5cc80;color:#7a4f00">⏭ Skip</button>`:'');
+    const skipTag=isSkipped?`<span style="background:#FEF2F2;color:#991b1b;font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700">⏭ Skipped</span>`:'';
+    return`<div class="game-row" style="flex-wrap:wrap;gap:6px;${isSkipped?'opacity:.6':''}">
       <div style="flex:1;min-width:0">
-        <div class="gname">${g.name}</div>
-        <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">${statusTag}<span class="fbadge">${fmtL[g.format]||g.format}</span></div>
+        <div class="gname">${g.name}${isSkipped?' <span style="text-decoration:line-through;color:#aaa">'+g.name+'</span>'.replace(g.name+'</span>','</span>'):''}</div>
+        <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">${statusTag}${skipTag}<span class="fbadge">${fmtL[g.format]||g.format}</span></div>
       </div>
-      ${!isLocked?`<button class="btn btn-sm btn-primary" onclick="lockGameRankings('${g.id}')" ${!allRanked?'disabled style="opacity:.45;cursor:not-allowed"':''}>Generate teams</button>`:''}
+      ${!isLocked&&!isSkipped?`<button class="btn btn-sm btn-primary" onclick="lockGameRankings('${g.id}')" ${!allRanked?'disabled style="opacity:.45;cursor:not-allowed"':''}>Generate teams</button>`:''}
+      ${skipBtn}
       <button class="btn btn-sm btn-danger" onclick="removeGame('${g.id}')">✕</button>
     </div>`;
   }).join('');
@@ -586,7 +711,7 @@ function mHTML(gid,m,pfx,onSave){
 // Called from showAdminPhase('scores') and after any score is saved
 function renderMatchFeed(){
   const feed=el('match-feed'); if(!feed) return;
-  const lockedGames=(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring');
+  const lockedGames=(S.games||[]).filter(g=>(g.status==='locked'||g.status==='scoring')&&g.status!=='skipped');
   if(!lockedGames.length){
     feed.innerHTML='<div class="card"><div class="alert alert-info">No games with locked teams yet. Go to the Games tab to add games and lock rankings.</div></div>';
     return;
@@ -1058,8 +1183,19 @@ async function awardPts(gid,pl,teams){
   teams.forEach(team=>{ const place=pl[team.id]||n, pts=Math.max(1,n-place+1); [team.p1,team.p2].filter(Boolean).forEach(player=>{ newPts[player]=pts; }); });
   await savePoints(gid,newPts);
 }
-function getTotalPts(player){ return Object.values(S.points||{}).reduce((s,gp)=>s+(gp[player]||0),0); }
-function getBreakdown(p){ return (S.games||[]).filter(g=>S.points&&S.points[g.id]&&S.points[g.id][p]!==undefined).map(g=>g.name+':'+S.points[g.id][p]).join(' · ')||'No points yet'; }
+function getTotalPts(player){
+  const skippedIds=new Set((S.games||[]).filter(g=>g.status==='skipped').map(g=>g.id));
+  return Object.entries(S.points||{}).reduce((s,[gid,gp])=>{
+    if(skippedIds.has(gid)) return s;
+    return s+(gp[player]||0);
+  },0);
+}
+function getBreakdown(p){
+  const skippedIds=new Set((S.games||[]).filter(g=>g.status==='skipped').map(g=>g.id));
+  return (S.games||[]).filter(g=>S.points&&S.points[g.id]&&S.points[g.id][p]!==undefined)
+    .map(g=>skippedIds.has(g.id)?`<span style="color:#ccc;text-decoration:line-through">${g.name}</span>`:`${g.name}:${S.points[g.id][p]}`)
+    .join(' · ')||'No points yet';
+}
 
 // ── LEADERBOARD ──────────────────────────────────────────
 function renderLeaderboard(){
@@ -1620,6 +1756,16 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div class="card" id="start-tourney-card">
         <div class="card-title">🚀 Start tournament</div>
         <div id="start-tourney-body"></div>
+        <div class="divider"></div>
+        <div style="font-size:11px;color:#aaa;margin-bottom:6px;font-weight:600">🧪 TESTING / BULK IMPORT</div>
+        <button class="btn btn-sm" onclick="fillTestRankings()" style="width:auto;border-color:#ccc;color:#888;font-size:11px;margin-bottom:5px">⚡ Fill random rankings for all players</button>
+        <div style="font-size:11px;color:#888;margin-bottom:6px;margin-top:4px">Paste a player's ranking sheet (copy from Excel/Sheets, paste below):</div>
+        <select id="upload-ranking-player" style="margin-bottom:6px;font-size:12px;padding:5px 8px">
+          <option value="">— select player —</option>
+        </select>
+        <textarea id="ranking-paste-area" rows="6" placeholder="Paste spreadsheet data here (copy from Excel/Google Sheets)..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:9px;font-size:11px;font-family:monospace;resize:vertical;margin-bottom:6px"></textarea>
+        <button class="btn btn-sm" onclick="handleRankingPaste()" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">📥 Load rankings</button>
+        <div id="ranking-upload-status" style="margin-top:6px"></div>
       </div>
     </div>
     <div id="admin-rankings" class="hidden">
