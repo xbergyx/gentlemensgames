@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#7F77DD">
 <title>Gentleman's Games</title>
 <link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f4f0;color:#1a1a1a;min-height:100vh;-webkit-tap-highlight-color:transparent}
@@ -554,12 +554,39 @@ onAuthStateChanged(auth, async user=>{
       if(preAssigned._preKey) await set(ref(db,'preAssignments/'+preAssigned._preKey), null);
       afterSignIn();
     } else {
-      showView('profile-setup');
-      if(user.email) el('profile-email').value=user.email;
-      if(user.phoneNumber) el('profile-phone').value=user.phoneNumber;
+      // Check if another UID already has this phone/email — merge instead of duplicate
+      const existing = await findExistingPlayerByContact(user);
+      if(existing){
+        // Copy their profile to this UID and remove the old one
+        userProfile = { ...existing.data, uid: user.uid, linkedAt: Date.now() };
+        await set(ref(db,'players/'+user.uid), userProfile);
+        if(existing.uid !== user.uid) await set(ref(db,'players/'+existing.uid), null);
+        afterSignIn();
+      } else {
+        showView('profile-setup');
+        if(user.email) el('profile-email').value=user.email;
+        if(user.phoneNumber) el('profile-phone').value=user.phoneNumber;
+      }
     }
   }
 });
+
+async function findExistingPlayerByContact(user){
+  // Look for any existing player profile with same phone or email
+  const snap = await get(ref(db,'players'));
+  if(!snap.exists()) return null;
+  const all = snap.val();
+  for(const [uid2,p] of Object.entries(all)){
+    if(uid2 === user.uid) continue; // skip self
+    if(!p) continue;
+    const matchPhone = user.phoneNumber && p.phone &&
+      normalizePhone(user.phoneNumber) === normalizePhone(p.phone);
+    const matchEmail = user.email && p.email &&
+      user.email.toLowerCase() === p.email.toLowerCase();
+    if(matchPhone || matchEmail) return { uid: uid2, data: p };
+  }
+  return null;
+}
 
 async function findPreAssignment(user){
   const snap = await get(ref(db,'preAssignments'));
@@ -572,7 +599,12 @@ async function findPreAssignment(user){
   }
   return null;
 }
-function normalizePhone(p){ return String(p||'').replace(/\D/g,''); }
+function normalizePhone(p){
+  // Strip all non-digits then take last 10 digits
+  // +15551234567, 15551234567, 5551234567 all → 5551234567
+  const digits = String(p||'').replace(/\D/g,'');
+  return digits.length > 10 ? digits.slice(-10) : digits;
+}
 
 window.saveProfile = async ()=>{
   const firstName = el('profile-firstname').value.trim();
@@ -586,14 +618,20 @@ window.saveProfile = async ()=>{
   userProfile = {
     uid: currentUser.uid,
     firstName, lastName, preferredName: preferred,
-    name: preferred, // keep for backwards compat
-    phone, email, preferredContact: pref,
+    name: preferred,
+    phone: phone || currentUser.phoneNumber || '',
+    email: email || currentUser.email || '',
+    preferredContact: pref,
     years:0, wins:0, podiums:0, lastPlaces:0,
     yearsAttended:[], gameWins:{}, customBadges:[],
     createdAt: Date.now()
   };
-  await set(ref(db,'players/'+currentUser.uid), userProfile);
-  afterSignIn();
+  try {
+    await set(ref(db,'players/'+currentUser.uid), userProfile);
+    afterSignIn();
+  } catch(err) {
+    showErr(errEl, 'Could not save profile: '+err.message+'. Check your internet connection.');
+  }
 };
 
 function afterSignIn(){
@@ -684,8 +722,19 @@ window.saveProfilePage = async ()=>{
   const pref      = el('pp-pref').value;
   const status    = el('pp-status');
   if(!firstName){ status.innerHTML='<div class="alert alert-warn">First name is required.</div>'; return; }
-  const updates = { firstName, lastName, preferredName:preferred, name:preferred, phone, email, preferredContact:pref };
-  await update(ref(db,'players/'+currentUser.uid), updates);
+  const updates = {
+    firstName, lastName, preferredName:preferred, name:preferred,
+    phone: phone||currentUser?.phoneNumber||'',
+    email: email||currentUser?.email||'',
+    preferredContact:pref
+  };
+  try {
+    await update(ref(db,'players/'+currentUser.uid), updates);
+    userProfile = {...userProfile, ...updates};
+  } catch(err) {
+    status.innerHTML='<div class="alert alert-warn">Could not save: '+err.message+'</div>';
+    return;
+  }
   userProfile = {...userProfile, ...updates};
   status.innerHTML='<div class="alert alert-success">✓ Profile updated!</div>';
   // Refresh header
@@ -841,7 +890,7 @@ window.openAdminPanel = ()=>{
   showView('admin-panel');
   renderSMSPanel();
   loadTournamentList();
-  loadGlobalPlayers();
+  loadGlobalPlayers(''); // load all players immediately
 };
 window.closeAdminPanel = ()=>{ showView('home'); };
 
@@ -849,18 +898,26 @@ function loadGlobalPlayers(searchTerm=''){
   get(ref(db,'players')).then(snap=>{
     const all = snap.exists() ? snap.val() : {};
     const e = el('global-players-list'); if(!e) return;
-    const filtered = Object.entries(all).filter(([uid2,p])=>{
+    const entries = Object.entries(all);
+    if(!entries.length){ e.innerHTML='<p class="empty">No players in database yet.</p>'; return; }
+    const filtered = entries.filter(([uid2,p])=>{
       if(!searchTerm) return true;
       const s=searchTerm.toLowerCase();
-      return (p.name||'').toLowerCase().includes(s)||(p.phone||'').includes(s)||(p.email||'').toLowerCase().includes(s);
+      return (p.preferredName||p.name||'').toLowerCase().includes(s)||
+             (p.firstName||'').toLowerCase().includes(s)||
+             (p.lastName||'').toLowerCase().includes(s)||
+             (p.phone||'').includes(s)||
+             (p.email||'').toLowerCase().includes(s);
     });
-    if(!filtered.length){ e.innerHTML='<p class="empty">No players found.</p>'; return; }
-    e.innerHTML=filtered.slice(0,20).map(([uid2,p])=>{
+    if(!filtered.length){ e.innerHTML='<p class="empty">No players match "'+searchTerm+'".</p>'; return; }
+    e.innerHTML=filtered.slice(0,50).map(([uid2,p])=>{
+      const preferred=p.preferredName||p.name||'?';
+      const fullN=((p.firstName||'')+(p.lastName?' '+p.lastName:'')).trim()||preferred;
       const badges=getPlayerBadgesFromProfile(p);
       return`<div class="player-row">
-        <div class="avatar">${initials(p.name)}</div>
+        <div class="avatar">${initials(preferred)}</div>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${p.name||'?'}</div>
+          <div style="font-size:13px;font-weight:600">${preferred}${fullN!==preferred?' <span style="font-size:11px;color:#aaa">('+fullN+')</span>':''}</div>
           <div style="font-size:11px;color:#888">${p.phone||''} ${p.email||''}</div>
           <div class="badges-wrap">${renderBadges(badges)}</div>
         </div>
@@ -868,6 +925,9 @@ function loadGlobalPlayers(searchTerm=''){
         <button class="btn btn-sm btn-danger" onclick="deleteGlobalPlayer('${uid2}','${esc(preferred)}')" style="width:auto">🗑</button>
       </div>`;
     }).join('');
+  }).catch(err=>{
+    const e=el('global-players-list');
+    if(e) e.innerHTML='<p class="empty" style="color:#c0392b">Error loading players: '+err.message+'</p>';
   });
 }
 
@@ -932,9 +992,12 @@ window.openAddGlobalPlayer = ()=>{
   el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title"><span>Add player</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
-    <div class="sec-label">Name</div><input type="text" id="np-name" placeholder="e.g. Chett">
+    <div class="sec-label">First name</div><input type="text" id="np-firstname" placeholder="e.g. Chett">
+    <div class="sec-label">Last name <span style="color:#aaa;font-weight:400">(optional)</span></div><input type="text" id="np-lastname" placeholder="e.g. Bergman">
+    <div class="sec-label">Preferred name <span style="color:#aaa;font-weight:400">(shown in app — leave blank to use first name)</span></div><input type="text" id="np-preferred" placeholder="e.g. Chett or CB">
     <div class="sec-label">Phone number</div><input type="tel" id="np-phone" placeholder="+1 555 000 0000">
     <div class="sec-label">Email</div><input type="email" id="np-email" placeholder="optional">
+    <div class="alert alert-info" style="font-size:11px;margin-top:4px">They can update their own name and info after signing in via their Profile page.</div>
     <div class="divider"></div>
     <button class="btn btn-primary" onclick="addGlobalPlayer()">+ Add player</button>
     <div id="np-status" style="margin-top:6px"></div>
@@ -942,15 +1005,18 @@ window.openAddGlobalPlayer = ()=>{
 };
 
 window.addGlobalPlayer = async ()=>{
-  const name  = el('np-name').value.trim();
+  const firstName = el('np-firstname')?.value.trim()||el('np-name')?.value.trim()||'';
+  const lastName  = el('np-lastname')?.value.trim()||'';
+  const preferred = el('np-preferred')?.value.trim()||firstName;
   const phone = el('np-phone').value.trim();
   const email = el('np-email').value.trim();
   const status = el('np-status');
-  if(!name){ status.innerHTML='<div class="alert alert-warn">Enter a name.</div>'; return; }
-  // Create a pre-assignment record (links to real account when they sign in)
+  if(!firstName){ status.innerHTML='<div class="alert alert-warn">Enter a first name.</div>'; return; }
   const preKey = uid();
   const preData = {
-    name, phone, email,
+    firstName, lastName, preferredName: preferred,
+    name: preferred,
+    phone, email,
     preferredContact: phone ? 'phone' : 'email',
     years:0, wins:0, podiums:0, lastPlaces:0,
     yearsAttended:[], gameWins:{}, customBadges:[],
