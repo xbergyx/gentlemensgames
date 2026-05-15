@@ -53,9 +53,8 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .badge-everyyear{background:#FFF7ED;color:#7c2d12;border-color:#fb923c}
 .badge-firsttimer{background:#F0F9FF;color:#0c4a6e;border-color:#7dd3fc}
 .badge-admin{background:#EEEDFE;color:#3C3489;border-color:#AFA9EC}
-.phase-tabs{display:flex;gap:5px;margin-bottom:1rem;overflow-x:auto;overflow-y:hidden;padding:2px 0 8px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-.phase-tabs::-webkit-scrollbar{display:none}
-.phase-tab{flex-shrink:0;padding:8px 12px;font-size:11px;font-weight:600;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;white-space:nowrap;touch-action:manipulation}
+.phase-tabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:1rem;padding:2px 0 2px}
+.phase-tab{flex:1;min-width:calc(25% - 5px);padding:7px 6px;font-size:11px;font-weight:600;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;white-space:nowrap;touch-action:manipulation;text-align:center}
 .phase-tab.active{background:#EEEDFE;color:#3C3489;border-color:#AFA9EC}
 .ptab{display:flex;gap:5px;margin-bottom:1rem}
 .ptab-btn{flex:1;padding:8px 4px;font-size:11px;font-weight:600;text-align:center;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;touch-action:manipulation}
@@ -125,15 +124,15 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 </style>
 </head>
 <body>
-<div class="app" id="app">
-  <div id="view-loading" style="display:flex;align-items:center;justify-content:center;min-height:100vh">
+<div class="app" id="app" style="padding-top:0">
+  <div id="view-loading" style="position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:#f5f4f0;z-index:999">
     <div style="text-align:center">
-      <div style="font-size:48px;margin-bottom:12px">🏆</div>
+      <div style="font-size:72px;margin-bottom:12px;line-height:1">🏆</div>
       <div style="font-size:16px;font-weight:600;color:#534AB7">Gentleman's Games</div>
       <div style="font-size:12px;color:#aaa;margin-top:6px">Loading...</div>
     </div>
   </div>
-  <div id="view-auth" class="hidden">
+  <div id="view-auth" class="hidden" style="padding-top:1rem">
     <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
@@ -194,7 +193,42 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <button class="btn btn-ghost btn-sm" onclick="skipClaim()" style="width:100%">I'll do this later</button>
     </div>
   </div>
-  <div id="view-home" class="hidden">
+  <div id="view-profile-page" class="hidden">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;padding-top:.5rem">
+      <button class="btn btn-sm" onclick="closeProfilePage()" style="width:auto">← Back</button>
+      <div style="font-size:16px;font-weight:700;flex:1">👤 My Profile</div>
+    </div>
+    <div class="card" id="profile-page-header"></div>
+    <div class="card">
+      <div class="card-title">✏️ Edit my info</div>
+      <div class="sec-label">First name</div>
+      <input type="text" id="pp-firstname" placeholder="First name">
+      <div class="sec-label">Last name</div>
+      <input type="text" id="pp-lastname" placeholder="Last name">
+      <div class="sec-label">Preferred name <span style="color:#aaa;font-weight:400">(shown in the app)</span></div>
+      <input type="text" id="pp-preferred" placeholder="e.g. Bryant or Bman">
+      <div class="sec-label">Phone number</div>
+      <input type="tel" id="pp-phone" placeholder="+1 555 000 0000">
+      <div class="sec-label">Email</div>
+      <input type="email" id="pp-email" placeholder="you@example.com">
+      <div class="sec-label">Preferred contact for invites</div>
+      <select id="pp-pref">
+        <option value="phone">Phone (SMS)</option>
+        <option value="email">Email</option>
+      </select>
+      <button class="btn btn-primary" onclick="saveProfilePage()">✓ Save changes</button>
+      <div id="pp-status" style="margin-top:6px"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🎖 My badges</div>
+      <div id="pp-badges"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📜 My history</div>
+      <div id="pp-history"></div>
+    </div>
+  </div>
+  <div id="view-home" class="hidden" style="padding-top:1rem">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem 0 1rem">
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
@@ -202,12 +236,13 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
+        <button class="btn btn-sm" onclick="openProfilePage()" style="width:auto;background:#f8f7f4;border-color:#e0ddd6">👤 Profile</button>
         <button class="btn btn-sm" onclick="signOut()" style="width:auto;color:#888">Sign out</button>
       </div>
     </div>
     <div id="install-prompt" class="hidden">
       <div class="install-banner">
-        <div class="pwa-icon">🏆</div>
+        <div class="pwa-icon" style="font-size:28px;line-height:1">🏆</div>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:700;margin-bottom:2px">Install the app</div>
           <div style="font-size:11px;opacity:.85">Add to your home screen for quick access on tournament day</div>
@@ -360,9 +395,14 @@ function el(id){ return document.getElementById(id); }
 function show(id){ const e=el(id); if(e)e.classList.remove('hidden'); }
 function hide(id){ const e=el(id); if(e)e.classList.add('hidden'); }
 function showView(v){
-  ['loading','auth','profile-setup','claim-name','home','tournament','admin-panel']
-    .forEach(x=>hide('view-'+x));
-  show('view-'+v);
+  ['loading','auth','profile-setup','claim-name','home','tournament','admin-panel','profile-page']
+    .forEach(x=>{ const e=el('view-'+x); if(e){ e.classList.add('hidden'); e.style.display=''; } });
+  const target=el('view-'+v);
+  if(target){ target.classList.remove('hidden'); }
+  // Loading screen uses fixed positioning, hide it differently
+  const loadEl=el('view-loading');
+  if(loadEl&&v!=='loading') loadEl.style.display='none';
+  window.scrollTo(0,0);
 }
 function todayKey(){ return new Date().toISOString().split('T')[0]; }
 
@@ -375,7 +415,29 @@ window.addEventListener('beforeinstallprompt', e=>{
   show('install-prompt');
 });
 window.installPWA = ()=>{
-  if(_pwaPrompt){ _pwaPrompt.prompt(); _pwaPrompt.userChoice.then(()=>hide('install-prompt')); }
+  if(_pwaPrompt){
+    _pwaPrompt.prompt();
+    _pwaPrompt.userChoice.then(r=>{ if(r.outcome==='accepted') hide('install-prompt'); });
+  } else {
+    // iOS Safari — show manual instructions
+    const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+    if(isIOS){
+      el('modal-area').innerHTML=`<div class="modal-bg" onclick="closeModal()"><div class="modal">
+        <div class="modal-handle"></div>
+        <div class="modal-title"><span>Install the app</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
+        <div style="text-align:center;padding:10px 0">
+          <div style="font-size:40px;margin-bottom:12px">📱</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:16px">Add to Home Screen</div>
+          <div style="font-size:13px;color:#888;line-height:1.7;margin-bottom:12px">
+            1. Tap the <strong>Share button</strong> <span style="font-size:16px">⬆️</span> at the bottom of Safari<br>
+            2. Scroll down and tap <strong>"Add to Home Screen"</strong><br>
+            3. Tap <strong>Add</strong> — done!
+          </div>
+          <div style="background:#f8f7f4;border-radius:10px;padding:12px;font-size:12px;color:#888">The app icon will appear on your home screen and open full-screen like a native app.</div>
+        </div>
+      </div></div>`;
+    }
+  }
 };
 
 // ── AUTH FLOW ─────────────────────────────────────────────
@@ -552,6 +614,87 @@ window.signOut = async ()=>{
   showView('auth');
 };
 
+window.openProfilePage = ()=>{
+  if(!userProfile){ alert('Not signed in.'); return; }
+  showView('profile-page');
+  // Header card
+  const hcard=el('profile-page-header');
+  const preferred=userProfile.preferredName||userProfile.name||'?';
+  const fullN=((userProfile.firstName||'')+(userProfile.lastName?' '+userProfile.lastName:'')).trim()||preferred;
+  const badges=getGlobalBadges(userProfile);
+  hcard.innerHTML=`<div style="display:flex;align-items:center;gap:14px">
+    <div style="width:56px;height:56px;border-radius:50%;background:#EEEDFE;color:#534AB7;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials(preferred)}</div>
+    <div>
+      <div style="font-size:20px;font-weight:700">${preferred}</div>
+      ${fullN!==preferred?`<div style="font-size:13px;color:#888;margin-top:2px">${fullN}</div>`:''}
+      <div class="badges-wrap" style="margin-top:6px">${renderBadges(badges)}</div>
+    </div>
+  </div>`;
+  // Pre-fill edit form
+  el('pp-firstname').value = userProfile.firstName||userProfile.name||'';
+  el('pp-lastname').value  = userProfile.lastName||'';
+  el('pp-preferred').value = userProfile.preferredName||userProfile.name||'';
+  el('pp-phone').value     = userProfile.phone||'';
+  el('pp-email').value     = userProfile.email||'';
+  el('pp-pref').value      = userProfile.preferredContact||'phone';
+  // Badges
+  const badgesEl=el('pp-badges');
+  if(badges.length) badgesEl.innerHTML='<div class="badges-wrap">'+renderBadges(badges)+'</div>';
+  else badgesEl.innerHTML='<p class="empty">No badges yet — attend more tournaments!</p>';
+  // History
+  const histEl=el('pp-history');
+  const h=userProfile;
+  const rows=[
+    {label:'Years attended', val:h.years||0},
+    {label:'Wins', val:h.wins||0},
+    {label:'Podiums', val:h.podiums||0},
+    {label:'Last place finishes', val:h.lastPlaces||0},
+    {label:'Years list', val:(h.yearsAttended||[]).join(', ')||'—'},
+  ];
+  histEl.innerHTML=rows.map(r=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ede6;font-size:13px"><span style="color:#888">${r.label}</span><span style="font-weight:600">${r.val}</span></div>`).join('');
+  if(h.gameWins&&Object.keys(h.gameWins).length){
+    histEl.innerHTML+=`<div style="margin-top:8px"><div class="sec-label">Game wins</div>${Object.entries(h.gameWins).map(([g,c])=>`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px"><span>${g}</span><span style="font-weight:600">${c}x</span></div>`).join('')}</div>`;
+  }
+};
+
+function getGlobalBadges(h){
+  // Generate badges from global profile (not tied to a specific tournament)
+  const badges=[], fy=2019, thisYear=new Date().getFullYear(), totalYears=thisYear-fy+1;
+  h=h||{};
+  if(h.years===1) badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
+  if(h.years>=1)  badges.push({cls:'badge-years',icon:'📅',text:h.years+' year'+(h.years!==1?'s':'')});
+  if(h.years>=totalYears&&totalYears>=2) badges.push({cls:'badge-everyyear',icon:'🔥',text:'Every Year'});
+  if(h.wins===1)  badges.push({cls:'badge-champ',icon:'🏆',text:'Champion'});
+  if(h.wins>=2)   badges.push({cls:'badge-dynasty',icon:'🏆',text:'Dynasty ('+h.wins+'x)'});
+  if(h.podiums>=1&&!h.wins) badges.push({cls:'badge-podium',icon:'🥉',text:'Podium x'+h.podiums});
+  if(h.years>=5)  badges.push({cls:'badge-veteran',icon:'⭐',text:'Veteran'});
+  if(h.yearsAttended&&h.yearsAttended.includes(fy)) badges.push({cls:'badge-founder',icon:'🏛️',text:'Founding Member'});
+  if(h.years>=3&&!h.wins&&!h.podiums) badges.push({cls:'badge-winless',icon:'😅',text:'Winless Wonder'});
+  if(h.lastPlaces>=1) badges.push({cls:'badge-lastplace',icon:'🪣',text:'Last Place'+(h.lastPlaces>1?' x'+h.lastPlaces:'')});
+  if(h.gameWins) Object.entries(h.gameWins).forEach(([g,c])=>{ if(c>=2) badges.push({cls:'badge-specialist',icon:'🎯',text:g+' Specialist'}); });
+  return badges;
+}
+
+window.saveProfilePage = async ()=>{
+  const firstName = el('pp-firstname').value.trim();
+  const lastName  = el('pp-lastname').value.trim();
+  const preferred = el('pp-preferred').value.trim()||firstName;
+  const phone     = el('pp-phone').value.trim();
+  const email     = el('pp-email').value.trim();
+  const pref      = el('pp-pref').value;
+  const status    = el('pp-status');
+  if(!firstName){ status.innerHTML='<div class="alert alert-warn">First name is required.</div>'; return; }
+  const updates = { firstName, lastName, preferredName:preferred, name:preferred, phone, email, preferredContact:pref };
+  await update(ref(db,'players/'+currentUser.uid), updates);
+  userProfile = {...userProfile, ...updates};
+  status.innerHTML='<div class="alert alert-success">✓ Profile updated!</div>';
+  // Refresh header
+  el('home-user-label').textContent = isAdmin?'🛡 Admin · '+preferred:preferred;
+  setTimeout(()=>{ status.innerHTML=''; openProfilePage(); },800);
+};
+
+window.closeProfilePage = ()=>{ showView('home'); };
+
 // ── SMS LIMIT ─────────────────────────────────────────────
 async function checkAndLogSMS(){
   const today = todayKey();
@@ -635,8 +778,8 @@ function renderTourneyList(elId, list, isPast, showAll=false){
         <div style="font-size:20px">${isPast?'📜':'🏆'}</div>
       </div>
       ${!isPast&&t.tournamentStarted?'<div class="tag tag-green" style="margin-top:6px;font-size:10px">● In progress</div>':''}
-      ${showAll&&isAdmin?`<div style="margin-top:8px;display:flex;gap:6px">
-        <button class="btn btn-sm" onclick="openTournament('${t.id}')" style="width:auto;flex:1">Open</button>
+      ${isAdmin?`<div style="margin-top:8px;display:flex;gap:6px">
+        <button class="btn btn-sm btn-primary" onclick="openTournament('${t.id}')" style="width:auto;flex:1">Open</button>
         <button class="btn btn-sm btn-danger" onclick="deleteTournament('${t.id}','${esc(t.tourneyName||'this tournament')}')" style="width:auto">🗑 Delete</button>
       </div>`:''}
     </div>`).join('');
@@ -722,6 +865,7 @@ function loadGlobalPlayers(searchTerm=''){
           <div class="badges-wrap">${renderBadges(badges)}</div>
         </div>
         <button class="btn btn-sm" onclick="editGlobalPlayer('${uid2}')" style="width:auto">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteGlobalPlayer('${uid2}','${esc(preferred)}')" style="width:auto">🗑</button>
       </div>`;
     }).join('');
   });
@@ -751,6 +895,13 @@ window.editGlobalPlayer = (uid2)=>{
       <button class="btn btn-primary" onclick="saveGlobalPlayer('${uid2}')">✓ Save</button>
     </div></div>`;
   });
+};
+
+window.deleteGlobalPlayer = async (uid2, name)=>{
+  if(!isAdmin){ alert('Only the universal admin can delete players.'); return; }
+  if(!confirm(`Delete "${name}" from the global player database? This removes their profile and history permanently.`)) return;
+  await set(ref(db,'players/'+uid2), null);
+  loadGlobalPlayers();
 };
 
 window.saveGlobalPlayer = async (uid2)=>{
@@ -916,7 +1067,8 @@ function buildTournamentShell(){
       <div class="phase-tab active" data-phase="setup">Setup</div>
       <div class="phase-tab" data-phase="games">Games</div>
       <div class="phase-tab" data-phase="rankings">Rankings</div>
-      <div class="phase-tab" data-phase="scores">Scores</div>
+      <div class="phase-tab" data-phase="active-game">Active Game</div>
+      <div class="phase-tab" data-phase="scores">Score History</div>
       <div class="phase-tab" data-phase="board">Leaderboard</div>
       <div class="phase-tab" data-phase="power">Power Rankings</div>
       <div class="phase-tab" data-phase="history">History</div>
@@ -924,6 +1076,7 @@ function buildTournamentShell(){
     <div id="admin-setup"></div>
     <div id="admin-games" class="hidden"></div>
     <div id="admin-rankings" class="hidden"></div>
+    <div id="admin-active-game" class="hidden"></div>
     <div id="admin-scores" class="hidden"></div>
     <div id="admin-board" class="hidden"></div>
     <div id="admin-power" class="hidden"></div>
@@ -959,19 +1112,20 @@ function renderAdminView(){
 
 function showAdminPhase(phase){
   _phase=phase;
-  ['setup','games','rankings','scores','board','power','history'].forEach(p=>{
+  ['setup','games','rankings','active-game','scores','board','power','history'].forEach(p=>{
     const panel=el('admin-'+p); if(panel) panel.classList.add('hidden');
     document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===p) t.classList.remove('active'); });
   });
   const target=el('admin-'+phase); if(target) target.classList.remove('hidden');
   document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===phase) t.classList.add('active'); });
-  if(phase==='setup')    renderAdminSetup();
-  if(phase==='games')    renderAdminGames();
-  if(phase==='rankings') renderRankingStatus();
-  if(phase==='scores')   renderMatchFeed();
-  if(phase==='board')    { renderLeaderboard(); renderGPB(); updateStats(); renderTiebreakerPanel(); }
-  if(phase==='power')    renderPowerRankings();
-  if(phase==='history')  { renderHistoryList(); renderCustomBadges(); renderCustomBadgePlayerSelect(); }
+  if(phase==='setup')       renderAdminSetup();
+  if(phase==='games')       renderAdminGames();
+  if(phase==='rankings')    renderRankingStatus();
+  if(phase==='active-game') renderActiveGamePanel();
+  if(phase==='scores')      renderScoreHistory();
+  if(phase==='board')       { renderLeaderboard(); renderGPB(); updateStats(); renderTiebreakerPanel(); }
+  if(phase==='power')       renderPowerRankings();
+  if(phase==='history')     { renderHistoryList(); renderCustomBadges(); renderCustomBadgePlayerSelect(); }
 }
 
 function renderAdminSetup(){
@@ -1430,8 +1584,63 @@ function mHTML(gid,m,pfx,onSave){
 }
 
 // ── MATCH FEED (SCORES TAB) ───────────────────────────────
-function renderMatchFeed(){
+function renderScoreHistory(){
   const e=el('admin-scores'); if(!e) return;
+  let html='<div class="card"><div class="card-title">📋 Score history</div>';
+  const allGames=S.games||[];
+  let anyScores=false;
+  allGames.forEach(game=>{
+    const scores=S.scores&&S.scores[game.id]||{};
+    if(!scores._fin) return;
+    anyScores=true;
+    const teams=S.teams&&S.teams[game.id]||[];
+    const pts=S.points&&S.points[game.id]||{};
+    const sorted=teams.slice().sort((a,b)=>{
+      const pa=Math.max(...[a.p1,a.p2].filter(Boolean).map(p=>pts[p]||0));
+      const pb=Math.max(...[b.p1,b.p2].filter(Boolean).map(p=>pts[p]||0));
+      return pb-pa;
+    });
+    html+=`<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #f0ede6">
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px;color:#534AB7">${game.name} <span class="fbadge">${fmtL[game.format]||game.format}</span></div>`;
+    sorted.forEach((t,i)=>{
+      const p=Math.max(...[t.p1,t.p2].filter(Boolean).map(p=>pts[p]||0));
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+        <div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}" style="width:20px;height:20px;font-size:10px">${i+1}</div>
+        <div style="flex:1;font-size:12px">${teamLabel(t)}</div>
+        <span style="font-size:12px;font-weight:700;color:#534AB7">${p}pts</span>
+      </div>`;
+    });
+    html+='</div>';
+  });
+  if(!anyScores) html+='<p class="empty">No completed games yet.</p>';
+  html+='</div>';
+
+  // Pending approvals
+  const pending=S.pendingScores||{};
+  let pendingHtml='';
+  Object.entries(pending).forEach(([gid,matches])=>{
+    const game=(S.games||[]).find(g=>g.id===gid);if(!game)return;
+    Object.entries(matches||{}).forEach(([mid,subs])=>{
+      if(!subs)return;
+      const sub=subs.t1||subs.t2;if(!sub)return;
+      const {type,poolKey,ri}=findMatchMeta(S.bs&&S.bs[gid],mid,gid);
+      pendingHtml+=`<div style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:10px;padding:10px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px">⏳ Pending — ${game.name}</div>
+        <div style="font-size:12px;margin-bottom:6px">Submitted: <strong>${sub.s1}–${sub.s2}</strong> by ${sub.submittedBy}</div>
+        ${subs.t1&&subs.t2?'<div style="font-size:11px;color:#888;margin-bottom:6px">Both teams submitted — scores differ.</div>':''}
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-success btn-sm" style="flex:1" onclick="approveMatchScore('${gid}','${mid}','${type}','${poolKey}',${ri})">✓ Approve ${sub.s1}–${sub.s2}</button>
+          <button class="btn btn-sm btn-danger" style="flex:1" onclick="rejectMatchScore('${gid}','${mid}')">✕ Reject</button>
+        </div>
+      </div>`;
+    });
+  });
+  if(pendingHtml) html='<div class="card"><div class="card-title">⏳ Pending approvals</div>'+pendingHtml+'</div>'+html;
+  e.innerHTML=html;
+}
+
+function renderMatchFeed(){
+  const e=el('admin-active-game'); if(!e) return;
   const lockedGames=(S.games||[]).filter(g=>(g.status==='locked'||g.status==='scoring')&&g.status!=='skipped');
   if(!lockedGames.length){ e.innerHTML='<div class="card"><div class="alert alert-info">No games with locked teams yet.</div></div>'; return; }
   let html='';
@@ -1684,6 +1893,160 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
   }
   await update(ref(db,'tournaments/'+currentTourneyId+'/bs'),{[gameId]:b});
 };
+
+// ── ACTIVE GAME PANEL ────────────────────────────────────
+function renderActiveGamePanel(){
+  const e=el('admin-active-game'); if(!e) return;
+  const lockedGames=(S.games||[]).filter(g=>(g.status==='locked'||g.status==='scoring')&&g.status!=='skipped');
+  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
+
+  let html='';
+
+  // Game selector
+  html+=`<div class="card"><div class="card-title">▶ Activate a game</div>
+    <div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Only the active game can receive score entries from players.</div>`;
+  if(!lockedGames.length){
+    html+='<p class="empty">No games with teams yet. Lock rankings first.</p>';
+  } else {
+    lockedGames.forEach(g=>{
+      const isActive=g.active||S.activeGameId===g.id;
+      const fin=S.scores&&S.scores[g.id]&&S.scores[g.id]._fin;
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0ede6">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">${g.name} <span class="fbadge">${fmtL[g.format]||g.format}</span></div>
+          ${fin?'<span class="tag tag-green" style="font-size:10px">✓ Complete</span>':isActive?'<span class="tag" style="background:#7F77DD;color:#fff;font-size:10px">▶ ACTIVE</span>':''}
+        </div>
+        ${!fin?`<button class="btn btn-sm ${isActive?'btn-danger':'btn-success'}" onclick="${isActive?'deactivateGame':'activateGame'}('${g.id}')" style="width:auto">${isActive?'⏸ Deactivate':'▶ Activate'}</button>`:''}
+      </div>`;
+    });
+  }
+  html+='</div>';
+
+  // Active game matchup display + recommendations
+  if(activeGame){
+    const teams=(S.teams&&S.teams[activeGame.id])||[];
+    const b=S.bs&&S.bs[activeGame.id];
+    const fmt=activeGame.format;
+
+    // Get all matches for this game
+    const allMatches=getAllMatchesForGame(b,fmt);
+    const pending=allMatches.filter(m=>m&&!m.winner&&!m.bye&&m.t1&&m.t2);
+    const done=allMatches.filter(m=>m&&m.winner);
+    const total=allMatches.filter(m=>m&&!m.bye).length;
+    const pct=total?Math.round(done.length/total*100):0;
+
+    html+=`<div class="card"><div class="card-title">🎯 ${activeGame.name} — matchups</div>
+      <div style="height:5px;background:#f0ede6;border-radius:5px;margin-bottom:10px">
+        <div style="height:5px;background:#7F77DD;border-radius:5px;width:${pct}%"></div>
+      </div>
+      <div style="font-size:11px;color:#888;margin-bottom:10px">${done.length}/${total} matches complete</div>`;
+
+    if(pending.length){
+      // Recommend next 4 matches — try to keep players non-overlapping
+      const recommended=pickNextMatches(pending,4);
+      html+=`<div style="font-size:12px;font-weight:700;color:#534AB7;margin-bottom:8px">🎲 Recommended next matches</div>`;
+      recommended.forEach((m,i)=>{
+        const pfx=`mf-${activeGame.id}-${m.id}`;
+        html+=`<div style="background:#FAFAFE;border:2px solid #7F77DD;border-radius:12px;padding:12px;margin-bottom:8px">
+          <div style="font-size:10px;font-weight:700;color:#534AB7;margin-bottom:8px">MATCH ${i+1}</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <div style="flex:1;font-size:13px;font-weight:600;text-align:center">${teamLabel(m.t1)}</div>
+            <div style="font-size:12px;color:#aaa;font-weight:700">VS</div>
+            <div style="flex:1;font-size:13px;font-weight:600;text-align:center">${teamLabel(m.t2)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="number" id="${pfx}-1" placeholder="Score" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:16px;text-align:center;margin:0;font-weight:700">
+            <span style="color:#aaa">–</span>
+            <input type="number" id="${pfx}-2" placeholder="Score" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:16px;text-align:center;margin:0;font-weight:700">
+          </div>
+          <button class="btn btn-success" style="margin-top:8px" onclick="saveMFMatch('${activeGame.id}','${m.id}','${m._type}','${m._poolKey||''}',${m._ri!==undefined?m._ri:'null'})">✓ Save result</button>
+        </div>`;
+      });
+
+      // Remaining matches
+      const remaining=pending.filter(m=>!recommended.find(r=>r.id===m.id));
+      if(remaining.length){
+        html+=`<div style="font-size:11px;color:#aaa;font-weight:700;margin:10px 0 6px">UPCOMING MATCHES</div>`;
+        remaining.forEach(m=>{
+          html+=`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0ede6;font-size:12px">
+            <div style="flex:1">${teamLabel(m.t1)}</div>
+            <div style="color:#aaa;font-size:10px">vs</div>
+            <div style="flex:1;text-align:right">${teamLabel(m.t2)}</div>
+          </div>`;
+        });
+      }
+    } else if(total>0){
+      html+=`<div class="alert alert-success">✓ All matches complete! Hit Finalize to award points.</div>`;
+      const fin=S.scores&&S.scores[activeGame.id]&&S.scores[activeGame.id]._fin;
+      if(!fin) html+=`<button class="btn btn-primary" onclick="finalizeGame('${activeGame.id}')">🏅 Finalize & award points</button>`;
+    }
+
+    // Completed matches collapsible
+    if(done.length){
+      html+=`<div style="font-size:11px;color:#aaa;font-weight:700;margin:10px 0 6px">COMPLETED</div>`;
+      done.forEach(m=>{
+        const loser=m.winner.id===m.t1.id?m.t2:m.t1;
+        html+=`<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #f0ede6;font-size:11px;color:#888">
+          <span style="color:#27500A;font-weight:600">✓ ${teamLabel(m.winner)}</span>
+          <span>${m.score1}–${m.score2}</span>
+          <span>def. ${teamLabel(loser)}</span>
+        </div>`;
+      });
+    }
+
+    // Standings for RR/pool formats
+    if((fmt==='round-robin'||fmt==='two-pool'||fmt==='pool-playoff')&&b){
+      html+=`<div style="margin-top:12px"><div style="font-size:12px;font-weight:700;margin-bottom:6px">Standings</div>`;
+      if(fmt==='round-robin'&&b.standings) html+=stHTML(teams,b.standings);
+      else if(fmt==='two-pool'){
+        html+=`<div class="pool-header" style="margin-bottom:5px">Pool A</div>${stHTML(b.poolA||[],b.poolASt||{})}`;
+        html+=`<div class="pool-header" style="margin-top:8px;margin-bottom:5px">Pool B</div>${stHTML(b.poolB||[],b.poolBSt||{})}`;
+      }
+      html+='</div>';
+    }
+    html+='</div>';
+  }
+
+  e.innerHTML=html;
+}
+
+function getAllMatchesForGame(b,fmt){
+  if(!b) return [];
+  const all=[];
+  function tag(m,type,poolKey,ri){ return m?{...m,_type:type,_poolKey:poolKey,_ri:ri}:null; }
+  if(fmt==='round-robin') (b.matches||[]).forEach(m=>all.push(tag(m,'rr',null,null)));
+  else if(fmt==='two-pool'){
+    (b.poolAM||[]).forEach(m=>all.push(tag(m,'pool','A',null)));
+    (b.poolBM||[]).forEach(m=>all.push(tag(m,'pool','B',null)));
+    (b.crossover||[]).forEach(m=>all.push(tag(m,'cross',null,null)));
+  }
+  else if(fmt==='single-elim') (b.rounds||[]).forEach((r,ri)=>r.forEach(m=>all.push(tag(m,'se',null,ri))));
+  else if(fmt==='double-elim'){
+    (b.winners||[]).forEach((r,ri)=>r.forEach(m=>all.push(tag(m,'dew',null,ri))));
+    (b.losers||[]).forEach((r,ri)=>r.forEach(m=>all.push(tag(m,'del',null,ri))));
+    if(b.grandFinal) all.push(tag(b.grandFinal,'degf',null,null));
+  }
+  else if(fmt==='pool-playoff'){
+    (b.pools||[]).forEach((p,pi)=>p.matches.forEach(m=>all.push(tag(m,'pppool',null,pi))));
+    (b.knockout||[]).forEach(m=>all.push(tag(m,'ko',null,null)));
+  }
+  return all.filter(Boolean);
+}
+
+function pickNextMatches(pending,n){
+  // Greedily pick up to n matches with no player overlap
+  const picked=[], usedPlayers=new Set();
+  // Use the stored random order if available, otherwise use pending order
+  const ordered=[...pending];
+  for(const m of ordered){
+    if(picked.length>=n) break;
+    const players=[m.t1?.p1,m.t1?.p2,m.t2?.p1,m.t2?.p2].filter(Boolean);
+    if(players.some(p=>usedPlayers.has(p))) continue;
+    picked.push(m);
+    players.forEach(p=>usedPlayers.add(p));
+  }
+  return picked;
+}
 
 window.finalizeGame = async (gameId)=>{
   const game=(S.games||[]).find(g=>g.id===gameId),teams=(S.teams&&S.teams[gameId])||[],b=S.bs&&S.bs[gameId],fmt=game.format,pl={},n=teams.length;
