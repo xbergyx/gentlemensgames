@@ -464,27 +464,38 @@ window.signInWithGoogle = async ()=>{
   const errEl=el('auth-error');
   try{
     const provider = new GoogleAuthProvider();
-    // Use redirect on mobile (PWA), popup on desktop
-    const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
-    if(isMobile){
-      await signInWithRedirect(auth, provider);
-      // Result handled in onAuthStateChanged after redirect
-    } else {
-      await signInWithPopup(auth, provider);
-    }
+    provider.addScope('email');
+    provider.addScope('profile');
+    // Always use popup — redirect breaks PWA session on iOS
+    // Popup works on iOS Safari when triggered directly from user tap
+    const result = await signInWithPopup(auth, provider);
+    // onAuthStateChanged handles the rest
   } catch(e){
-    if(e.code !== 'auth/popup-closed-by-user'){
+    if(e.code === 'auth/popup-blocked'){
+      // Popup was blocked — fall back to redirect
+      try{
+        showErr(errEl, 'Popup blocked — redirecting to Google...');
+        const provider2 = new GoogleAuthProvider();
+        await signInWithRedirect(auth, provider2);
+      } catch(e2){
+        showErr(errEl, 'Sign-in failed: '+e2.message);
+      }
+    } else if(e.code === 'auth/cancelled-popup-request'||e.code === 'auth/popup-closed-by-user'){
+      // User closed — do nothing
+    } else {
       showErr(errEl, 'Google sign-in failed: '+e.message);
     }
   }
 };
 
-// Handle Google redirect result on app load
+// Handle redirect result in case popup was blocked and redirect was used
 getRedirectResult(auth).then(result=>{
-  // onAuthStateChanged handles the user automatically
+  if(result?.user){
+    // onAuthStateChanged will fire automatically
+  }
 }).catch(e=>{
-  if(e.code !== 'auth/no-current-user'){
-    console.error('Redirect result error:', e);
+  if(e.code !== 'auth/no-current-user' && e.code !== 'auth/null-user'){
+    console.error('Redirect result error:', e.code, e.message);
   }
 });
 
