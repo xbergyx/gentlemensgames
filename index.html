@@ -136,11 +136,22 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
-      <div class="alert alert-info" style="font-size:11px;margin-bottom:12px">Enter your phone number or email address. We'll send you a one-time code.</div>
-      <div class="sec-label">Phone number or email</div>
-      <input type="text" id="auth-contact" placeholder="+1 555 000 0000 or email@example.com" autocomplete="tel email">
-      <button class="btn btn-primary" onclick="startAuth()">→ Continue</button>
-      <div id="auth-error" class="hidden" style="margin-top:6px"></div>
+      <div class="alert alert-info" style="font-size:11px;margin-bottom:14px">Sign in with Google for the best experience, or use your phone number.</div>
+      <!-- Google Sign-In -->
+      <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;font-size:14px;font-weight:500;gap:10px;margin-bottom:10px">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Continue with Google
+      </button>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="flex:1;height:1px;background:#eee"></div>
+        <span style="font-size:11px;color:#aaa">or</span>
+        <div style="flex:1;height:1px;background:#eee"></div>
+      </div>
+      <!-- Phone fallback -->
+      <div class="sec-label">Phone number</div>
+      <input type="tel" id="auth-contact" placeholder="+1 555 000 0000" autocomplete="tel">
+      <button class="btn" onclick="startAuth()" style="margin-bottom:0">→ Continue with phone</button>
+      <div id="auth-error" style="margin-top:6px"></div>
     </div>
     <div class="card hidden" id="auth-step-2">
       <div class="card-title">🔐 Enter your code</div>
@@ -155,7 +166,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       </div>
       <button class="btn btn-primary" onclick="verifyOTP()">✓ Verify</button>
       <button class="btn btn-ghost btn-sm" onclick="backToStep1()" style="width:100%;margin-top:4px">← Back</button>
-      <div id="otp-error" class="hidden" style="margin-top:6px"></div>
+      <div id="otp-error" style="margin-top:6px"></div>
     </div>
     <div id="recaptcha-container"></div>
   </div>
@@ -316,6 +327,7 @@ import { getDatabase, ref, set, get, onValue, update, push, query, orderByChild,
                                     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
 import { getAuth, signInWithPhoneNumber, signInWithEmailLink,
          sendSignInLinkToEmail, isSignInWithEmailLink,
+         GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
          RecaptchaVerifier, onAuthStateChanged, signOut as fbSignOut }
                                     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 
@@ -447,6 +459,34 @@ let recaptchaVerifier = null;
 let phoneConfirmResult = null;
 let authMode = null; // 'phone' | 'email'
 let authContact = null;
+
+window.signInWithGoogle = async ()=>{
+  const errEl=el('auth-error');
+  try{
+    const provider = new GoogleAuthProvider();
+    // Use redirect on mobile (PWA), popup on desktop
+    const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
+    if(isMobile){
+      await signInWithRedirect(auth, provider);
+      // Result handled in onAuthStateChanged after redirect
+    } else {
+      await signInWithPopup(auth, provider);
+    }
+  } catch(e){
+    if(e.code !== 'auth/popup-closed-by-user'){
+      showErr(errEl, 'Google sign-in failed: '+e.message);
+    }
+  }
+};
+
+// Handle Google redirect result on app load
+getRedirectResult(auth).then(result=>{
+  // onAuthStateChanged handles the user automatically
+}).catch(e=>{
+  if(e.code !== 'auth/no-current-user'){
+    console.error('Redirect result error:', e);
+  }
+});
 
 window.startAuth = async ()=>{
   const raw = el('auth-contact').value.trim();
@@ -696,21 +736,7 @@ window.openProfilePage = ()=>{
 };
 
 function getGlobalBadges(h){
-  // Generate badges from global profile (not tied to a specific tournament)
-  const badges=[], fy=2019, thisYear=new Date().getFullYear(), totalYears=thisYear-fy+1;
-  h=h||{};
-  if(h.years===1) badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
-  if(h.years>=1)  badges.push({cls:'badge-years',icon:'📅',text:h.years+' year'+(h.years!==1?'s':'')});
-  if(h.years>=totalYears&&totalYears>=2) badges.push({cls:'badge-everyyear',icon:'🔥',text:'Every Year'});
-  if(h.wins===1)  badges.push({cls:'badge-champ',icon:'🏆',text:'Champion'});
-  if(h.wins>=2)   badges.push({cls:'badge-dynasty',icon:'🏆',text:'Dynasty ('+h.wins+'x)'});
-  if(h.podiums>=1&&!h.wins) badges.push({cls:'badge-podium',icon:'🥉',text:'Podium x'+h.podiums});
-  if(h.years>=5)  badges.push({cls:'badge-veteran',icon:'⭐',text:'Veteran'});
-  if(h.yearsAttended&&h.yearsAttended.includes(fy)) badges.push({cls:'badge-founder',icon:'🏛️',text:'Founding Member'});
-  if(h.years>=3&&!h.wins&&!h.podiums) badges.push({cls:'badge-winless',icon:'😅',text:'Winless Wonder'});
-  if(h.lastPlaces>=1) badges.push({cls:'badge-lastplace',icon:'🪣',text:'Last Place'+(h.lastPlaces>1?' x'+h.lastPlaces:'')});
-  if(h.gameWins) Object.entries(h.gameWins).forEach(([g,c])=>{ if(c>=2) badges.push({cls:'badge-specialist',icon:'🎯',text:g+' Specialist'}); });
-  return badges;
+  return getPlayerBadgesFromProfile(h,'');
 }
 
 window.saveProfilePage = async ()=>{
@@ -1080,6 +1106,7 @@ window.doCreateTournament = async ()=>{
     players:[], playerUids:{}, games:[], teams:{}, scores:{}, bs:{},
     points:{}, gameRankings:{}, history:{}, customBadges:[],
     tiebreaker:{}, tournamentFinalized:false, tournamentStarted:false,
+    enabledBadges:{}, playerBadges:{},
     createdBy: currentUser.uid, createdAt: Date.now()
   };
   await set(ref(db,'tournaments/'+tid), doc);
@@ -1114,6 +1141,8 @@ window.openTournament = (tid)=>{
     if(!S.tiebreaker) S.tiebreaker={};
     if(!S.pendingScores) S.pendingScores={};
     if(!S.tourneyAdmins) S.tourneyAdmins={};
+    if(!S.playerBadges) S.playerBadges={};
+    if(!S.enabledBadges) S.enabledBadges={};
     if(!S.playerUids) S.playerUids={};
     const myUid = actingAsUid||currentUser?.uid;
     const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
@@ -2277,29 +2306,95 @@ function renderPowerRankings(){
   e.innerHTML=html;
 }
 
+
+// ── BADGE LIBRARY ─────────────────────────────────────────
+// All possible badges. auto=calculated automatically, manual=admin assigns
+const BADGE_LIBRARY = [
+  // Attendance
+  { id:'first-timer',   cat:'Attendance', icon:'🌱', name:'First Timer',        desc:'First ever GG appearance',         auto:true  },
+  { id:'years',         cat:'Attendance', icon:'📅', name:'Years Attended',      desc:'One badge per year attended',      auto:true  },
+  { id:'every-year',    cat:'Attendance', icon:'🔥', name:'Every Year',          desc:'Attended every GG since founding', auto:true  },
+  { id:'founding',      cat:'Attendance', icon:'🏛️', name:'Founding Member',     desc:'Attended the first GG in 2019',   auto:true  },
+  { id:'veteran',       cat:'Attendance', icon:'⭐', name:'Veteran',             desc:'5+ years attended',                auto:true  },
+  // Performance
+  { id:'champion',      cat:'Performance',icon:'👑', name:'Champion',            desc:'Won the overall tournament',       auto:true  },
+  { id:'dynasty',       cat:'Performance',icon:'🔱', name:'Dynasty',             desc:'Won the tournament 2+ times',      auto:true  },
+  { id:'podium',        cat:'Performance',icon:'🥉', name:'Podium Finish',       desc:'Finished 2nd or 3rd',              auto:true  },
+  { id:'last-place',    cat:'Performance',icon:'🪣', name:'Last Place',          desc:'Finished last',                    auto:true  },
+  { id:'winless',       cat:'Performance',icon:'😅', name:'Winless Wonder',      desc:'3+ years, never won or podiumed',  auto:true  },
+  { id:'specialist',    cat:'Performance',icon:'🎯', name:'Game Specialist',     desc:'Won the same game 2+ times',       auto:true  },
+  // Sport-specific (manual)
+  { id:'golf-king',     cat:'Sport',      icon:'⛳', name:'Golf King',           desc:'Best golfer at GG',                auto:false },
+  { id:'bowling-king',  cat:'Sport',      icon:'🎳', name:'Bowling King',        desc:'Best bowler at GG',                auto:false },
+  { id:'cornhole-king', cat:'Sport',      icon:'🌽', name:'Cornhole King',       desc:'Best cornhole player at GG',       auto:false },
+  { id:'beer-pong-king',cat:'Sport',      icon:'🏓', name:'Beer Pong King',      desc:'Best beer pong player at GG',      auto:false },
+  { id:'spikeball-king',cat:'Sport',      icon:'🏐', name:'Spikeball King',      desc:'Best spikeball player at GG',      auto:false },
+  { id:'beer-darts',    cat:'Sport',      icon:'🎯', name:'Beer Darts Champ',    desc:'Reigning beer darts champion',     auto:false },
+  { id:'beer-die',      cat:'Sport',      icon:'🎲', name:'Beer Die Champ',      desc:'Reigning beer die champion',       auto:false },
+  { id:'cocaine-champ', cat:'Sport',      icon:'🃏', name:'Cocaine Champ',       desc:'Reigning cocaine champion',        auto:false },
+  { id:'kanjam-king',   cat:'Sport',      icon:'🥏', name:'Kan Jam King',        desc:'Best kan jam player at GG',        auto:false },
+  // Character
+  { id:'commissioner',  cat:'Character',  icon:'🎩', name:'Commissioner',        desc:'The host and organizer',           auto:false },
+  { id:'mvp',           cat:'Character',  icon:'🌟', name:'MVP',                 desc:'Most Valuable Player',             auto:false },
+  { id:'comeback-kid',  cat:'Character',  icon:'📈', name:'Comeback Kid',        desc:'Biggest improvement year over year',auto:false },
+  { id:'crowd-fav',     cat:'Character',  icon:'🎉', name:'Crowd Favorite',      desc:'The people\'s champion',           auto:false },
+  { id:'trash-talk',    cat:'Character',  icon:'🗣️', name:'Trash Talker',        desc:'Loudest mouth on the court',       auto:false },
+  { id:'sportsmanship', cat:'Character',  icon:'🤝', name:'Good Sport',          desc:'Best sportsmanship award',         auto:false },
+  { id:'upset',         cat:'Character',  icon:'💥', name:'Upset King',          desc:'Beat the highest ranked player',   auto:false },
+  { id:'clutch',        cat:'Character',  icon:'🧊', name:'Clutch',              desc:'Won in overtime / extra points',   auto:false },
+  // Custom
+  { id:'custom',        cat:'Custom',     icon:'✨', name:'Custom Badge',        desc:'Admin-defined custom badge',       auto:false },
+];
+
+function getBadgeById(id){ return BADGE_LIBRARY.find(b=>b.id===id)||null; }
+
+// Get enabled badges from settings (global + tournament override)
+function getEnabledBadgeIds(){
+  const global=(S?S.enabledBadges:null)||{};
+  // Default: all auto badges on, manual badges off
+  const enabled=new Set();
+  BADGE_LIBRARY.forEach(b=>{
+    const setting=global[b.id];
+    if(setting===true) enabled.add(b.id);
+    else if(setting===false) {/* disabled */}
+    else if(b.auto) enabled.add(b.id); // default on for auto badges
+  });
+  return enabled;
+}
+
 // ── HISTORY & BADGES ──────────────────────────────────────
 function getPlayerBadges(name){ return getPlayerBadgesFromProfile(S.history&&S.history[name]||{},name); }
 function getPlayerBadgesFromProfile(h,name=''){
-  const badges=[],yr=S?.tourneyYear||new Date().getFullYear(),fy=S?.foundingYear||2019,totalYears=yr-fy+1;
+  const enabled=getEnabledBadgeIds();
+  const badges=[];
+  const fy=S?.foundingYear||2019, yr=S?.tourneyYear||new Date().getFullYear(), totalYears=yr-fy+1;
   h=h||{};
-  if(h.years===1)badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
-  if(h.years>=1)badges.push({cls:'badge-years',icon:'📅',text:h.years+' year'+(h.years!==1?'s':'')});
-  if(h.years>=totalYears&&totalYears>=2)badges.push({cls:'badge-everyyear',icon:'🔥',text:'Every Year'});
-  if(h.wins===1)badges.push({cls:'badge-champ',icon:'👑',text:'Champion'});
-  if(h.wins>=2)badges.push({cls:'badge-dynasty',icon:'🔱',text:'Dynasty ('+h.wins+'x)'});
-  if(h.podiums>=1&&!h.wins)badges.push({cls:'badge-podium',icon:'🥉',text:'Podium x'+h.podiums});
-  if(h.years>=5)badges.push({cls:'badge-veteran',icon:'⭐',text:'Veteran'});
-  if(h.yearsAttended&&h.yearsAttended.includes(fy))badges.push({cls:'badge-founder',icon:'🏛️',text:'Founding Member'});
-  if(h.years>=3&&!h.wins&&!h.podiums)badges.push({cls:'badge-winless',icon:'😅',text:'Winless Wonder'});
-  if(h.lastPlaces>=1)badges.push({cls:'badge-lastplace',icon:'🪣',text:'Last Place'+(h.lastPlaces>1?' x'+h.lastPlaces:'')});
-  if(h.gameWins)Object.entries(h.gameWins).forEach(e=>{if(e[1]>=2)badges.push({cls:'badge-specialist',icon:'🎯',text:e[0]+' Specialist'});});
+  if(enabled.has('first-timer')&&h.years===1) badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
+  if(enabled.has('years')&&h.years>=1) badges.push({cls:'badge-years',icon:'📅',text:h.years+' year'+(h.years!==1?'s':'')});
+  if(enabled.has('every-year')&&h.years>=totalYears&&totalYears>=2) badges.push({cls:'badge-everyyear',icon:'🔥',text:'Every Year'});
+  if(enabled.has('champion')&&h.wins===1) badges.push({cls:'badge-champ',icon:'🏆',text:'Champion'});
+  if(enabled.has('dynasty')&&h.wins>=2) badges.push({cls:'badge-dynasty',icon:'🔱',text:'Dynasty ('+h.wins+'x)'});
+  if(enabled.has('podium')&&h.podiums>=1&&!h.wins) badges.push({cls:'badge-podium',icon:'🥉',text:'Podium x'+h.podiums});
+  if(enabled.has('veteran')&&h.years>=5) badges.push({cls:'badge-veteran',icon:'⭐',text:'Veteran'});
+  if(enabled.has('founding')&&h.yearsAttended&&h.yearsAttended.includes(fy)) badges.push({cls:'badge-founder',icon:'🏛️',text:'Founding Member'});
+  if(enabled.has('winless')&&h.years>=3&&!h.wins&&!h.podiums) badges.push({cls:'badge-winless',icon:'😅',text:'Winless Wonder'});
+  if(enabled.has('last-place')&&h.lastPlaces>=1) badges.push({cls:'badge-lastplace',icon:'🪣',text:'Last Place'+(h.lastPlaces>1?' x'+h.lastPlaces:'')});
+  if(enabled.has('specialist')&&h.gameWins) Object.entries(h.gameWins).forEach(([g,c])=>{ if(c>=2) badges.push({cls:'badge-specialist',icon:'🎯',text:g+' Specialist'}); });
+  // Manual badges assigned to this player
+  const manualBadges=(S?.playerBadges&&name&&S.playerBadges[name])||[];
+  manualBadges.forEach(bid=>{ const bDef=getBadgeById(bid); if(bDef&&enabled.has(bid)) badges.push({cls:'badge-custom',icon:bDef.icon,text:bDef.name}); });
+  // Legacy custom badges
   (S?.customBadges||[]).filter(b=>b.player===name).forEach(b=>badges.push({cls:'badge-custom',icon:'✨',text:b.name}));
   return badges;
 }
 function renderBadges(badges){ if(!badges||!badges.length)return''; return badges.map(b=>`<span class="badge ${b.cls}">${b.icon} ${b.text}</span>`).join(''); }
 function renderHistoryList(){
   const e=el('admin-history'); if(!e) return;
-  let html='<div class="card"><div class="card-title">📜 Player history</div>';
+  let html=`<div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="card-title" style="margin:0">📜 Player history</div>
+      <button class="btn btn-sm btn-primary" onclick="openBadgeManager()" style="width:auto">🎖 Manage badges</button>
+    </div>`;
   (S.players||[]).forEach(p=>{
     const h=(S.history&&S.history[p])||{};
     html+=`<div style="padding:10px 0;border-bottom:1px solid #f0ede6">
@@ -2321,6 +2416,75 @@ function renderHistoryList(){
   e.innerHTML=html;
   renderCustomBadges(); renderCustomBadgePlayerSelect();
 }
+// ── BADGE MANAGEMENT ─────────────────────────────────────
+window.openBadgeManager = ()=>{
+  // Shows all badges with toggle switches + player assignment
+  const enabled=getEnabledBadgeIds();
+  const cats=[...new Set(BADGE_LIBRARY.map(b=>b.cat))];
+  let html=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-height:85vh">
+    <div class="modal-handle"></div>
+    <div class="modal-title"><span>🎖 Badge Manager</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
+    <div class="alert alert-info" style="font-size:11px;margin-bottom:12px">Toggle badges on/off globally. Auto badges calculate automatically. Manual badges you assign to players below.</div>`;
+
+  cats.forEach(cat=>{
+    html+=`<div style="font-size:12px;font-weight:700;color:#534AB7;margin:12px 0 6px">${cat}</div>`;
+    BADGE_LIBRARY.filter(b=>b.cat===cat).forEach(b=>{
+      const isOn=enabled.has(b.id);
+      html+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0ede6">
+        <span style="font-size:20px;width:28px;text-align:center">${b.icon}</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">${b.name} <span style="font-size:10px;color:#aaa;font-weight:400">${b.auto?'auto':'manual'}</span></div>
+          <div style="font-size:11px;color:#888">${b.desc}</div>
+        </div>
+        <div class="toggle-track ${isOn?'on':''}" onclick="toggleBadge('${b.id}',${!isOn})" style="flex-shrink:0"><div class="toggle-thumb"></div></div>
+      </div>`;
+    });
+  });
+
+  html+=`<div class="divider"></div>
+    <div style="font-size:12px;font-weight:700;color:#534AB7;margin-bottom:8px">Assign manual badges to players</div>
+    <select id="badge-assign-player" style="margin-bottom:8px"><option value="">— select player —</option>${(S.players||[]).map(p=>`<option value="${p}">${p}</option>`).join('')}</select>
+    <div id="badge-assign-list"></div>
+  </div></div>`;
+
+  el('modal-area').innerHTML=html;
+  el('badge-assign-player').addEventListener('change', renderBadgeAssignList);
+};
+
+window.toggleBadge = async (badgeId, on)=>{
+  const enabledBadges=JSON.parse(JSON.stringify(S.enabledBadges||{}));
+  enabledBadges[badgeId]=on;
+  await update(ref(db,'tournaments/'+currentTourneyId),{enabledBadges});
+  // Re-render the modal
+  openBadgeManager();
+};
+
+window.renderBadgeAssignList = ()=>{
+  const player=el('badge-assign-player')?.value; if(!player) return;
+  const e=el('badge-assign-list'); if(!e) return;
+  const enabled=getEnabledBadgeIds();
+  const assigned=(S.playerBadges&&S.playerBadges[player])||[];
+  const manualBadges=BADGE_LIBRARY.filter(b=>!b.auto&&b.id!=='custom'&&enabled.has(b.id));
+  if(!manualBadges.length){ e.innerHTML='<p class="empty">No manual badges enabled. Toggle some on above.</p>'; return; }
+  e.innerHTML=manualBadges.map(b=>{
+    const has=assigned.includes(b.id);
+    return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0ede6">
+      <span style="font-size:18px">${b.icon}</span>
+      <div style="flex:1;font-size:12px;font-weight:500">${b.name}</div>
+      <button class="btn btn-sm ${has?'btn-danger':'btn-success'}" onclick="togglePlayerBadge('${esc(player)}','${b.id}',${!has})" style="width:auto">${has?'Remove':'Assign'}</button>
+    </div>`;
+  }).join('');
+};
+
+window.togglePlayerBadge = async (player, badgeId, assign)=>{
+  const playerBadges=JSON.parse(JSON.stringify(S.playerBadges||{}));
+  if(!playerBadges[player]) playerBadges[player]=[];
+  if(assign){ if(!playerBadges[player].includes(badgeId)) playerBadges[player].push(badgeId); }
+  else { playerBadges[player]=playerBadges[player].filter(b=>b!==badgeId); }
+  await update(ref(db,'tournaments/'+currentTourneyId),{playerBadges});
+  renderBadgeAssignList();
+};
+
 window.openEditHistory = (name)=>{
   const h=(S.history&&S.history[name])||{};
   el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
