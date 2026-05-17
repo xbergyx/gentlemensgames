@@ -767,6 +767,10 @@ function afterSignIn(){
     });
   }
   loadTournamentList();
+  // Auto-link ghost player slots in any tournament
+  if(userProfile && !userProfile.pendingAdminReview){
+    linkGhostPlayerSlots(currentUser.uid, userProfile);
+  }
   showView('home');
   // Show install prompt on iOS manually
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -1084,6 +1088,48 @@ async function renderSMSPanel(){
 }
 
 // ── TOURNAMENT LIST ───────────────────────────────────────
+// ── GHOST PLAYER AUTO-LINK ───────────────────────────────
+async function linkGhostPlayerSlots(uid2, profile){
+  // When a player signs up, check every tournament for ghost slots matching their name
+  const snap = await get(ref(db,'tournaments'));
+  if(!snap.exists()) return;
+
+  const preferredName = profile.preferredName||profile.name||profile.firstName||'';
+  const firstName = (profile.firstName||'').trim().toLowerCase();
+  const lastName = (profile.lastName||'').trim().toLowerCase();
+  const preKey = profile._preKey||null;
+
+  const updates = {};
+  let matched = false;
+
+  Object.entries(snap.val()).forEach(([tid,t])=>{
+    if(!t||!t.ghostPlayers) return;
+    const ghostPlayers = t.ghostPlayers;
+
+    Object.entries(ghostPlayers).forEach(([gPreKey, gPlayerName])=>{
+      // Match by preKey (exact) or by name
+      const nameMatch = gPlayerName.toLowerCase()===preferredName.toLowerCase()
+        || gPlayerName.toLowerCase()===firstName
+        || gPlayerName.toLowerCase()===(firstName+' '+lastName);
+      const keyMatch = preKey && gPreKey===preKey;
+
+      if(keyMatch||nameMatch){
+        // Remove from ghostPlayers, add to playerUids
+        updates[`tournaments/${tid}/ghostPlayers/${gPreKey}`] = null;
+        updates[`tournaments/${tid}/playerUids/${uid2}`] = gPlayerName;
+        matched = true;
+      }
+    });
+  });
+
+  if(matched && Object.keys(updates).length){
+    // Use multi-path update
+    const dbRef = ref(db, '/');
+    await update(dbRef, updates);
+    console.log('Auto-linked ghost player slots for', preferredName);
+  }
+}
+
 function loadTournamentList(){
   onValue(ref(db,'tournaments'), snap=>{
     const all = snap.exists() ? snap.val() : {};
@@ -1092,7 +1138,11 @@ function loadTournamentList(){
       if(!t||!t.tourneyName) return;
       // Show tournament if user is a participant or admin
       const myUid = actingAsUid||currentUser?.uid;
-      const isParticipant = t.playerUids && t.playerUids[myUid];
+      const isParticipant = (t.playerUids && t.playerUids[myUid]) ||
+        (t.ghostPlayers && userProfile &&
+          Object.values(t.ghostPlayers||{}).some(n=>
+            n.toLowerCase()===(userProfile.preferredName||userProfile.name||'').toLowerCase()
+          ));
       if(!isAdmin&&!isParticipant) return;
       if(t.tournamentFinalized) past.push({id,...t});
       else active.push({id,...t});
@@ -1476,7 +1526,7 @@ window.doCreateTournament = async ()=>{
   const doc = {
     tourneyName:name, tourneyYear:year, foundingYear:fy,
     adminCode:code, joinCode:uid().substr(0,6),
-    players:[], playerUids:{}, games:[], teams:{}, scores:{}, bs:{},
+    players:[], playerUids:{}, ghostPlayers:{}, games:[], teams:{}, scores:{}, bs:{},
     points:{}, gameRankings:{}, history:{}, customBadges:[],
     tiebreaker:{}, tournamentFinalized:false, tournamentStarted:false,
     enabledBadges:{}, playerBadges:{},
@@ -1517,6 +1567,7 @@ window.openTournament = (tid)=>{
     if(!S.playerBadges) S.playerBadges={};
     if(!S.enabledBadges) S.enabledBadges={};
     if(!S.playerUids) S.playerUids={};
+    if(!S.ghostPlayers) S.ghostPlayers={};
     const myUid = actingAsUid||currentUser?.uid;
     const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
     isTourneyAdmin = isAdmin || !!(S.tourneyAdmins&&S.tourneyAdmins[myUid]);
@@ -1691,29 +1742,70 @@ function renderAdminGames(){
 }
 
 // ── PLAYERS ───────────────────────────────────────────────
-window.searchPlayersToAdd = (term)=>{
+window.searchPlayersToAdd = async (term)=>{
   const e=el('player-search-results'); if(!e) return;
   if(!term||term.length<2){ e.innerHTML=''; return; }
-  get(ref(db,'players')).then(snap=>{
-    if(!snap.exists()){ e.innerHTML=''; return; }
-    const all=snap.val();
-    const players=S.players||[];
-    const matches=Object.entries(all).filter(([uid2,p])=>{
-      const s=term.toLowerCase();
-      return ((p.name||'').toLowerCase().includes(s)||(p.phone||'').includes(s)||(p.email||'').toLowerCase().includes(s))
-        && !players.includes(p.name);
-    }).slice(0,5);
-    if(!matches.length){ e.innerHTML='<p class="empty" style="padding:6px">No matches. <button class="btn btn-sm btn-primary" onclick="openAddGlobalPlayer()" style="width:auto">+ Add new player</button></p>'; return; }
-    e.innerHTML=matches.map(([uid2,p])=>`
-      <div class="player-search-result" onclick="addPlayerFromGlobal('${uid2}','${esc(p.name)}')">
-        <div class="avatar">${initials(p.name)}</div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${p.name}</div>
-          <div style="font-size:11px;color:#888">${p.phone||''} ${p.email||''}</div>
-        </div>
-        <div class="tag tag-purple" style="font-size:10px">+ Add</div>
-      </div>`).join('');
-  });
+  const currentPlayers=S.players||[];
+  const s=term.toLowerCase();
+
+  // Search both signed-up players AND pre-assignments (historical, not yet signed up)
+  const [playersSnap, preSnap] = await Promise.all([
+    get(ref(db,'players')),
+    get(ref(db,'preAssignments'))
+  ]);
+
+  const results=[];
+
+  // Signed-up players
+  if(playersSnap.exists()){
+    Object.entries(playersSnap.val()).forEach(([uid2,p])=>{
+      if(!p) return;
+      const displayN = p.preferredName||p.name||p.firstName||'';
+      const fullN = ((p.firstName||'')+ ' '+(p.lastName||'')).trim();
+      const searchable = [displayN,fullN,p.phone||'',p.email||''].join(' ').toLowerCase();
+      if(searchable.includes(s) && !currentPlayers.includes(displayN)){
+        results.push({
+          id: uid2, name: displayN, fullName: fullN,
+          sub: p.phone||p.email||'', tag:'Signed up',
+          tagCls:'tag-green', type:'player',
+          onclick:`addPlayerFromGlobal('${uid2}','${esc(displayN)}')`
+        });
+      }
+    });
+  }
+
+  // Pre-assignments (historical players not yet signed up)
+  if(preSnap.exists()){
+    Object.entries(preSnap.val()).forEach(([key,p])=>{
+      if(!p) return;
+      const displayN = p.preferredName||p.nickname||p.firstName||'';
+      const fullN = ((p.firstName||'')+(p.lastName?' '+p.lastName:'')).trim();
+      const searchable = [displayN,fullN,p.phone||'',p.email||''].join(' ').toLowerCase();
+      if(searchable.includes(s) && !currentPlayers.includes(displayN)){
+        results.push({
+          id: key, name: displayN, fullName: fullN,
+          sub: p.years?(p.years+'yrs · '+(p.wins?p.wins+'🏆 ':'')+(p.phone||p.email||'')):(p.phone||p.email||''),
+          tag:'Not signed up yet', tagCls:'tag-amber', type:'pre',
+          onclick:`addPlayerFromPre('${key}','${esc(displayN)}')`
+        });
+      }
+    });
+  }
+
+  if(!results.length){
+    e.innerHTML='<p class="empty" style="padding:6px">No matches. <button class="btn btn-sm btn-primary" onclick="openAddGlobalPlayer()" style="width:auto">+ Add new player</button></p>';
+    return;
+  }
+
+  e.innerHTML=results.slice(0,8).map(r=>`
+    <div class="player-search-result" onclick="${r.onclick}">
+      <div class="avatar">${initials(r.name)}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">${r.name}${r.fullName&&r.fullName!==r.name?' <span style="font-size:11px;color:#aaa;font-weight:400">('+r.fullName+')</span>':''}</div>
+        <div style="font-size:11px;color:#888">${r.sub}</div>
+      </div>
+      <div class="tag ${r.tagCls}" style="font-size:10px">${r.tag}</div>
+    </div>`).join('');
 };
 
 window.addPlayerFromGlobal = async (playerUid, playerName)=>{
@@ -1723,6 +1815,19 @@ window.addPlayerFromGlobal = async (playerUid, playerName)=>{
   players.push(playerName);
   playerUids[playerUid]=playerName;
   await update(ref(db,'tournaments/'+currentTourneyId),{players,playerUids});
+  el('player-search-results').innerHTML='';
+  if(el('player-search-input')) el('player-search-input').value='';
+};
+
+window.addPlayerFromPre = async (preKey, playerName)=>{
+  // Add a historical (pre-signed-up) player to the tournament
+  // They'll be linked when they sign up
+  const players=[...(S.players||[])];
+  const ghostPlayers={...(S.ghostPlayers||{})};  // preKey -> playerName mapping
+  if(players.includes(playerName)){ alert('Already added.'); return; }
+  players.push(playerName);
+  ghostPlayers[preKey]=playerName;  // track that this slot is waiting for signup
+  await update(ref(db,'tournaments/'+currentTourneyId),{players,ghostPlayers});
   el('player-search-results').innerHTML='';
   if(el('player-search-input')) el('player-search-input').value='';
 };
@@ -1743,10 +1848,12 @@ function renderPlayerList(){
     const ranked=(S.gameRankings&&Object.values(S.gameRankings).some(g=>g[p]))?
       '<span style="color:#27500A;font-weight:600;font-size:10px">✓ ranked</span>':
       '<span style="font-size:10px;color:#aaa">pending</span>';
-    return`<div class="player-row">
-      <div class="avatar">${initials(p)}</div>
+    const ghostPlayers=S.ghostPlayers||{};
+    const isGhost=Object.values(ghostPlayers).includes(p);
+    return`<div class="player-row" style="${isGhost?'opacity:.8':''}">
+      <div class="avatar" style="${isGhost?'background:#FEF3E2;color:#7a4f00':''}">${isGhost?'⏳':initials(p)}</div>
       <div style="flex:1">
-        <div style="font-size:13px;font-weight:600">${p}</div>
+        <div style="font-size:13px;font-weight:600">${p} ${isGhost?'<span class="tag tag-amber" style="font-size:9px">awaiting signup</span>':''}</div>
         <div class="badges-wrap" style="margin-top:3px">${renderBadges(badges)}</div>
       </div>
       ${ranked}
