@@ -327,6 +327,8 @@ let actingAsUid      = null;  // when admin acts as another player
 let actingAsName     = null;
 let currentTourneyId = null;
 let S              = null;  // current tournament data
+Object.defineProperty(window,'_S',{get:()=>S});
+Object.defineProperty(window,'_GP',{get:()=>_globalProfiles});
 let _phase         = 'setup';
 let _tab           = 'rank';
 let _pwaPrompt     = null;
@@ -2754,7 +2756,11 @@ window.openGameRanking=(gameId,myName)=>{
   const prevYear=(S.tourneyYear||new Date().getFullYear())-1;
   function gs(name){
     const prof=_globalProfiles[name]||_globalProfiles[(name||'').trim()]||{};
-    return (prof.gameStats&&prof.gameStats[game.name])||(S.history&&S.history[name]&&S.history[name].gameStats&&S.history[name].gameStats[game.name])||null;
+    const fromProfile=prof.gameStats&&prof.gameStats[game.name];
+    const fromHistory=S.history&&S.history[name]&&S.history[name].gameStats&&S.history[name].gameStats[game.name];
+    const result=fromProfile||fromHistory||null;
+
+    return result;
   }
   function pr(name){return (_globalProfiles[name]&&_globalProfiles[name].overallStandings&&_globalProfiles[name].overallStandings[prevYear])||99;}
   let ordered;
