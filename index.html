@@ -853,8 +853,33 @@ window.syncTournamentHistory=async()=>{
     const preKey=Object.entries(ghostPlayers).find(([k,v])=>v===playerName)?.[0];
     let prof = preKey ? preByKey[preKey] : null;
 
+    // If found by preKey but has no gameStats, check if a better entry exists by name
+    if(prof && (!prof.gameStats || Object.keys(prof.gameStats).length===0)){
+      const betterByName=pm[playerName];
+      if(betterByName && betterByName.gameStats && Object.keys(betterByName.gameStats).length>0){
+        prof=betterByName;
+      }
+    }
+
     // Fall back to name-based lookup (for signed-up players)
     if(!prof) prof=pm[playerName];
+    
+    // Final fallback: search all preAssignments for best match by years
+    if(!prof || !prof.gameStats || Object.keys(prof.gameStats||{}).length===0){
+      let bestProf=null;
+      Object.values(preByKey).forEach(p=>{
+        const dn=(p.preferredName||p.nickname||p.firstName||'').trim();
+        const fn=(p.firstName||'').trim().toLowerCase();
+        const pn=playerName.toLowerCase();
+        if(dn===playerName||fn===pn){
+          if(!bestProf||(p.years||0)>(bestProf.years||0)||
+            Object.keys(p.gameStats||{}).length>Object.keys(bestProf.gameStats||{}).length){
+            bestProf=p;
+          }
+        }
+      });
+      if(bestProf&&Object.keys(bestProf.gameStats||{}).length>0) prof=bestProf;
+    }
 
     if(!prof){notFound.push(playerName);return;}
 
