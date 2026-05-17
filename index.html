@@ -1130,6 +1130,308 @@ async function linkGhostPlayerSlots(uid2, profile){
   }
 }
 
+
+// ── PLAYER VIEW ───────────────────────────────────────────
+function renderPlayerView(myName){
+  if(!S)return;
+  const header=el('tourney-header-label');
+  if(header)header.textContent=S.tourneyName+' '+S.tourneyYear;
+  hide('admin-area'); show('player-area');
+  const hcard=el('player-header-card');
+  if(hcard){
+    const badges=getPlayerBadges(myName);
+    hcard.innerHTML=`<div style="display:flex;align-items:center;gap:10px">
+      <div class="avatar" style="width:38px;height:38px;font-size:14px">${initials(myName)}</div>
+      <div><div style="font-size:15px;font-weight:700">${myName}</div><div class="badges-wrap">${renderBadges(badges)}</div></div>
+    </div>`;
+  }
+  showPlayerTab(_tab||'rank',myName);
+}
+function showPlayerTab(tab,myName){
+  _tab=tab;
+  myName=myName||actingAsName||(userProfile?.name)||'';
+  ['rank','teams','lb'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
+  const tv=el('pview-'+tab);if(tv)tv.classList.remove('hidden');
+  const tb=el('ptab-'+tab);if(tb)tb.classList.add('active');
+  if(tab==='rank')  renderPlayerRankings(myName);
+  if(tab==='teams') renderMyTeams(myName);
+  if(tab==='lb')    { renderPlayerLB(myName); renderAllPlayerBadges(); }
+}
+function renderPlayerRankings(myName){
+  const e=el('pview-rank'); if(!e) return;
+  const games=S.games||[], others=(S.players||[]).filter(p=>p!==myName);
+  if(!S.tournamentStarted){
+    e.innerHTML=`<div class="card"><div style="text-align:center;padding:20px"><div style="font-size:40px;margin-bottom:10px">⏳</div><div style="font-size:14px;font-weight:600">Waiting for host to start</div><div style="font-size:12px;color:#888;margin-top:6px">The host will start the tournament once everyone has joined.</div></div></div>`;return;
+  }
+  if(!games.length){e.innerHTML='<div class="card"><p class="empty">No games added yet. Check back soon!</p></div>';return;}
+  let html='<div class="card"><div class="card-title">🎯 Game rankings</div><div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Each game needs its own ranking. Tap a game to rank players.</div>';
+  games.forEach(g=>{
+    const gR=(S.gameRankings&&S.gameRankings[g.id])||{};
+    const myRank=gR[myName],rc=Object.keys(gR).length,total=(S.players||[]).length;
+    const isLocked=g.status==='locked'||g.status==='scoring';
+    if(isLocked){
+      html+=`<div style="background:#EAF3DE;border:1px solid #b2d88a;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">✅</div><div><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#27500A">Teams locked</div></div></div>`;
+    } else if(myRank){
+      html+=`<div style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">👍</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e">${rc}/${total} submitted</div></div><button class="btn btn-sm" onclick="openGameRanking('${g.id}','${esc(myName)}')" style="width:auto">Edit</button></div>`;
+    } else {
+      html+=`<div style="background:#FFFBEB;border:1px solid #fcd34d;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">🎯</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#7a4f00">${rc}/${total} done</div></div><button class="btn btn-sm btn-primary" onclick="openGameRanking('${g.id}','${esc(myName)}')" style="width:auto">Rank now</button></div>`;
+    }
+  });
+  html+='</div>';
+  e.innerHTML=html;
+}
+window.openGameRanking = (gameId,myName)=>{
+  const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
+  const others=(S.players||[]).filter(p=>p!==myName).sort((a,b)=>a.localeCompare(b));
+  const gR=(S.gameRankings&&S.gameRankings[gameId])||{};
+  let ranked=gR[myName]?gR[myName].filter(p=>others.includes(p)):[...others];
+  others.forEach(p=>{if(!ranked.includes(p))ranked.push(p);});
+  el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title"><span>Rank for: ${game.name}</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
+    <div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Hold and drag to reorder — 1 = best</div>
+    <div id="game-rank-list">${ranked.map((p,i)=>`<div class="rank-item" draggable="true" data-player="${esc(p)}"
+      ondragstart="dstart(event)" ondragover="dover(event,'game-rank-list')" ondrop="ddrop(event,'game-rank-list')" ondragleave="dleave(event)"
+      ontouchstart="tstart(event,'game-rank-list')" ontouchmove="tmove(event)" ontouchend="tend(event)">
+      <span style="color:#ccc;font-size:18px">⠿</span>
+      <span class="rank-num">${i+1}</span>
+      <div class="avatar">${initials(p)}</div>
+      <div style="flex:1"><div style="font-size:13px;font-weight:500">${p}</div><div class="badges-wrap" style="margin-top:2px">${renderBadges(getPlayerBadges(p))}</div></div>
+    </div>`).join('')}</div>
+    <div class="divider"></div>
+    <button class="btn btn-primary" onclick="submitGameRanking('${gameId}','${esc(myName)}')">✓ Submit for ${game.name}</button>
+    <div id="rank-submit-msg"></div>
+  </div></div>`;
+};
+window.submitGameRanking = async (gameId,myName)=>{
+  const items=Array.from(el('game-rank-list').querySelectorAll('.rank-item'));
+  const ranked=items.map(e=>e.dataset.player);
+  const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
+  if(!gameRankings[gameId])gameRankings[gameId]={};
+  gameRankings[gameId][myName]=ranked;
+  await update(ref(db,'tournaments/'+currentTourneyId),{gameRankings});
+  el('rank-submit-msg').innerHTML='<div class="alert alert-success" style="margin-top:8px">✓ Submitted!</div>';
+  setTimeout(()=>closeModal(),700);
+};
+function renderMyTeams(myName){
+  const e=el('pview-teams');if(!e)return;
+  const locked=(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring');
+  if(!locked.length){e.innerHTML='<div class="card"><p class="empty">Teams appear once rankings are locked.</p></div>';return;}
+
+  // Active game matchup display
+  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
+  let html='';
+  if(activeGame){
+    const teams=(S.teams&&S.teams[activeGame.id])||[];
+    const myTeam=teams.find(t=>t.p1===myName||t.p2===myName);
+    const b=S.bs&&S.bs[activeGame.id];
+    html+=`<div class="card" style="border-color:#7F77DD;border-width:2px">
+      <div class="card-title" style="color:#534AB7">▶ Now playing: ${activeGame.name}</div>`;
+    if(myTeam){
+      const partner=myTeam.p1===myName?myTeam.p2:myTeam.p1;
+      html+=`<div style="background:#EEEDFE;border-radius:10px;padding:12px;margin-bottom:10px">
+        <div style="font-size:11px;color:#888;margin-bottom:4px">Your team</div>
+        <div style="font-size:16px;font-weight:700">${myName} ${partner?'& '+partner:''}</div>
+      </div>`;
+      // Find my opponent
+      if(b){
+        const myMatch=findMyActiveMatch(b,myTeam,activeGame.format);
+        if(myMatch){
+          const oppTeam=myMatch.t1.id===myTeam.id?myMatch.t2:myMatch.t1;
+          const pending=S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][myMatch.id];
+          const myTeamSide=myMatch.t1.id===myTeam.id?'t1':'t2';
+          const mySubmitted=pending&&pending[myTeamSide];
+          html+=`<div style="font-size:11px;color:#888;margin-bottom:6px">vs</div>
+            <div style="background:#f8f7f4;border-radius:10px;padding:12px;margin-bottom:10px">
+              <div style="font-size:11px;color:#888;margin-bottom:4px">Opponents</div>
+              <div style="font-size:16px;font-weight:700">${teamLabel(oppTeam)}</div>
+            </div>`;
+          if(!myMatch.winner){
+            if(mySubmitted){
+              html+=`<div class="alert alert-info" style="font-size:11px">✓ You submitted ${mySubmitted.s1}–${mySubmitted.s2}. Waiting for opponents to confirm.</div>`;
+            } else {
+              html+=`<div style="font-size:13px;font-weight:600;margin-bottom:8px">Enter your score:</div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                  <div style="flex:1;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:4px">Your team</div>
+                    <input type="number" id="ps-${myMatch.id}-${myTeamSide==='t1'?1:2}" placeholder="0" style="width:70px;padding:8px;border:2px solid #7F77DD;border-radius:10px;font-size:20px;text-align:center;font-weight:700;margin:0"></div>
+                  <div style="font-size:18px;color:#aaa">–</div>
+                  <div style="flex:1;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:4px">Opponents</div>
+                    <input type="number" id="ps-${myMatch.id}-${myTeamSide==='t1'?2:1}" placeholder="0" style="width:70px;padding:8px;border:1px solid #ddd;border-radius:10px;font-size:20px;text-align:center;font-weight:700;margin:0"></div>
+                </div>
+                <button class="btn btn-primary" onclick="playerSubmitScore('${activeGame.id}','${myMatch.id}','${myTeamSide}')">✓ Submit score</button>`;
+            }
+          } else {
+            html+=`<div class="alert alert-success">✓ Result: ${teamLabel(myMatch.winner)} won ${myMatch.score1}–${myMatch.score2}</div>`;
+          }
+          html+=`<div id="ps-${myMatch.id}-status"></div>`;
+        }
+      }
+    } else {
+      html+=`<div class="alert alert-info" style="font-size:11px">You don't have a match in this game.</div>`;
+    }
+    // All matchups for active game
+    html+=`<div class="divider"></div><div style="font-size:12px;font-weight:600;color:#888;margin-bottom:8px">All matchups</div>`;
+    const allTeams=(S.teams&&S.teams[activeGame.id])||[];
+    for(let i=0;i<allTeams.length;i+=2){
+      if(i+1<allTeams.length){
+        const t1=allTeams[i],t2=allTeams[i+1];
+        const isMe=(t1.p1===myName||t1.p2===myName||t2.p1===myName||t2.p2===myName);
+        html+=`<div style="background:${isMe?'#EEEDFE':'#f8f7f4'};border-radius:9px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+          <div style="flex:1;font-size:12px;font-weight:${isMe?'700':'500'}">${teamLabel(t1)}</div>
+          <div style="font-size:11px;color:#aaa">vs</div>
+          <div style="flex:1;font-size:12px;font-weight:${isMe?'700':'500'};text-align:right">${teamLabel(t2)}</div>
+        </div>`;
+      }
+    }
+    html+='</div>';
+  }
+
+  html+='<div class="card"><div class="card-title">👥 All my teams</div>';
+  locked.forEach(g=>{
+    const teams=(S.teams&&S.teams[g.id])||[],myTeam=teams.find(t=>t.p1===myName||t.p2===myName);
+    if(!myTeam)return;
+    const partner=myTeam.p1===myName?myTeam.p2:myTeam.p1,pts=S.points&&S.points[g.id]&&S.points[g.id][myName];
+    const isActive2=g.active||S.activeGameId===g.id;
+    html+=`<div class="player-row" style="${isActive2?'background:#FAFAFE':''}">
+      <div class="avatar" style="background:${isActive2?'#7F77DD':'#E1F5EE'};color:${isActive2?'#fff':'#085041'}">${isActive2?'▶':'🛡'}</div>
+      <div style="flex:1"><div style="font-size:13px;font-weight:600">${g.name}${isActive2?' <span class="tag" style="background:#7F77DD;color:#fff;font-size:9px">ACTIVE</span>':''}</div>
+      <div style="font-size:11px;color:#888">${partner?'With '+partner:'Solo'} · ${fmtL[g.format]||g.format}</div></div>
+      ${pts!==undefined?`<span class="tag tag-purple">${pts}pts</span>`:''}</div>`;
+  });
+  html+='</div>'; e.innerHTML=html;
+}
+
+function findMyActiveMatch(b,myTeam,fmt){
+  const allMatches=[];
+  if(fmt==='round-robin'&&b.matches) allMatches.push(...b.matches);
+  else if(fmt==='two-pool'){ if(b.poolAM)allMatches.push(...b.poolAM); if(b.poolBM)allMatches.push(...b.poolBM); if(b.crossover)allMatches.push(...b.crossover); }
+  else if(fmt==='single-elim'&&b.rounds) b.rounds.forEach(r=>allMatches.push(...r));
+  else if(fmt==='double-elim'){ if(b.winners)b.winners.forEach(r=>allMatches.push(...r)); if(b.losers)b.losers.forEach(r=>allMatches.push(...r)); if(b.grandFinal)allMatches.push(b.grandFinal); }
+  else if(fmt==='pool-playoff'&&b.pools){ b.pools.forEach(p=>allMatches.push(...p.matches)); if(b.knockout)allMatches.push(...b.knockout); }
+  return allMatches.find(m=>m&&!m.winner&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id))||null;
+}
+
+window.playerSubmitScore = async (gameId,matchId,teamSide)=>{
+  const inp1=el(`ps-${matchId}-1`),inp2=el(`ps-${matchId}-2`);
+  const rawS1=parseFloat(inp1?.value),rawS2=parseFloat(inp2?.value);
+  if(isNaN(rawS1)||isNaN(rawS2)){alert('Enter scores for both teams.');return;}
+  if(rawS1===rawS2){alert('No draws allowed.');return;}
+  // s1 is always team1 score, s2 is team2 score
+  const s1=teamSide==='t1'?rawS1:rawS2, s2=teamSide==='t1'?rawS2:rawS1;
+  const myName=actingAsName||(userProfile?.name)||'';
+  const existing=(S.pendingScores&&S.pendingScores[gameId]&&S.pendingScores[gameId][matchId])||{};
+  const newPending={...existing,[teamSide]:{s1,s2,submittedBy:myName,at:Date.now()}};
+  const otherSide=teamSide==='t1'?'t2':'t1';
+  const statusEl=el(`ps-${matchId}-status`);
+  if(existing[otherSide]&&existing[otherSide].s1===s1&&existing[otherSide].s2===s2){
+    // Both agree
+    await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:null});
+    // Find match type for saveMFMatch
+    const b=S.bs&&S.bs[gameId];
+    const {type,poolKey,ri}=findMatchMeta(b,matchId,gameId);
+    await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
+    if(statusEl)statusEl.innerHTML='<div class="alert alert-success">✓ Score confirmed!</div>';
+  } else {
+    await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:newPending});
+    if(statusEl)statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">✓ Score submitted — waiting for opponents to confirm.</div>';
+  }
+};
+
+function findMatchMeta(b,matchId,gameId){
+  const game=(S.games||[]).find(g=>g.id===gameId);
+  const fmt=game?.format||'round-robin';
+  if(fmt==='round-robin') return {type:'rr',poolKey:null,ri:null};
+  if(fmt==='two-pool'){
+    if(b.poolAM?.find(m=>m.id===matchId)) return {type:'pool',poolKey:'A',ri:null};
+    if(b.poolBM?.find(m=>m.id===matchId)) return {type:'pool',poolKey:'B',ri:null};
+    return {type:'cross',poolKey:null,ri:null};
+  }
+  if(fmt==='single-elim'){
+    for(let ri=0;ri<(b.rounds||[]).length;ri++) if(b.rounds[ri].find(m=>m.id===matchId)) return {type:'se',poolKey:null,ri};
+  }
+  if(fmt==='double-elim'){
+    for(let ri=0;ri<(b.winners||[]).length;ri++) if(b.winners[ri].find(m=>m.id===matchId)) return {type:'dew',poolKey:null,ri};
+    for(let ri=0;ri<(b.losers||[]).length;ri++) if(b.losers[ri].find(m=>m.id===matchId)) return {type:'del',poolKey:null,ri};
+    return {type:'degf',poolKey:null,ri:null};
+  }
+  if(fmt==='pool-playoff'){
+    for(let pi=0;pi<(b.pools||[]).length;pi++) if(b.pools[pi].matches.find(m=>m.id===matchId)) return {type:'pppool',poolKey:null,ri:pi};
+    return {type:'ko',poolKey:null,ri:null};
+  }
+  return {type:'rr',poolKey:null,ri:null};
+}
+function renderPlayerLB(myName){
+  const e=el('pview-lb');if(!e)return;
+  const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
+  let html='<div class="card"><div class="card-title">🏅 Leaderboard</div>';
+  if(!sorted.length)html+='<p class="empty">No data yet.</p>';
+  else html+=sorted.map((p,i)=>`<div class="lb-row"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div><div class="lb-name">${p}${p===myName?' <span style="font-size:10px;color:#534AB7">(you)</span>':''}</div><div class="lb-pts">${getTotalPts(p)}</div></div>`).join('');
+  html+='</div>';
+  html+='<div class="card"><div class="card-title">🎖 Badges</div><div id="all-player-badges"></div></div>';
+  e.innerHTML=html; renderAllPlayerBadges();
+}
+function renderAllPlayerBadges(){
+  const e=el('all-player-badges');if(!e)return;
+  e.innerHTML=(S.players||[]).map(p=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede6"><div style="font-size:13px;font-weight:600;margin-bottom:4px">${p}</div><div class="badges-wrap">${renderBadges(getPlayerBadges(p))}</div></div>`).join('');
+}
+
+// ── DRAG & DROP ───────────────────────────────────────────
+let _ds=null,_touchClone=null,_touchList=null,_touchOffX=0,_touchOffY=0;
+window.dstart=(e)=>{_ds=e.currentTarget;e.currentTarget.classList.add('dragging');e.dataTransfer.effectAllowed='move';};
+window.dover=(e,listId)=>{e.preventDefault();if(e.currentTarget!==_ds)e.currentTarget.classList.add('drag-over');};
+window.dleave=(e)=>{e.currentTarget.classList.remove('drag-over');};
+window.ddrop=(e,listId)=>{
+  e.preventDefault();e.currentTarget.classList.remove('drag-over');
+  if(!_ds||_ds===e.currentTarget)return;
+  const list=el(listId||'game-rank-list'),si=Array.from(list.children).indexOf(_ds),ti=Array.from(list.children).indexOf(e.currentTarget);
+  if(si<ti)e.currentTarget.after(_ds);else e.currentTarget.before(_ds);
+  _ds.classList.remove('dragging');
+  Array.from(list.querySelectorAll('.rank-item')).forEach((el2,i)=>{const sp=el2.querySelector('.rank-num');if(sp)sp.textContent=i+1;});
+};
+window.tstart=(e,listId)=>{
+  const item=e.currentTarget;_ds=item;_touchList=el(listId||'game-rank-list');
+  const rect=item.getBoundingClientRect(),touch=e.touches[0];
+  _touchOffX=touch.clientX-rect.left;_touchOffY=touch.clientY-rect.top;
+  _touchClone=item.cloneNode(true);
+  _touchClone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:.85;z-index:999;pointer-events:none;background:#EEEDFE;border:2px dashed #7F77DD;border-radius:9px;box-shadow:0 4px 12px rgba(0,0,0,.15);`;
+  document.body.appendChild(_touchClone);item.style.opacity='.3';e.preventDefault();
+};
+window.tmove=(e)=>{
+  if(!_touchClone||!_ds)return;
+  const touch=e.touches[0];
+  _touchClone.style.left=(touch.clientX-_touchOffX)+'px';_touchClone.style.top=(touch.clientY-_touchOffY)+'px';
+  Array.from(_touchList.querySelectorAll('.rank-item')).forEach(x=>x.classList.remove('drag-over'));
+  const target=Array.from(_touchList.querySelectorAll('.rank-item')).find(x=>{if(x===_ds)return false;const r=x.getBoundingClientRect();return touch.clientY>=r.top&&touch.clientY<=r.bottom;});
+  if(target)target.classList.add('drag-over');e.preventDefault();
+};
+window.tend=(e)=>{
+  if(!_ds||!_touchList)return;
+  const touch=e.changedTouches[0];
+  Array.from(_touchList.querySelectorAll('.rank-item')).forEach(x=>x.classList.remove('drag-over'));
+  const target=Array.from(_touchList.querySelectorAll('.rank-item')).find(x=>{if(x===_ds)return false;const r=x.getBoundingClientRect();return touch.clientY>=r.top&&touch.clientY<=r.bottom;});
+  if(target){const si=Array.from(_touchList.children).indexOf(_ds),ti=Array.from(_touchList.children).indexOf(target);if(si<ti)target.after(_ds);else target.before(_ds);Array.from(_touchList.querySelectorAll('.rank-item')).forEach((x,i)=>{const sp=x.querySelector('.rank-num');if(sp)sp.textContent=i+1;});}
+  _ds.style.opacity='';if(_touchClone){_touchClone.remove();_touchClone=null;}_ds=null;_touchList=null;
+};
+
+// ── POWER RANKINGS ────────────────────────────────────────
+function renderPowerRankings(){
+  const e=el('admin-power'); if(!e) return;
+  const games=S.games||[],players=S.players||[];
+  if(!players.length||!games.length){e.innerHTML='<div class="card"><p class="empty">Add players and games first.</p></div>';return;}
+  function avgForGame(gameId,player){const gR=(S.gameRankings&&S.gameRankings[gameId])||{},others=players.filter(p=>p!==player);let total=0,count=0;others.forEach(r=>{const rk=gR[r];if(rk){const i=rk.indexOf(player);if(i!==-1){total+=i+1;count++;}}});return count?total/count:null;}
+  function overallAvg(player){const avgs=games.map(g=>avgForGame(g.id,player)).filter(v=>v!==null);return avgs.length?avgs.reduce((a,b)=>a+b,0)/avgs.length:null;}
+  const sorted=players.slice().sort((a,b)=>{const aa=overallAvg(a),ba=overallAvg(b);if(aa===null&&ba===null)return 0;if(aa===null)return 1;if(ba===null)return -1;return aa-ba;});
+  let html=`<div class="card"><div class="card-title">📊 Power rankings</div><div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Lower avg = ranked better by peers.</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="text-align:left;padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;position:sticky;left:0;background:#fff">Player</th>${games.map(g=>`<th style="padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;color:#534AB7;text-align:center;white-space:nowrap">${g.name}</th>`).join('')}<th style="padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;text-align:center">Avg</th></tr></thead><tbody>`;
+  const n=players.length;
+  sorted.forEach((p,i)=>{
+    const avgs=games.map(g=>avgForGame(g.id,p)),oa=overallAvg(p),bg=i%2===0?'#fff':'#f8f7f4';
+    html+=`<tr style="background:${bg}"><td style="padding:6px 4px;font-weight:600;font-size:12px;position:sticky;left:0;background:${bg};white-space:nowrap"><div style="display:flex;align-items:center;gap:5px"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}" style="width:20px;height:20px;font-size:10px">${i+1}</div>${p}</div></td>${avgs.map(avg=>avg!==null?`<td style="padding:6px 4px;text-align:center;color:${avg<=3?'#27500A':avg>=n-1?'#c0392b':'#534AB7'};font-weight:${avg<=3||avg>=n-1?'700':'400'}">${avg.toFixed(2)}</td>`:`<td style="padding:6px 4px;text-align:center;color:#ccc">—</td>`).join('')}<td style="padding:6px 4px;text-align:center;font-weight:700">${oa!==null?oa.toFixed(2):'—'}</td></tr>`;
+  });
+  html+='</tbody></table></div></div>';
+  e.innerHTML=html;
+}
+
+
 function loadTournamentList(){
   onValue(ref(db,'tournaments'), snap=>{
     const all = snap.exists() ? snap.val() : {};
@@ -2885,48 +3187,57 @@ window.manageTourneyAdmins = ()=>{
     const tourneyAdmins=S.tourneyAdmins||{};
     const myUid=currentUser?.uid;
 
-    // Current tournament admins at top
-    const currentAdmins=Object.entries(tourneyAdmins).map(([uid2])=>{
-      const p=all[uid2]; if(!p) return '';
+    // Build rows using string concat to avoid nested backtick issues
+    function adminRow(uid2,p){
       const name=p.preferredName||p.name||'?';
-      return`<div class="player-row">
-        <div class="avatar" style="background:#EEEDFE;color:#3C3489">🛡</div>
-        <div style="flex:1"><div style="font-size:13px;font-weight:600">${name}</div>
-        <div style="font-size:11px;color:#888">${p.email||p.phone||''}</div></div>
-        <button class="btn btn-sm btn-danger" onclick="toggleTourneyAdmin('${uid2}',false)" style="width:auto">Remove</button>
-      </div>`;
-    }).join('');
-
-    // Players in this tournament who aren't already admins
-    const tournamentPlayers=Object.entries(all).filter(([uid2,p])=>{
-      return uid2!==myUid && !tourneyAdmins[uid2] &&
-        (S.players||[]).includes(p.preferredName||p.name||'');
-    });
-
-    // Also show all signed-up users not in tournament
-    const otherUsers=Object.entries(all).filter(([uid2,p])=>{
-      return uid2!==myUid && !tourneyAdmins[uid2] &&
-        !(S.players||[]).includes(p.preferredName||p.name||'');
-    });
-
-    const makeRow=(uid2,p)=>{
+      return '<div class="player-row">'
+        +'<div class="avatar" style="background:#EEEDFE;color:#3C3489">🛡</div>'
+        +'<div style="flex:1"><div style="font-size:13px;font-weight:600">'+name+'</div>'
+        +'<div style="font-size:11px;color:#888">'+(p.email||p.phone||'')+'</div></div>'
+        +'<button class="btn btn-sm btn-danger" onclick="toggleTourneyAdmin('+uid2+',false)" style="width:auto">Remove</button>'
+        +'</div>';
+    }
+    function addRow(uid2,p){
       const name=p.preferredName||p.name||'?';
-      return`<div class="player-row">
-        <div class="avatar">${initials(name)}</div>
-        <div style="flex:1"><div style="font-size:13px;font-weight:600">${name}</div>
-        <div style="font-size:11px;color:#888">${p.email||p.phone||''}</div></div>
-        <button class="btn btn-sm btn-success" onclick="toggleTourneyAdmin('${uid2}',true)" style="width:auto">+ Add</button>
-      </div>`;
-    };
+      return '<div class="player-row">'
+        +'<div class="avatar">'+initials(name)+'</div>'
+        +'<div style="flex:1"><div style="font-size:13px;font-weight:600">'+name+'</div>'
+        +'<div style="font-size:11px;color:#888">'+(p.email||p.phone||'')+'</div></div>'
+        +'<button class="btn btn-sm btn-success" onclick="toggleTourneyAdmin('+uid2+',true)" style="width:auto">+ Add</button>'
+        +'</div>';
+    }
 
-    el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
-      <div class="modal-handle"></div>
-      <div class="modal-title"><span>👥 Tournament admins</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
-      <div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Admins can manage scores, approve results, and run the tournament alongside you.</div>
-      ${currentAdmins?`<div style="font-size:11px;font-weight:700;color:#534AB7;margin-bottom:6px">Current admins</div>${currentAdmins}<div class="divider"></div>`:''}
-      ${tournamentPlayers.length?`<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">Players in this tournament</div>${tournamentPlayers.map(([u,p])=>makeRow(u,p)).join('')}`:''}
-      ${otherUsers.length?`<div style="font-size:11px;font-weight:700;color:#aaa;margin:8px 0 6px">Other registered users</div>${otherUsers.slice(0,10).map(([u,p])=>makeRow(u,p)).join('')}`:''}
-    </div></div>`;
+    const currentAdminsHtml = Object.entries(tourneyAdmins)
+      .map(([uid2])=>{ const p=all[uid2]; return p?adminRow(uid2,p):''; }).join('');
+
+    const tournamentPlayers = Object.entries(all).filter(([uid2,p])=>
+      uid2!==myUid && !tourneyAdmins[uid2] &&
+      (S.players||[]).includes(p.preferredName||p.name||''));
+
+    const otherUsers = Object.entries(all).filter(([uid2,p])=>
+      uid2!==myUid && !tourneyAdmins[uid2] &&
+      !(S.players||[]).includes(p.preferredName||p.name||''));
+
+    let html='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
+      +'<div class="modal-handle"></div>'
+      +'<div class="modal-title"><span>👥 Tournament admins</span>'
+      +'<button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
+      +'<div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Admins can manage scores, approve results, and run the tournament alongside you.</div>';
+
+    if(currentAdminsHtml){
+      html+='<div style="font-size:11px;font-weight:700;color:#534AB7;margin-bottom:6px">Current admins</div>'
+        +currentAdminsHtml+'<div class="divider"></div>';
+    }
+    if(tournamentPlayers.length){
+      html+='<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">Players in this tournament</div>'
+        +tournamentPlayers.map(([u,p])=>addRow(u,p)).join('');
+    }
+    if(otherUsers.length){
+      html+='<div style="font-size:11px;font-weight:700;color:#aaa;margin:8px 0 6px">Other registered users</div>'
+        +otherUsers.slice(0,10).map(([u,p])=>addRow(u,p)).join('');
+    }
+    html+='</div></div>';
+    el('modal-area').innerHTML=html;
   });
 };
 window.toggleTourneyAdmin = async (uid2,add)=>{
