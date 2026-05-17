@@ -724,7 +724,7 @@ window.handleHistoryImport=async(event)=>{
     const col=n=>hdrs.findIndex(h=>h.includes(n));
     const cN=col('nickname'),cF=col('first'),cL=col('last'),cP=col('preferred'),
           cPh=col('phone'),cEm=col('email'),cYr=col('years'),cW=col('wins'),
-          cPo=col('podium'),cLp=col('last place'),cYl=col('years list');
+          cPo=col('podium'),cLp=col('last place'),cYl=col('years list'),cGs=col('gamestats');
     let imported=0,updated=0,skipped=0;
     for(let i=hIdx+1;i<rows.length;i++){
       const row=rows[i];
@@ -737,9 +737,11 @@ window.handleHistoryImport=async(event)=>{
       const podiums=parseInt(row[cPo])||0,lastPlaces=parseInt(row[cLp])||0;
       const yearsAttended=String(row[cYl]||'').split(',').map(y=>parseInt(y.trim())).filter(Boolean);
       const matchNames=[nick,fn2,pref,fn2+' '+ln2,pref+' '+ln2].filter(Boolean).map(n=>n.trim().toLowerCase());
+      let gameStats={};
+      try{ if(cGs>=0&&row[cGs]) gameStats=JSON.parse(String(row[cGs])); }catch(e){}
       const pd={nickname:nick,firstName:fn2,lastName:ln2,preferredName:pref,name:pref,
         phone,email,preferredContact:phone?'phone':'email',years,wins,podiums,lastPlaces,
-        yearsAttended,matchNames,importedFrom:'GG_Complete_History',importedAt:Date.now()};
+        yearsAttended,matchNames,gameStats,importedFrom:'GG_Complete_History',importedAt:Date.now()};
       try{
         const eu=await findPlayerByMatchNames(matchNames,phone,email);
         if(eu){
@@ -789,8 +791,13 @@ window.syncTournamentHistory=async()=>{
       lastPlaces:prof.lastPlaces||0, yearsAttended:prof.yearsAttended||[],
       gameWins:prof.gameWins||{}, gameStats:prof.gameStats||{}
     };
-    // Also update _globalProfiles cache immediately
-    if(_globalProfiles[name]) _globalProfiles[name]={..._globalProfiles[name],...prof};
+    // Also update _globalProfiles cache immediately with full profile including gameStats
+    const profWithStats={...(_globalProfiles[name]||{}),...prof,gameStats:prof.gameStats||{}};
+    _globalProfiles[name]=profWithStats;
+    // Also index by all name variants
+    [prof.preferredName,prof.nickname,prof.firstName].filter(Boolean).forEach(n=>{
+      if(n.trim()) _globalProfiles[n.trim()]=profWithStats;
+    });
     synced++;
   });
   if(!synced){alert('No matching profiles found. Import GG_Complete_History.xlsx first.');return;}
