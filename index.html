@@ -745,6 +745,7 @@ window.handleHistoryImport=async(event)=>{
         phone,email,preferredContact:phone?'phone':'email',years,wins,podiums,lastPlaces,
         yearsAttended,matchNames,gameStats,importedFrom:'GG_Complete_History',importedAt:Date.now()};
       try{
+        // Check signed-up players first
         const eu=await findPlayerByMatchNames(matchNames,phone,email,fn2,ln2);
         if(eu){
           const es=await get(ref(db,'players/'+eu));
@@ -752,8 +753,24 @@ window.handleHistoryImport=async(event)=>{
           await update(ref(db,'players/'+eu),{...pd,uid:eu,phone:ex.phone||phone,email:ex.email||email});
           updated++;
         } else {
-          const pk='import_'+nick.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+Date.now();
-          await set(ref(db,'preAssignments/'+pk),pd); imported++;
+          // Check existing preAssignments by first+last to avoid duplicates
+          const preSnap=await get(ref(db,'preAssignments'));
+          let existingPreKey=null;
+          if(preSnap.exists()){
+            for(const [key,p] of Object.entries(preSnap.val())){
+              if(!p) continue;
+              const pfn=(p.firstName||'').trim().toLowerCase();
+              const pln=(p.lastName||'').trim().toLowerCase();
+              if(pfn===fn2.toLowerCase()&&pln===ln2.toLowerCase()){
+                existingPreKey=key; break;
+              }
+            }
+          }
+          // Use stable key based on first+last (no timestamp) to prevent duplicates
+          const stableKey='pre_'+fn2.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+ln2.toLowerCase().replace(/[^a-z0-9]/g,'_');
+          const targetKey=existingPreKey||stableKey;
+          await set(ref(db,'preAssignments/'+targetKey),pd);
+          if(existingPreKey) updated++; else imported++;
         }
       }catch(e){skipped++;}
     }
