@@ -1577,9 +1577,15 @@ window.openTournament = (tid)=>{
 };
 
 function buildTournamentShell(){
-  return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;padding-top:.5rem">
+  return`<div style="display:flex;align-items:center;gap:6px;margin-bottom:.75rem;padding-top:.5rem;flex-wrap:wrap">
     <button class="btn btn-sm" onclick="leaveTournament()" style="width:auto">← Back</button>
-    <div style="font-size:13px;font-weight:600;flex:1;color:#534AB7" id="tourney-header-label"></div>
+    <div style="font-size:13px;font-weight:600;flex:1;color:#534AB7;min-width:80px" id="tourney-header-label"></div>
+    <button class="btn btn-sm hidden" id="btn-player-view" onclick="switchToPlayerView()"
+      style="width:auto;background:#EAF3DE;border-color:#97C459;color:#27500A">👤 My Rankings</button>
+    <button class="btn btn-sm hidden" id="btn-admin-view" onclick="switchToAdminView()"
+      style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin View</button>
+    <button class="btn btn-sm hidden" id="btn-manage-admins" onclick="manageTourneyAdmins()"
+      style="width:auto;border-color:#e0ddd6;color:#888">👥 Admins</button>
   </div>
   <div id="admin-area" class="hidden">
     <div class="phase-tabs">
@@ -1626,8 +1632,35 @@ function renderAdminView(){
   const header = el('tourney-header-label');
   if(header) header.textContent = S.tourneyName+' '+S.tourneyYear;
   show('admin-area'); hide('player-area');
+  // Show My Rankings button if admin is also a player in this tournament
+  const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
+  const amPlayer = (S.players||[]).includes(myName);
+  const btnPlayer = el('btn-player-view');
+  const btnAdmins = el('btn-manage-admins');
+  if(btnPlayer) btnPlayer.classList.toggle('hidden', !amPlayer);
+  if(btnAdmins) btnAdmins.classList.remove('hidden');
+  el('btn-admin-view')?.classList.add('hidden');
   showAdminPhase(_phase||'setup');
 }
+
+window.switchToPlayerView = ()=>{
+  const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
+  hide('admin-area');
+  el('btn-player-view')?.classList.add('hidden');
+  el('btn-admin-view')?.classList.remove('hidden');
+  el('btn-manage-admins')?.classList.add('hidden');
+  renderPlayerView(myName);
+};
+
+window.switchToAdminView = ()=>{
+  show('admin-area'); hide('player-area');
+  el('btn-admin-view')?.classList.add('hidden');
+  el('btn-manage-admins')?.classList.remove('hidden');
+  const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
+  const amPlayer = (S.players||[]).includes(myName);
+  el('btn-player-view')?.classList.toggle('hidden', !amPlayer);
+  showAdminPhase(_phase||'setup');
+};
 
 function showAdminPhase(phase){
   _phase=phase;
@@ -2695,7 +2728,7 @@ function renderLeaderboard(){
   html+=`<div class="card"><div class="card-title">📊 Points per game</div><div id="game-pts-breakdown"></div></div>`;
   html+=`<div class="card" id="tiebreaker-card"><div class="card-title">🏓 Overall tiebreaker</div><div id="tiebreaker-panel"></div></div>`;
   html+=`<div class="card"><div class="card-title">🏆 Declare champion</div><div class="alert alert-warn" style="font-size:11px">Do at end of day. Saves to history and awards all badges.</div><button class="btn btn-primary" onclick="declareTournamentWinner()">🏆 Finalize &amp; save to history</button><div id="declare-status"></div></div>`;
-  html+=`<div class="card"><div class="card-title">👥 Tournament admins</div><div class="alert alert-info" style="font-size:11px;margin-bottom:8px">Add others who can approve scores and manage this tournament.</div><button class="btn" onclick="manageTourneyAdmins()">👥 Manage tournament admins</button></div>`;
+  // Tournament admins managed via header button
   e.innerHTML=html;
   renderGPB(); updateStats(); renderTiebreakerPanel();
 }
@@ -2745,22 +2778,50 @@ window.manageTourneyAdmins = ()=>{
   get(ref(db,'players')).then(snap=>{
     const all=snap.exists()?snap.val():{};
     const tourneyAdmins=S.tourneyAdmins||{};
-    let html=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
-      <div class="modal-handle"></div>
-      <div class="modal-title"><span>Tournament admins</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
-      <div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Tournament admins can manage scores and approve results for this tournament.</div>`;
-    Object.entries(all).forEach(([uid2,p])=>{
-      if(uid2===currentUser?.uid)return;
-      const isTA=tourneyAdmins[uid2];
-      html+=`<div class="player-row">
-        <div class="avatar">${initials(p.preferredName||p.name)}</div>
-        <div style="flex:1"><div style="font-size:13px;font-weight:600">${p.preferredName||p.name}</div>
+    const myUid=currentUser?.uid;
+
+    // Current tournament admins at top
+    const currentAdmins=Object.entries(tourneyAdmins).map(([uid2])=>{
+      const p=all[uid2]; if(!p) return '';
+      const name=p.preferredName||p.name||'?';
+      return`<div class="player-row">
+        <div class="avatar" style="background:#EEEDFE;color:#3C3489">🛡</div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:600">${name}</div>
         <div style="font-size:11px;color:#888">${p.email||p.phone||''}</div></div>
-        <button class="btn btn-sm ${isTA?'btn-danger':'btn-success'}" onclick="toggleTourneyAdmin('${uid2}',${!isTA})" style="width:auto">${isTA?'Remove':'+ Add'}</button>
+        <button class="btn btn-sm btn-danger" onclick="toggleTourneyAdmin('${uid2}',false)" style="width:auto">Remove</button>
       </div>`;
+    }).join('');
+
+    // Players in this tournament who aren't already admins
+    const tournamentPlayers=Object.entries(all).filter(([uid2,p])=>{
+      return uid2!==myUid && !tourneyAdmins[uid2] &&
+        (S.players||[]).includes(p.preferredName||p.name||'');
     });
-    html+='</div></div>';
-    el('modal-area').innerHTML=html;
+
+    // Also show all signed-up users not in tournament
+    const otherUsers=Object.entries(all).filter(([uid2,p])=>{
+      return uid2!==myUid && !tourneyAdmins[uid2] &&
+        !(S.players||[]).includes(p.preferredName||p.name||'');
+    });
+
+    const makeRow=(uid2,p)=>{
+      const name=p.preferredName||p.name||'?';
+      return`<div class="player-row">
+        <div class="avatar">${initials(name)}</div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:600">${name}</div>
+        <div style="font-size:11px;color:#888">${p.email||p.phone||''}</div></div>
+        <button class="btn btn-sm btn-success" onclick="toggleTourneyAdmin('${uid2}',true)" style="width:auto">+ Add</button>
+      </div>`;
+    };
+
+    el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title"><span>👥 Tournament admins</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
+      <div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Admins can manage scores, approve results, and run the tournament alongside you.</div>
+      ${currentAdmins?`<div style="font-size:11px;font-weight:700;color:#534AB7;margin-bottom:6px">Current admins</div>${currentAdmins}<div class="divider"></div>`:''}
+      ${tournamentPlayers.length?`<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">Players in this tournament</div>${tournamentPlayers.map(([u,p])=>makeRow(u,p)).join('')}`:''}
+      ${otherUsers.length?`<div style="font-size:11px;font-weight:700;color:#aaa;margin:8px 0 6px">Other registered users</div>${otherUsers.slice(0,10).map(([u,p])=>makeRow(u,p)).join('')}`:''}
+    </div></div>`;
   });
 };
 window.toggleTourneyAdmin = async (uid2,add)=>{
