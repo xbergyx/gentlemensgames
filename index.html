@@ -261,6 +261,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div class="divider"></div>
       <button class="btn btn-sm btn-primary" onclick="openAddGlobalPlayer()" style="width:auto">+ Add new player</button>
       <button class="btn btn-sm" onclick="deduplicateGlobalPlayers()" style="width:auto;margin-left:6px;border-color:#f0a0a0;color:#c0392b">🧹 Remove duplicates</button>
+      <button class="btn btn-sm" onclick="deduplicatePreAssignments()" style="width:auto;margin-left:6px;border-color:#f5cc80;color:#7a4f00;margin-top:4px">🧹 Clean ghost duplicates</button>
     </div>
     <div class="card" id="pending-approvals-card">
       <div class="card-title">Pending player approvals <span id="pending-count-badge"></span></div>
@@ -374,6 +375,7 @@ function showView(v){
   ['loading','auth','profile-setup','claim-name','home','tournament','admin-panel']
     .forEach(x=>hide('view-'+x));
   show('view-'+v);
+  window.scrollTo(0,0);
 }
 function todayKey(){ return new Date().toISOString().split('T')[0]; }
 
@@ -1068,6 +1070,41 @@ window.openAdminPanel=()=>{
 };
 window.closeAdminPanel = ()=>{ showView('home'); };
 
+window.deduplicatePreAssignments = async ()=>{
+  const snap=await get(ref(db,'preAssignments'));
+  if(!snap.exists()){alert('No pre-assignments found.');return;}
+  const all=snap.val();
+  // Group by normalized name
+  const byName={};
+  Object.entries(all).forEach(([key,p])=>{
+    if(!p) return;
+    const name=(p.preferredName||p.nickname||p.firstName||'').trim().toLowerCase();
+    if(!byName[name]) byName[name]=[];
+    byName[name].push({key,p});
+  });
+  const dupes=Object.entries(byName).filter(([n,arr])=>arr.length>1);
+  if(!dupes.length){alert('No duplicate ghost players found!');return;}
+  let msg='Found duplicate ghost players:\n';
+  dupes.forEach(([name,arr])=>msg+=name+': '+arr.length+' entries\n');
+  msg+='\nKeep the entry with most history and delete the rest?';
+  if(!confirm(msg)) return;
+  let deleted=0;
+  for(const [name,arr] of dupes){
+    // Keep the one with most data
+    arr.sort((a,b)=>{
+      const sa=(a.p.years||0)*10+(a.p.phone?5:0)+(a.p.email?5:0)+Object.keys(a.p.gameWins||{}).length;
+      const sb=(b.p.years||0)*10+(b.p.phone?5:0)+(b.p.email?5:0)+Object.keys(b.p.gameWins||{}).length;
+      return sb-sa;
+    });
+    for(let i=1;i<arr.length;i++){
+      await set(ref(db,'preAssignments/'+arr[i].key),null);
+      deleted++;
+    }
+  }
+  alert('Removed '+deleted+' duplicate ghost entries.');
+  loadGlobalPlayers();
+};
+
 window.deduplicateGlobalPlayers = async ()=>{
   const snap=await get(ref(db,'players'));
   if(!snap.exists()) return;
@@ -1384,13 +1421,26 @@ async function loadGlobalProfilesForTournament(){
   _globalProfiles={};
   if(ps.exists()) Object.values(ps.val()).forEach(p=>{
     if(!p) return;
-    [p.preferredName,p.name,p.firstName,p.nickname,((p.firstName||'')+' '+(p.lastName||'')).trim()]
-      .filter(Boolean).forEach(n=>{if(n)_globalProfiles[n.trim()]=p;});
+    [p.preferredName,p.name,p.firstName,p.nickname,p.lastName,
+     ((p.firstName||'')+' '+(p.lastName||'')).trim()]
+      .filter(Boolean).forEach(n=>{
+        const key=n.trim();
+        if(key&&(!_globalProfiles[key]||(p.years||0)>(_globalProfiles[key].years||0)))
+          _globalProfiles[key]=p;
+      });
   });
   if(prs.exists()) Object.values(prs.val()).forEach(p=>{
     if(!p) return;
-    [p.preferredName,p.nickname,p.firstName,((p.firstName||'')+' '+(p.lastName||'')).trim()]
-      .filter(Boolean).forEach(n=>{if(n&&!_globalProfiles[n.trim()])_globalProfiles[n.trim()]=p;});
+    [p.preferredName,p.nickname,p.firstName,p.lastName,
+     ((p.firstName||'')+' '+(p.lastName||'')).trim()]
+      .filter(Boolean).forEach(n=>{
+        const key=n.trim();
+        if(key&&!_globalProfiles[key]) _globalProfiles[key]=p;
+      });
+  });
+  // Also index tournament history directly for fallback
+  if(S.history) Object.entries(S.history).forEach(([name,h])=>{
+    if(h&&!_globalProfiles[name]) _globalProfiles[name]=h;
   });
   const updates={};let dirty=false;
   players.forEach(name=>{
@@ -2435,7 +2485,11 @@ function renderPowerRankings(){
 
 // ── HISTORY & BADGES ──────────────────────────────────────
 function getPlayerBadges(name){
-  const gp=_globalProfiles[name]||{};
+  // Try exact match first, then trimmed, then tournament history
+  const gp=_globalProfiles[name]
+    ||_globalProfiles[(name||'').trim()]
+    ||(S.history&&S.history[name])
+    ||{};
   if(S.tournamentFinalized){
     const h=(S.history&&S.history[name])||gp;
     return getPlayerBadgesFromProfile(h,name);
@@ -2582,7 +2636,10 @@ window.openGameRanking=(gameId,myName)=>{
   const others=(S.players||[]).filter(p=>p!==myName);
   const gR=(S.gameRankings&&S.gameRankings[gameId])||{};
   const prevYear=(S.tourneyYear||new Date().getFullYear())-1;
-  function gs(name){return (_globalProfiles[name]&&_globalProfiles[name].gameStats&&_globalProfiles[name].gameStats[game.name])||null;}
+  function gs(name){
+    const prof=_globalProfiles[name]||_globalProfiles[(name||'').trim()]||{};
+    return (prof.gameStats&&prof.gameStats[game.name])||(S.history&&S.history[name]&&S.history[name].gameStats&&S.history[name].gameStats[game.name])||null;
+  }
   function pr(name){return (_globalProfiles[name]&&_globalProfiles[name].overallStandings&&_globalProfiles[name].overallStandings[prevYear])||99;}
   let ordered;
   if(gR[myName]){
