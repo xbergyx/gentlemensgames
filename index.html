@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#7F77DD">
 <title>Gentleman's Games</title>
 <link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f4f0;color:#1a1a1a;min-height:100vh;-webkit-tap-highlight-color:transparent}
@@ -53,8 +53,9 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .badge-everyyear{background:#FFF7ED;color:#7c2d12;border-color:#fb923c}
 .badge-firsttimer{background:#F0F9FF;color:#0c4a6e;border-color:#7dd3fc}
 .badge-admin{background:#EEEDFE;color:#3C3489;border-color:#AFA9EC}
-.phase-tabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:1rem;padding:2px 0 2px}
-.phase-tab{flex:1;min-width:calc(25% - 5px);padding:7px 6px;font-size:11px;font-weight:600;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;white-space:nowrap;touch-action:manipulation;text-align:center}
+.phase-tabs{display:flex;gap:5px;margin-bottom:1rem;overflow-x:auto;overflow-y:hidden;padding:2px 0 8px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.phase-tabs::-webkit-scrollbar{display:none}
+.phase-tab{flex-shrink:0;padding:8px 12px;font-size:11px;font-weight:600;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;white-space:nowrap;touch-action:manipulation}
 .phase-tab.active{background:#EEEDFE;color:#3C3489;border-color:#AFA9EC}
 .ptab{display:flex;gap:5px;margin-bottom:1rem}
 .ptab-btn{flex:1;padding:8px 4px;font-size:11px;font-weight:600;text-align:center;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;touch-action:manipulation}
@@ -124,34 +125,23 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 </style>
 </head>
 <body>
-<div class="app" id="app" style="padding-top:0">
-  <div id="view-loading" style="position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:#f5f4f0;z-index:999">
+<div class="app" id="app">
+  <div id="view-loading" style="display:flex;align-items:center;justify-content:center;min-height:100vh">
     <div style="text-align:center">
-      <div style="font-size:72px;margin-bottom:12px;line-height:1">🏆</div>
+      <div style="font-size:48px;margin-bottom:12px">🏆</div>
       <div style="font-size:16px;font-weight:600;color:#534AB7">Gentleman's Games</div>
       <div style="font-size:12px;color:#aaa;margin-top:6px">Loading...</div>
     </div>
   </div>
-  <div id="view-auth" class="hidden" style="padding-top:1rem">
+  <div id="view-auth" class="hidden">
     <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
-      <div class="alert alert-info" style="font-size:11px;margin-bottom:14px">Sign in with Google for the best experience, or use your phone number.</div>
-      <!-- Google Sign-In -->
-      <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;font-size:14px;font-weight:500;gap:10px;margin-bottom:10px">
-        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-        Continue with Google
-      </button>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <div style="flex:1;height:1px;background:#eee"></div>
-        <span style="font-size:11px;color:#aaa">or</span>
-        <div style="flex:1;height:1px;background:#eee"></div>
-      </div>
-      <!-- Phone fallback -->
-      <div class="sec-label">Phone number</div>
-      <input type="tel" id="auth-contact" placeholder="+1 555 000 0000" autocomplete="tel">
-      <button class="btn" onclick="startAuth()" style="margin-bottom:0">→ Continue with phone</button>
-      <div id="auth-error" style="margin-top:6px"></div>
+      <div class="alert alert-info" style="font-size:11px;margin-bottom:12px">Enter your phone number or email address. We'll send you a one-time code.</div>
+      <div class="sec-label">Phone number or email</div>
+      <input type="text" id="auth-contact" placeholder="+1 555 000 0000 or email@example.com" autocomplete="tel email">
+      <button class="btn btn-primary" onclick="startAuth()">→ Continue</button>
+      <div id="auth-error" class="hidden" style="margin-top:6px"></div>
     </div>
     <div class="card hidden" id="auth-step-2">
       <div class="card-title">🔐 Enter your code</div>
@@ -166,7 +156,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       </div>
       <button class="btn btn-primary" onclick="verifyOTP()">✓ Verify</button>
       <button class="btn btn-ghost btn-sm" onclick="backToStep1()" style="width:100%;margin-top:4px">← Back</button>
-      <div id="otp-error" style="margin-top:6px"></div>
+      <div id="otp-error" class="hidden" style="margin-top:6px"></div>
     </div>
     <div id="recaptcha-container"></div>
   </div>
@@ -204,42 +194,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <button class="btn btn-ghost btn-sm" onclick="skipClaim()" style="width:100%">I'll do this later</button>
     </div>
   </div>
-  <div id="view-profile-page" class="hidden">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;padding-top:.5rem">
-      <button class="btn btn-sm" onclick="closeProfilePage()" style="width:auto">← Back</button>
-      <div style="font-size:16px;font-weight:700;flex:1">👤 My Profile</div>
-    </div>
-    <div class="card" id="profile-page-header"></div>
-    <div class="card">
-      <div class="card-title">✏️ Edit my info</div>
-      <div class="sec-label">First name</div>
-      <input type="text" id="pp-firstname" placeholder="First name">
-      <div class="sec-label">Last name</div>
-      <input type="text" id="pp-lastname" placeholder="Last name">
-      <div class="sec-label">Preferred name <span style="color:#aaa;font-weight:400">(shown in the app)</span></div>
-      <input type="text" id="pp-preferred" placeholder="e.g. Bryant or Bman">
-      <div class="sec-label">Phone number</div>
-      <input type="tel" id="pp-phone" placeholder="+1 555 000 0000">
-      <div class="sec-label">Email</div>
-      <input type="email" id="pp-email" placeholder="you@example.com">
-      <div class="sec-label">Preferred contact for invites</div>
-      <select id="pp-pref">
-        <option value="phone">Phone (SMS)</option>
-        <option value="email">Email</option>
-      </select>
-      <button class="btn btn-primary" onclick="saveProfilePage()">✓ Save changes</button>
-      <div id="pp-status" style="margin-top:6px"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">🎖 My badges</div>
-      <div id="pp-badges"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">📜 My history</div>
-      <div id="pp-history"></div>
-    </div>
-  </div>
-  <div id="view-home" class="hidden" style="padding-top:1rem">
+  <div id="view-home" class="hidden">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem 0 1rem">
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
@@ -247,13 +202,12 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
-        <button class="btn btn-sm" onclick="openProfilePage()" style="width:auto;background:#f8f7f4;border-color:#e0ddd6">👤 Profile</button>
         <button class="btn btn-sm" onclick="signOut()" style="width:auto;color:#888">Sign out</button>
       </div>
     </div>
     <div id="install-prompt" class="hidden">
       <div class="install-banner">
-        <div class="pwa-icon" style="font-size:28px;line-height:1">🏆</div>
+        <div class="pwa-icon">🏆</div>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:700;margin-bottom:2px">Install the app</div>
           <div style="font-size:11px;opacity:.85">Add to your home screen for quick access on tournament day</div>
@@ -294,9 +248,8 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
     <div class="card">
       <div class="card-title">👥 Global player database</div>
-      <div class="alert alert-info" style="font-size:11px;margin-bottom:8px">Upload GG_Complete_History.xlsx to auto-import all player history and badges.</div>
-      <label class="btn btn-success" style="cursor:pointer;margin-bottom:8px">
-        📥 Import from GG_Complete_History.xlsx
+      <label class="btn btn-success" style="cursor:pointer;margin-bottom:8px;width:100%">
+        Import from GG_Complete_History.xlsx
         <input type="file" id="history-import-input" accept=".xlsx,.xls" style="display:none" onchange="handleHistoryImport(event)">
       </label>
       <div id="history-import-status" style="margin-bottom:8px"></div>
@@ -309,8 +262,8 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <button class="btn btn-sm btn-primary" onclick="openAddGlobalPlayer()" style="width:auto">+ Add new player</button>
     </div>
     <div class="card" id="pending-approvals-card">
-      <div class="card-title">⏳ Pending player approvals <span id="pending-count-badge"></span></div>
-      <div class="alert alert-info" style="font-size:11px;margin-bottom:8px">Players who signed up but couldn't be auto-matched to a historical record. Link them or approve as new.</div>
+      <div class="card-title">Pending player approvals <span id="pending-count-badge"></span></div>
+      <div class="alert alert-info" style="font-size:11px;margin-bottom:8px">Players who signed up but could not be auto-matched.</div>
       <div id="pending-approvals-list"><p class="empty">No pending approvals.</p></div>
     </div>
     <div class="card">
@@ -338,7 +291,6 @@ import { getDatabase, ref, set, get, onValue, update, push, query, orderByChild,
                                     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
 import { getAuth, signInWithPhoneNumber, signInWithEmailLink,
          sendSignInLinkToEmail, isSignInWithEmailLink,
-         GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
          RecaptchaVerifier, onAuthStateChanged, signOut as fbSignOut }
                                     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 
@@ -418,14 +370,9 @@ function el(id){ return document.getElementById(id); }
 function show(id){ const e=el(id); if(e)e.classList.remove('hidden'); }
 function hide(id){ const e=el(id); if(e)e.classList.add('hidden'); }
 function showView(v){
-  ['loading','auth','profile-setup','claim-name','home','tournament','admin-panel','profile-page']
-    .forEach(x=>{ const e=el('view-'+x); if(e){ e.classList.add('hidden'); e.style.display=''; } });
-  const target=el('view-'+v);
-  if(target){ target.classList.remove('hidden'); }
-  // Loading screen uses fixed positioning, hide it differently
-  const loadEl=el('view-loading');
-  if(loadEl&&v!=='loading') loadEl.style.display='none';
-  window.scrollTo(0,0);
+  ['loading','auth','profile-setup','claim-name','home','tournament','admin-panel']
+    .forEach(x=>hide('view-'+x));
+  show('view-'+v);
 }
 function todayKey(){ return new Date().toISOString().split('T')[0]; }
 
@@ -438,29 +385,7 @@ window.addEventListener('beforeinstallprompt', e=>{
   show('install-prompt');
 });
 window.installPWA = ()=>{
-  if(_pwaPrompt){
-    _pwaPrompt.prompt();
-    _pwaPrompt.userChoice.then(r=>{ if(r.outcome==='accepted') hide('install-prompt'); });
-  } else {
-    // iOS Safari — show manual instructions
-    const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
-    if(isIOS){
-      el('modal-area').innerHTML=`<div class="modal-bg" onclick="closeModal()"><div class="modal">
-        <div class="modal-handle"></div>
-        <div class="modal-title"><span>Install the app</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
-        <div style="text-align:center;padding:10px 0">
-          <div style="font-size:40px;margin-bottom:12px">📱</div>
-          <div style="font-size:14px;font-weight:600;margin-bottom:16px">Add to Home Screen</div>
-          <div style="font-size:13px;color:#888;line-height:1.7;margin-bottom:12px">
-            1. Tap the <strong>Share button</strong> <span style="font-size:16px">⬆️</span> at the bottom of Safari<br>
-            2. Scroll down and tap <strong>"Add to Home Screen"</strong><br>
-            3. Tap <strong>Add</strong> — done!
-          </div>
-          <div style="background:#f8f7f4;border-radius:10px;padding:12px;font-size:12px;color:#888">The app icon will appear on your home screen and open full-screen like a native app.</div>
-        </div>
-      </div></div>`;
-    }
-  }
+  if(_pwaPrompt){ _pwaPrompt.prompt(); _pwaPrompt.userChoice.then(()=>hide('install-prompt')); }
 };
 
 // ── AUTH FLOW ─────────────────────────────────────────────
@@ -470,45 +395,6 @@ let recaptchaVerifier = null;
 let phoneConfirmResult = null;
 let authMode = null; // 'phone' | 'email'
 let authContact = null;
-
-window.signInWithGoogle = async ()=>{
-  const errEl=el('auth-error');
-  try{
-    const provider = new GoogleAuthProvider();
-    provider.addScope('email');
-    provider.addScope('profile');
-    // Always use popup — redirect breaks PWA session on iOS
-    // Popup works on iOS Safari when triggered directly from user tap
-    const result = await signInWithPopup(auth, provider);
-    // onAuthStateChanged handles the rest
-  } catch(e){
-    if(e.code === 'auth/popup-blocked'){
-      // Popup was blocked — fall back to redirect
-      try{
-        showErr(errEl, 'Popup blocked — redirecting to Google...');
-        const provider2 = new GoogleAuthProvider();
-        await signInWithRedirect(auth, provider2);
-      } catch(e2){
-        showErr(errEl, 'Sign-in failed: '+e2.message);
-      }
-    } else if(e.code === 'auth/cancelled-popup-request'||e.code === 'auth/popup-closed-by-user'){
-      // User closed — do nothing
-    } else {
-      showErr(errEl, 'Google sign-in failed: '+e.message);
-    }
-  }
-};
-
-// Handle redirect result in case popup was blocked and redirect was used
-getRedirectResult(auth).then(result=>{
-  if(result?.user){
-    // onAuthStateChanged will fire automatically
-  }
-}).catch(e=>{
-  if(e.code !== 'auth/no-current-user' && e.code !== 'auth/null-user'){
-    console.error('Redirect result error:', e.code, e.message);
-  }
-});
 
 window.startAuth = async ()=>{
   const raw = el('auth-contact').value.trim();
@@ -616,88 +502,49 @@ onAuthStateChanged(auth, async user=>{
       if(preAssigned._preKey) await set(ref(db,'preAssignments/'+preAssigned._preKey), null);
       afterSignIn();
     } else {
-      // Check if another UID already has this phone/email — merge instead of duplicate
-      const existing = await findExistingPlayerByContact(user);
-      if(existing){
-        // Copy their profile to this UID and remove the old one
-        userProfile = { ...existing.data, uid: user.uid, linkedAt: Date.now() };
-        await set(ref(db,'players/'+user.uid), userProfile);
-        if(existing.uid !== user.uid) await set(ref(db,'players/'+existing.uid), null);
-        afterSignIn();
-      } else {
-        showView('profile-setup');
-        if(user.email) el('profile-email').value=user.email;
-        if(user.phoneNumber) el('profile-phone').value=user.phoneNumber;
-      }
+      showView('profile-setup');
+      if(user.email) el('profile-email').value=user.email;
+      if(user.phoneNumber) el('profile-phone').value=user.phoneNumber;
     }
   }
 });
 
-async function findExistingPlayerByContact(user){
-  // Look for any existing player profile with same phone or email
-  const snap = await get(ref(db,'players'));
-  if(!snap.exists()) return null;
-  const all = snap.val();
-  for(const [uid2,p] of Object.entries(all)){
-    if(uid2 === user.uid) continue; // skip self
-    if(!p) continue;
-    const matchPhone = user.phoneNumber && p.phone &&
-      normalizePhone(user.phoneNumber) === normalizePhone(p.phone);
-    const matchEmail = user.email && p.email &&
-      user.email.toLowerCase() === p.email.toLowerCase();
-    if(matchPhone || matchEmail) return { uid: uid2, data: p };
-  }
-  return null;
-}
-
 async function findPreAssignment(user, firstNameHint='', lastNameHint=''){
-  const snap = await get(ref(db,'preAssignments'));
+  const snap=await get(ref(db,'preAssignments'));
   if(!snap.exists()) return null;
-  const all = snap.val();
-
-  // Priority 1: exact phone match
+  const all=snap.val();
   for(const [key,v] of Object.entries(all)){
     if(!v) continue;
-    if(user.phoneNumber && v.phone && normalizePhone(user.phoneNumber)===normalizePhone(v.phone))
-      return {...v, _preKey:key, _matchType:'phone'};
+    if(user.phoneNumber&&v.phone&&normalizePhone(user.phoneNumber)===normalizePhone(v.phone))
+      return {...v,_preKey:key,_matchType:'phone'};
   }
-  // Priority 2: exact email match
   for(const [key,v] of Object.entries(all)){
     if(!v) continue;
-    if(user.email && v.email && user.email.toLowerCase()===v.email.toLowerCase())
-      return {...v, _preKey:key, _matchType:'email'};
+    if(user.email&&v.email&&user.email.toLowerCase()===v.email.toLowerCase())
+      return {...v,_preKey:key,_matchType:'email'};
   }
-  // Priority 3: first+last name match (from profile setup)
-  if(firstNameHint && lastNameHint){
-    const fn=firstNameHint.trim().toLowerCase(), ln=lastNameHint.trim().toLowerCase();
+  if(firstNameHint&&lastNameHint){
+    const fn=firstNameHint.trim().toLowerCase(),ln=lastNameHint.trim().toLowerCase();
     for(const [key,v] of Object.entries(all)){
       if(!v) continue;
       const vfn=(v.firstName||v.name||'').trim().toLowerCase();
       const vln=(v.lastName||'').trim().toLowerCase();
-      // Match on first+last, or nickname+last
-      const nickLower=(v.nickname||'').trim().toLowerCase();
-      if((vfn===fn||nickLower===fn) && vln===ln)
-        return {...v, _preKey:key, _matchType:'name'};
+      const nick=(v.nickname||'').trim().toLowerCase();
+      if((vfn===fn||nick===fn)&&vln===ln) return {...v,_preKey:key,_matchType:'name'};
     }
   }
-  // Priority 4: matchNames array (from spreadsheet import)
   if(firstNameHint||lastNameHint){
-    const searchStr=`${firstNameHint} ${lastNameHint}`.trim().toLowerCase();
+    const search=(firstNameHint+' '+lastNameHint).trim().toLowerCase();
     for(const [key,v] of Object.entries(all)){
       if(!v) continue;
-      const matchNames=(v.matchNames||[]).map(n=>n.toLowerCase());
-      if(matchNames.includes(searchStr)||matchNames.includes(firstNameHint.toLowerCase()))
-        return {...v, _preKey:key, _matchType:'matchNames'};
+      const mn=(v.matchNames||[]).map(n=>n.toLowerCase());
+      if(mn.includes(search)||mn.includes(firstNameHint.toLowerCase()))
+        return {...v,_preKey:key,_matchType:'matchNames'};
     }
   }
   return null;
 }
-function normalizePhone(p){
-  // Strip all non-digits then take last 10 digits
-  // +15551234567, 15551234567, 5551234567 all → 5551234567
-  const digits = String(p||'').replace(/\D/g,'');
-  return digits.length > 10 ? digits.slice(-10) : digits;
-}
+function normalizePhone(p){ return String(p||'').replace(/\D/g,''); }
 
 window.saveProfile = async ()=>{
   const firstName = el('profile-firstname').value.trim();
@@ -708,69 +555,44 @@ window.saveProfile = async ()=>{
   const pref  = el('profile-pref').value;
   const errEl = el('profile-error');
   if(!firstName){ showErr(errEl,'Enter your first name.'); return; }
-  // Try to find a pre-assignment by name before creating fresh profile
-  const nameMatch = await findPreAssignment(currentUser, firstName, lastName);
+  const nameMatch=await findPreAssignment(currentUser,firstName,lastName);
   if(nameMatch){
-    userProfile = {
-      ...nameMatch,
-      uid: currentUser.uid,
-      firstName, lastName, preferredName: preferred, name: preferred,
-      phone: phone||currentUser.phoneNumber||nameMatch.phone||'',
-      email: email||currentUser.email||nameMatch.email||'',
-      preferredContact: pref,
-      linkedAt: Date.now(), matchType: nameMatch._matchType||'name'
-    };
-    try {
-      await set(ref(db,'players/'+currentUser.uid), userProfile);
-      if(nameMatch._preKey) await set(ref(db,'preAssignments/'+nameMatch._preKey), null);
-      afterSignIn();
-      return;
-    } catch(err) { /* fall through to pending */ }
+    userProfile={...nameMatch,uid:currentUser.uid,firstName,lastName,
+      preferredName:preferred,name:preferred,
+      phone:phone||currentUser.phoneNumber||nameMatch.phone||'',
+      email:email||currentUser.email||nameMatch.email||'',
+      preferredContact:pref,linkedAt:Date.now(),matchType:nameMatch._matchType||'name'};
+    try{
+      await set(ref(db,'players/'+currentUser.uid),userProfile);
+      if(nameMatch._preKey) await set(ref(db,'preAssignments/'+nameMatch._preKey),null);
+      afterSignIn(); return;
+    }catch(err){}
   }
-
-  // No match — save profile and add to pending approvals for admin review
-  userProfile = {
-    uid: currentUser.uid,
-    firstName, lastName, preferredName: preferred, name: preferred,
-    phone: phone||currentUser.phoneNumber||'',
-    email: email||currentUser.email||'',
-    preferredContact: pref,
-    years:0, wins:0, podiums:0, lastPlaces:0,
-    yearsAttended:[], gameWins:{}, customBadges:[],
-    createdAt: Date.now(), pendingAdminReview: true
-  };
-  try {
-    await set(ref(db,'players/'+currentUser.uid), userProfile);
-    // Also add to pendingApprovals so admin can review
-    await set(ref(db,'pendingApprovals/'+currentUser.uid), {
-      uid: currentUser.uid, firstName, lastName, preferredName: preferred,
-      phone: phone||currentUser.phoneNumber||'',
-      email: email||currentUser.email||'',
-      signedUpAt: Date.now(), status: 'pending'
-    });
-    afterSignIn();
-  } catch(err) {
-    showErr(errEl, 'Could not save profile: '+err.message+'. Check your internet connection.');
-  }
+  userProfile={uid:currentUser.uid,firstName,lastName,preferredName:preferred,name:preferred,
+    phone:phone||currentUser.phoneNumber||'',email:email||currentUser.email||'',
+    preferredContact:pref,years:0,wins:0,podiums:0,lastPlaces:0,
+    yearsAttended:[],gameWins:{},customBadges:[],createdAt:Date.now(),pendingAdminReview:true};
+  await set(ref(db,'players/'+currentUser.uid),userProfile);
+  await set(ref(db,'pendingApprovals/'+currentUser.uid),{
+    uid:currentUser.uid,firstName,lastName,preferredName:preferred,
+    phone:phone||currentUser.phoneNumber||'',email:email||currentUser.email||'',
+    signedUpAt:Date.now(),status:'pending'});
+  afterSignIn();
 };
 
 function afterSignIn(){
-  const displayName = actingAsName || userProfile?.preferredName || userProfile?.name || currentUser.email || currentUser.phoneNumber || 'Player';
-  el('home-user-label').textContent = isAdmin ? '🛡 Admin · '+displayName : displayName;
+  const displayName=actingAsName||userProfile?.preferredName||userProfile?.name||currentUser.email||currentUser.phoneNumber||'Player';
+  el('home-user-label').textContent=isAdmin?'🛡 Admin · '+displayName:displayName;
   if(isAdmin){
     el('btn-admin-panel').style.display='';
-    // Listen for pending approvals count in real time
-    onValue(ref(db,'pendingApprovals'), snap=>{
-      const count = snap.exists() ? Object.keys(snap.val()).length : 0;
-      const btn = el('btn-admin-panel');
-      if(btn) btn.textContent = count > 0 ? `🛡 Admin (${count})` : '🛡 Admin';
+    onValue(ref(db,'pendingApprovals'),snap=>{
+      const count=snap.exists()?Object.keys(snap.val()).length:0;
+      const btn=el('btn-admin-panel');
+      if(btn) btn.textContent=count>0?'🛡 Admin ('+count+')':'🛡 Admin';
     });
   }
   loadTournamentList();
-  // Auto-link ghost player slots in any tournament
-  if(userProfile && !userProfile.pendingAdminReview){
-    linkGhostPlayerSlots(currentUser.uid, userProfile);
-  }
+  if(userProfile&&!userProfile.pendingAdminReview) linkGhostPlayerSlots(currentUser.uid,userProfile);
   showView('home');
   // Show install prompt on iOS manually
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -778,272 +600,316 @@ function afterSignIn(){
   if(isIOS&&!isStandalone) show('install-prompt');
 }
 
-// ── HISTORY IMPORT FROM SPREADSHEET ─────────────────────
-window.handleHistoryImport = async (event)=>{
-  const file = event.target.files[0]; if(!file) return;
-  const statusEl = el('history-import-status');
-  statusEl.innerHTML = '<div class="alert alert-info" style="font-size:11px">📂 Reading spreadsheet...</div>';
-
-  if(!window.XLSX){
-    await new Promise((res,rej)=>{
-      const s=document.createElement('script');
-      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      s.onload=res; s.onerror=()=>rej(new Error('Failed to load SheetJS'));
-      document.head.appendChild(s);
-    });
-  }
-
-  try {
-    const buf = await file.arrayBuffer();
-    const wb = window.XLSX.read(buf, {type:'array'});
-
-    if(!wb.SheetNames.includes('Player Roster')){
-      statusEl.innerHTML='<div class="alert alert-warn">Sheet "Player Roster" not found. Make sure you\'re uploading GG_Complete_History.xlsx</div>';
-      return;
-    }
-
-    const ws = wb.Sheets['Player Roster'];
-    const rows = window.XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-
-    // Find header row
-    let headerIdx = -1;
-    for(let i=0;i<rows.length;i++){
-      if(String(rows[i][0]||'').includes('Nickname')){ headerIdx=i; break; }
-    }
-    if(headerIdx<0){ statusEl.innerHTML='<div class="alert alert-warn">Could not find header row.</div>'; return; }
-
-    const headers = rows[headerIdx].map(h=>String(h||'').trim().toLowerCase());
-    const col = (name)=>headers.findIndex(h=>h.includes(name.toLowerCase()));
-
-    const cNick=col('nickname'), cFirst=col('first'), cLast=col('last'),
-          cPref=col('preferred'), cPhone=col('phone'), cEmail=col('email'),
-          cYrs=col('years'), cWins=col('wins'), cPods=col('podium'),
-          cLasts=col('last place'), cYlist=col('years list');
-
-    let imported=0, updated=0, skipped=0;
-    const errors=[];
-
-    for(let i=headerIdx+1;i<rows.length;i++){
-      const row=rows[i];
-      const nick=String(row[cNick]||'').trim();
-      if(!nick||nick.startsWith('📝')) continue;
-
-      const firstName=String(row[cFirst]||'').trim();
-      const lastName=String(row[cLast]||'').trim();
-      const preferred=String(row[cPref]||'').trim()||firstName||nick;
-      const phone=String(row[cPhone]||'').trim();
-      const email=String(row[cEmail]||'').trim();
-      const years=parseInt(row[cYrs])||0;
-      const wins=parseInt(row[cWins])||0;
-      const podiums=parseInt(row[cPods])||0;
-      const lastPlaces=parseInt(row[cLasts])||0;
-      const yearsStr=String(row[cYlist]||'');
-      const yearsAttended=yearsStr.split(',').map(y=>parseInt(y.trim())).filter(Boolean);
-
-      // Build matchable names list
-      const matchNames=[nick,firstName,preferred,firstName+' '+lastName,preferred+' '+lastName]
-        .filter(Boolean).map(n=>n.trim().toLowerCase());
-
-      // Look up game stats from Game Results sheet
-      const gameStats = extractGameStats(wb, nick);
-
-      const playerData = {
-        nickname:nick, firstName, lastName, preferredName:preferred, name:preferred,
-        phone, email, preferredContact:phone?'phone':'email',
-        years, wins, podiums, lastPlaces, yearsAttended,
-        matchNames, gameStats,
-        gameWins: Object.fromEntries(
-          Object.entries(gameStats).filter(([g,s])=>s.wins>0).map(([g,s])=>[g,s.wins])
-        ),
-        importedFrom:'GG_Complete_History', importedAt:Date.now()
-      };
-
-      // Check if player already exists in Firebase by matching names/phone/email
-      const existingUid = await findPlayerByMatchNames(matchNames, phone, email);
-
-      try {
-        if(existingUid){
-          // Update existing player — preserve their uid and auth info
-          const snap = await get(ref(db,'players/'+existingUid));
-          const existing = snap.exists() ? snap.val() : {};
-          await update(ref(db,'players/'+existingUid), {
-            ...playerData,
-            uid: existingUid,
-            phone: existing.phone||phone,
-            email: existing.email||email,
-          });
-          updated++;
-        } else {
-          // Create pre-assignment (will link when player signs up)
-          const preKey = 'import_'+nick.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+Date.now();
-          await set(ref(db,'preAssignments/'+preKey), playerData);
-          imported++;
-        }
-      } catch(e){
-        errors.push(nick+': '+e.message);
-        skipped++;
+// ── GLOBAL PROFILES + GHOST LINKS ────────────────────────
+async function linkGhostPlayerSlots(uid2,profile){
+  const snap=await get(ref(db,'tournaments'));
+  if(!snap.exists()) return;
+  const pn=profile.preferredName||profile.name||profile.firstName||'';
+  const fn=(profile.firstName||'').trim().toLowerCase();
+  const ln=(profile.lastName||'').trim().toLowerCase();
+  const pk=profile._preKey||null;
+  const updates={};let matched=false;
+  Object.entries(snap.val()).forEach(([tid,t])=>{
+    if(!t||!t.ghostPlayers) return;
+    Object.entries(t.ghostPlayers).forEach(([gk,gn])=>{
+      const nm=gn.toLowerCase()===pn.toLowerCase()||gn.toLowerCase()===fn||gn.toLowerCase()===(fn+' '+ln);
+      if((pk&&gk===pk)||nm){
+        updates['tournaments/'+tid+'/ghostPlayers/'+gk]=null;
+        updates['tournaments/'+tid+'/playerUids/'+uid2]=gn;
+        matched=true;
       }
-    }
-
-    statusEl.innerHTML=`<div class="alert alert-success">
-      ✓ Import complete!<br>
-      <strong>${imported}</strong> new pre-assignments created<br>
-      <strong>${updated}</strong> existing players updated<br>
-      ${skipped?'<strong>'+skipped+'</strong> skipped (errors)':''}
-      ${errors.length?'<div style="font-size:10px;color:#c0392b;margin-top:4px">'+errors.slice(0,3).join('<br>')+'</div>':''}
-    </div>`;
-    loadGlobalPlayers();
-    event.target.value='';
-  } catch(err){
-    statusEl.innerHTML=`<div class="alert alert-warn">❌ ${err.message}</div>`;
-  }
-};
-
-function extractGameStats(wb, playerNick){
-  const stats={};
-  if(!wb.SheetNames.includes('Game Results by Year')) return stats;
-  const ws=wb.Sheets['Game Results by Year'];
-  const rows=window.XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-  const gameIcons={'⛳':'Golf','🎳':'Bowling','🌽':'Cornhole','🥏':'Kan Jam',
-                   '🏐':'Spikeball','🎯':'Beer Darts','🎲':'Beer Die','🃏':'Cocaine','🪣':'Bucketball'};
-  let currentGame=null;
-  for(const row of rows){
-    const first=String(row[0]||'').trim();
-    // Game section header
-    for(const [icon,game] of Object.entries(gameIcons)){
-      if(first.startsWith(icon)){ currentGame=game; break; }
-    }
-    if(!currentGame) continue;
-    if(first==='Player'||first.startsWith('⛳')||first.startsWith('🎳')||
-       first.startsWith('🌽')||first.startsWith('🥏')||first.startsWith('🏐')||
-       first.startsWith('🎯')||first.startsWith('🎲')||first.startsWith('🃏')||
-       first.startsWith('🪣')) continue;
-    // Check if this row's player matches
-    const rowPlayerRaw=first;
-    const rowPlayer=rowPlayerRaw.replace(/[^a-zA-Z ]/g,'').trim().toLowerCase();
-    const nickLower=playerNick.toLowerCase();
-    if(!rowPlayer||!rowPlayer.includes(nickLower)&&!nickLower.includes(rowPlayer)) continue;
-    // Parse placements from columns 2-6 (years 2021-2025)
-    const placements=[];
-    for(let ci=1;ci<=5;ci++){
-      const cell=String(row[ci]||'').trim();
-      if(cell==='—'||!cell) continue;
-      const placeMatch=cell.match(/(\d+)\./);
-      if(placeMatch) placements.push(parseInt(placeMatch[1]));
-    }
-    if(placements.length){
-      stats[currentGame]={
-        years_played:placements.length,
-        avg_place:parseFloat((placements.reduce((a,b)=>a+b,0)/placements.length).toFixed(2)),
-        best_place:Math.min(...placements),
-        wins:placements.filter(p=>p===1).length,
-      };
-    }
-  }
-  return stats;
+    });
+  });
+  if(matched) await update(ref(db,'/'),updates);
 }
 
-async function findPlayerByMatchNames(matchNames, phone, email){
-  const snap = await get(ref(db,'players'));
+// ── PENDING APPROVALS ─────────────────────────────────────
+async function loadPendingApprovals(){
+  const snap=await get(ref(db,'pendingApprovals'));
+  const listEl=el('pending-approvals-list'),badgeEl=el('pending-count-badge');
+  if(!listEl) return;
+  if(!snap.exists()||!Object.keys(snap.val()).length){
+    listEl.innerHTML='<p class="empty">No pending approvals. ✓</p>';
+    if(badgeEl) badgeEl.innerHTML=''; return;
+  }
+  const pending=snap.val(),count=Object.keys(pending).length;
+  if(badgeEl) badgeEl.innerHTML='<span class="tag" style="background:#fee2e2;color:#991b1b;font-size:10px">'+count+'</span>';
+  const preSnap=await get(ref(db,'preAssignments'));
+  const preAssignments=preSnap.exists()?preSnap.val():{};
+  const preOptions=Object.entries(preAssignments)
+    .map(([key,v])=>'<option value="'+key+'">'+(v.preferredName||v.firstName||v.nickname||'?')+' '+(v.lastName||'')+' '+(v.years?'('+v.years+'yrs)':'')+'</option>')
+    .join('');
+  function pendingRow(uid2,p){
+    return '<div style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:10px;padding:10px;margin-bottom:8px">'
+      +'<div style="font-size:13px;font-weight:600;margin-bottom:4px">'+(p.firstName||'')+' '+(p.lastName||'')
+      +' <span style="font-size:10px;color:#888">('+( p.email||p.phone||'no contact')+')</span></div>'
+      +'<div style="font-size:11px;color:#888;margin-bottom:8px">Signed up '
+      +(p.signedUpAt?new Date(p.signedUpAt).toLocaleDateString():'')+'</div>'
+      +'<select id="link-select-'+uid2+'" style="font-size:12px;margin-bottom:6px;width:100%">'
+      +'<option value="">- select historical record -</option>'+preOptions+'</select>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      +'<button class="btn btn-primary btn-sm" style="flex:1" onclick="linkPendingPlayer(this)" data-uid="'+uid2+'">Link & merge</button>'
+      +'<button class="btn btn-success btn-sm" style="flex:1" onclick="approvePendingAsNew(this)" data-uid="'+uid2+'">Approve as new</button>'
+      +'<button class="btn btn-sm btn-danger" style="flex:1" onclick="rejectPending(this)" data-uid="'+uid2+'">Reject</button>'
+      +'</div></div>';
+  }
+  listEl.innerHTML=Object.entries(pending).map(([uid2,p])=>pendingRow(uid2,p)).join('');
+}
+window.linkPendingPlayer=async(btn)=>{
+  const uid2=btn.dataset.uid;
+  const preKey=el('link-select-'+uid2)?.value;
+  if(!preKey){alert('Select a historical record to link to.');return;}
+  const [pSnap,prSnap]=await Promise.all([get(ref(db,'players/'+uid2)),get(ref(db,'preAssignments/'+preKey))]);
+  if(!pSnap.exists()||!prSnap.exists()){alert('Record not found.');return;}
+  const player=pSnap.val(),pre=prSnap.val();
+  const merged={...pre,uid:uid2,firstName:player.firstName||pre.firstName,
+    lastName:player.lastName||pre.lastName,
+    preferredName:player.preferredName||pre.preferredName||pre.nickname,
+    name:player.preferredName||pre.preferredName||pre.nickname,
+    phone:player.phone||pre.phone||'',email:player.email||pre.email||'',
+    preferredContact:player.preferredContact||'email',
+    linkedAt:Date.now(),pendingAdminReview:false,matchType:'admin'};
+  await set(ref(db,'players/'+uid2),merged);
+  await set(ref(db,'preAssignments/'+preKey),null);
+  await set(ref(db,'pendingApprovals/'+uid2),null);
+  alert('Linked! '+merged.firstName+' '+merged.lastName+' now has their full history.');
+  loadPendingApprovals(); loadGlobalPlayers();
+};
+window.approvePendingAsNew=async(btn)=>{
+  const uid2=btn.dataset.uid;
+  await update(ref(db,'players/'+uid2),{pendingAdminReview:false,approvedAt:Date.now()});
+  await set(ref(db,'pendingApprovals/'+uid2),null);
+  alert('Approved as new player.');
+  loadPendingApprovals(); loadGlobalPlayers();
+};
+window.rejectPending=async(btn)=>{
+  const uid2=btn.dataset.uid;
+  if(!confirm('Reject this signup? This will delete their account.')) return;
+  await set(ref(db,'players/'+uid2),null);
+  await set(ref(db,'pendingApprovals/'+uid2),null);
+  loadPendingApprovals();
+};
+
+// ── HISTORY IMPORT ────────────────────────────────────────
+window.handleHistoryImport=async(event)=>{
+  const file=event.target.files[0]; if(!file) return;
+  const statusEl=el('history-import-status');
+  statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">Reading spreadsheet...</div>';
+  if(!window.XLSX){
+    await new Promise((res,rej)=>{
+      const sc=document.createElement('script');
+      sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      sc.onload=res; sc.onerror=rej; document.head.appendChild(sc);
+    });
+  }
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=window.XLSX.read(buf,{type:'array'});
+    if(!wb.SheetNames.includes('Player Roster')){
+      statusEl.innerHTML='<div class="alert alert-warn">Sheet "Player Roster" not found.</div>'; return;
+    }
+    const ws=wb.Sheets['Player Roster'];
+    const rows=window.XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    let hIdx=-1;
+    for(let i=0;i<rows.length;i++){if(String(rows[i][0]||'').includes('Nickname')){hIdx=i;break;}}
+    if(hIdx<0){statusEl.innerHTML='<div class="alert alert-warn">Header row not found.</div>';return;}
+    const hdrs=rows[hIdx].map(h=>String(h||'').trim().toLowerCase());
+    const col=n=>hdrs.findIndex(h=>h.includes(n));
+    const cN=col('nickname'),cF=col('first'),cL=col('last'),cP=col('preferred'),
+          cPh=col('phone'),cEm=col('email'),cYr=col('years'),cW=col('wins'),
+          cPo=col('podium'),cLp=col('last place'),cYl=col('years list');
+    let imported=0,updated=0,skipped=0;
+    for(let i=hIdx+1;i<rows.length;i++){
+      const row=rows[i];
+      const nick=String(row[cN]||'').trim();
+      if(!nick||nick.startsWith('📝')) continue;
+      const fn2=String(row[cF]||'').trim(),ln2=String(row[cL]||'').trim();
+      const pref=String(row[cP]||'').trim()||fn2||nick;
+      const phone=String(row[cPh]||'').trim(),email=String(row[cEm]||'').trim();
+      const years=parseInt(row[cYr])||0,wins=parseInt(row[cW])||0;
+      const podiums=parseInt(row[cPo])||0,lastPlaces=parseInt(row[cLp])||0;
+      const yearsAttended=String(row[cYl]||'').split(',').map(y=>parseInt(y.trim())).filter(Boolean);
+      const matchNames=[nick,fn2,pref,fn2+' '+ln2,pref+' '+ln2].filter(Boolean).map(n=>n.trim().toLowerCase());
+      const pd={nickname:nick,firstName:fn2,lastName:ln2,preferredName:pref,name:pref,
+        phone,email,preferredContact:phone?'phone':'email',years,wins,podiums,lastPlaces,
+        yearsAttended,matchNames,importedFrom:'GG_Complete_History',importedAt:Date.now()};
+      try{
+        const eu=await findPlayerByMatchNames(matchNames,phone,email);
+        if(eu){
+          const es=await get(ref(db,'players/'+eu));
+          const ex=es.exists()?es.val():{};
+          await update(ref(db,'players/'+eu),{...pd,uid:eu,phone:ex.phone||phone,email:ex.email||email});
+          updated++;
+        } else {
+          const pk='import_'+nick.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+Date.now();
+          await set(ref(db,'preAssignments/'+pk),pd); imported++;
+        }
+      }catch(e){skipped++;}
+    }
+    statusEl.innerHTML='<div class="alert alert-success">Import complete! '+imported+' new, '+updated+' updated'+(skipped?' ('+skipped+' skipped)':'')+'</div>';
+    loadGlobalPlayers(); event.target.value='';
+  }catch(err){statusEl.innerHTML='<div class="alert alert-warn">Error: '+err.message+'</div>';}
+};
+async function findPlayerByMatchNames(matchNames,phone,email){
+  const snap=await get(ref(db,'players'));
   if(!snap.exists()) return null;
-  const all = snap.val();
-  for(const [uid2,p] of Object.entries(all)){
+  for(const [uid2,p] of Object.entries(snap.val())){
     if(!p) continue;
-    // Match by phone or email first
     if(phone&&p.phone&&normalizePhone(phone)===normalizePhone(p.phone)) return uid2;
     if(email&&p.email&&email.toLowerCase()===p.email.toLowerCase()) return uid2;
-    // Match by name
-    const pNames=[p.nickname,p.firstName,p.preferredName,p.name,
-                  (p.firstName||'')+' '+(p.lastName||'')]
+    const pn=[p.nickname,p.firstName,p.preferredName,p.name,(p.firstName||'')+' '+(p.lastName||'')]
       .filter(Boolean).map(n=>n.trim().toLowerCase());
-    if(matchNames.some(mn=>pNames.includes(mn))) return uid2;
+    if(matchNames.some(m=>pn.includes(m))) return uid2;
   }
   return null;
 }
+
+// ── SYNC HISTORY ──────────────────────────────────────────
+window.syncTournamentHistory=async()=>{
+  const players=S.players||[];
+  if(!players.length){alert('No players to sync.');return;}
+  const [ps,prs]=await Promise.all([get(ref(db,'players')),get(ref(db,'preAssignments'))]);
+  const pm={};
+  if(ps.exists()) Object.values(ps.val()).forEach(p=>{if(p)[p.preferredName,p.name,p.firstName,p.nickname].filter(Boolean).forEach(n=>{pm[n.trim()]=p;});});
+  if(prs.exists()) Object.values(prs.val()).forEach(p=>{if(p)[p.preferredName,p.nickname,p.firstName].filter(Boolean).forEach(n=>{if(!pm[n.trim()])pm[n.trim()]=p;});});
+  const updates={};let synced=0,notFound=[];
+  players.forEach(name=>{
+    const prof=pm[name];
+    if(!prof){notFound.push(name);return;}
+    updates['history/'+name]={years:prof.years||0,wins:prof.wins||0,podiums:prof.podiums||0,
+      lastPlaces:prof.lastPlaces||0,yearsAttended:prof.yearsAttended||[],
+      gameWins:prof.gameWins||{},gameStats:prof.gameStats||{}};
+    synced++;
+  });
+  if(!synced){alert('No matching profiles found. Import GG_Complete_History.xlsx first.');return;}
+  await update(ref(db,'tournaments/'+currentTourneyId),updates);
+  await loadGlobalProfilesForTournament();
+  alert('Synced '+synced+' player'+(synced!==1?'s':'')+'!'+(notFound.length?'\n\nNot found: '+notFound.join(', '):''));
+};
+
+// ── TOURNAMENT SUMMARY MODAL ──────────────────────────────
+window.showTournamentSummaryModal=()=>{
+  const sorted=(S.finalStandings||[]).map(x=>x.player);
+  const nb=S.newBadgesEarned||{};
+  const yr=S.tourneyYear||new Date().getFullYear();
+  const skip=getSkippedIds();
+  const games=(S.games||[]).filter(g=>!skip.has(g.id)&&S.scores&&S.scores[g.id]&&S.scores[g.id]._fin);
+  const winner=sorted[0]||'';
+  let html='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-height:90vh">'
+    +'<div class="modal-handle"></div>'
+    +'<div class="modal-title"><div style="display:flex;width:100%;justify-content:space-between;align-items:center">'
+    +'<span>'+( S.tourneyName||'')+' '+yr+' Summary</span>'
+    +'<button class="btn btn-sm" onclick="closeModal()" style="width:auto">X</button></div></div>';
+  html+='<div style="background:linear-gradient(135deg,#C8A820,#a07818);border-radius:12px;padding:14px;text-align:center;margin-bottom:12px">'
+    +'<div style="font-size:32px">🏆</div>'
+    +'<div style="font-size:20px;font-weight:700;color:#fff;margin-top:4px">'+winner+'</div>'
+    +'<div style="font-size:12px;color:rgba(255,255,255,.8)">'+yr+' Champion · '+sorted.length+' players</div></div>';
+  html+='<div style="font-size:12px;font-weight:700;color:#534AB7;margin-bottom:6px">Final Standings</div>';
+  sorted.forEach(function(p,i){
+    const pts=getTotalPts(p);
+    const bg=i===0?'#FFF3CD':i===1?'#EBF4FF':i===2?'#EAF3DE':'#fff';
+    const icon=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:'+bg+';border-radius:8px;margin-bottom:3px">'
+      +'<span style="font-size:14px;width:24px">'+(icon||(i+1)+'.')+'</span>'
+      +'<span style="flex:1;font-size:13px;font-weight:'+(i<3?'600':'400')+'">'+p+'</span>'
+      +'<span style="font-size:13px;font-weight:700;color:#534AB7">'+pts+' pts</span></div>';
+  });
+  if(games.length){
+    html+='<div style="font-size:12px;font-weight:700;color:#534AB7;margin:12px 0 6px">Game Results</div>';
+    games.forEach(function(g){
+      const pts=(S.points&&S.points[g.id])||{};
+      const top=sorted.filter(function(p){return pts[p];}).sort(function(a,b){return (pts[b]||0)-(pts[a]||0);}).slice(0,3);
+      if(!top.length) return;
+      html+='<div style="padding:6px 0;border-bottom:1px solid #f0ede6;font-size:12px">'
+        +'<span style="font-weight:600">'+g.name+'</span>'
+        +' <span style="color:#27500A">🥇'+top[0]+'('+(pts[top[0]]||0)+')</span>'
+        +(top[1]?' <span style="color:#1a5f9e">🥈'+top[1]+'('+(pts[top[1]]||0)+')</span>':'')
+        +(top[2]?' <span>🥉'+top[2]+'('+(pts[top[2]]||0)+')</span>':'')+'</div>';
+    });
+  }
+  const be=Object.entries(nb);
+  if(be.length){
+    html+='<div style="font-size:12px;font-weight:700;color:#534AB7;margin:12px 0 6px">New Badges Earned</div>';
+    be.forEach(function(entry){
+      const p2=entry[0],badges=entry[1];
+      html+='<div style="padding:6px 0;border-bottom:1px solid #f0ede6">'
+        +'<div style="font-size:12px;font-weight:600;margin-bottom:3px">'+p2+'</div>'
+        +'<div>'+badges.map(function(b){return '<span style="margin-right:6px">'+b.icon+' '+b.name+'</span>';}).join('')+'</div></div>';
+    });
+  }
+  html+='<button class="btn btn-sm btn-primary" onclick="copyTournamentSummary()" style="width:100%;margin-top:12px">Copy summary</button>';
+  html+='</div></div>';
+  el('modal-area').innerHTML=html;
+};
+window.copyTournamentSummary=()=>{
+  const sorted=(S.finalStandings||[]).map(x=>x.player);
+  const yr=S.tourneyYear||new Date().getFullYear();
+  const skip=getSkippedIds();
+  const games=(S.games||[]).filter(g=>!skip.has(g.id)&&S.scores&&S.scores[g.id]&&S.scores[g.id]._fin);
+  const nb=S.newBadgesEarned||{};
+  let t=(S.tourneyName||'GG')+' '+yr+'\n\nFINAL STANDINGS\n';
+  sorted.forEach((p,i)=>{t+=(['🥇','🥈','🥉'][i]||'')+(i+1)+'. '+p+' - '+getTotalPts(p)+' pts\n';});
+  t+='\nGAME RESULTS\n';
+  games.forEach(g=>{
+    const pts=(S.points&&S.points[g.id])||{};
+    const top=sorted.filter(p=>pts[p]).sort((a,b)=>(pts[b]||0)-(pts[a]||0)).slice(0,3);
+    if(top.length) t+=g.name+': 🥇'+top[0]+(top[1]?' 🥈'+top[1]:'')+(top[2]?' 🥉'+top[2]:'')+'\n';
+  });
+  t+='\nNEW BADGES\n';
+  Object.entries(nb).forEach(([p,badges])=>{t+=p+': '+badges.map(b=>b.icon+' '+b.name).join(', ')+'\n';});
+  navigator.clipboard.writeText(t).then(()=>alert('Copied!'));
+};
+
+// ── BADGE LIBRARY ─────────────────────────────────────────
+const BADGE_LIBRARY=[
+  {id:'first-timer',cat:'Attendance',icon:'🌱',name:'First Timer',auto:true},
+  {id:'years',cat:'Attendance',icon:'📅',name:'Years Attended',auto:true},
+  {id:'every-year',cat:'Attendance',icon:'🔥',name:'Every Year',auto:true},
+  {id:'founding',cat:'Attendance',icon:'🏛️',name:'Founding Member',auto:true},
+  {id:'veteran',cat:'Attendance',icon:'⭐',name:'Veteran',auto:true},
+  {id:'champion',cat:'Performance',icon:'🏆',name:'Champion',auto:true},
+  {id:'dynasty',cat:'Performance',icon:'🔱',name:'Dynasty',auto:true},
+  {id:'podium',cat:'Performance',icon:'🥉',name:'Podium Finish',auto:true},
+  {id:'last-place',cat:'Performance',icon:'🪣',name:'Last Place',auto:true},
+  {id:'winless',cat:'Performance',icon:'😅',name:'Winless Wonder',auto:true},
+  {id:'specialist',cat:'Performance',icon:'🎯',name:'Game Specialist',auto:true},
+  {id:'golf-king',cat:'Sport',icon:'⛳',name:'Golf King',auto:false},
+  {id:'bowling-king',cat:'Sport',icon:'🎳',name:'Bowling King',auto:false},
+  {id:'cornhole-king',cat:'Sport',icon:'🌽',name:'Cornhole King',auto:false},
+  {id:'beer-pong-king',cat:'Sport',icon:'🏓',name:'Beer Pong King',auto:false},
+  {id:'spikeball-king',cat:'Sport',icon:'🏐',name:'Spikeball King',auto:false},
+  {id:'beer-darts',cat:'Sport',icon:'🎯',name:'Beer Darts Champ',auto:false},
+  {id:'beer-die',cat:'Sport',icon:'🎲',name:'Beer Die Champ',auto:false},
+  {id:'cocaine-champ',cat:'Sport',icon:'🃏',name:'Cocaine Champ',auto:false},
+  {id:'kanjam-king',cat:'Sport',icon:'🥏',name:'Kan Jam King',auto:false},
+  {id:'commissioner',cat:'Character',icon:'🎩',name:'Commissioner',auto:false},
+  {id:'mvp',cat:'Character',icon:'🌟',name:'MVP',auto:false},
+  {id:'comeback-kid',cat:'Character',icon:'📈',name:'Comeback Kid',auto:false},
+  {id:'crowd-fav',cat:'Character',icon:'🎉',name:'Crowd Favorite',auto:false},
+  {id:'trash-talk',cat:'Character',icon:'🗣️',name:'Trash Talker',auto:false},
+  {id:'sportsmanship',cat:'Character',icon:'🤝',name:'Good Sport',auto:false},
+  {id:'upset',cat:'Character',icon:'💥',name:'Upset King',auto:false},
+  {id:'clutch',cat:'Character',icon:'🧊',name:'Clutch',auto:false},
+  {id:'custom',cat:'Custom',icon:'✨',name:'Custom Badge',auto:false},
+];
+function getBadgeById(id){return BADGE_LIBRARY.find(b=>b.id===id)||null;}
+function getEnabledBadgeIds(){
+  const global=(S?S.enabledBadges:null)||{};
+  const enabled=new Set();
+  BADGE_LIBRARY.forEach(b=>{
+    const s=global[b.id];
+    if(s===true)enabled.add(b.id);
+    else if(s!==false&&b.auto)enabled.add(b.id);
+  });
+  return enabled;
+}
+
 
 window.signOut = async ()=>{
   await fbSignOut(auth);
   currentUser=null; userProfile=null; actingAsUid=null; actingAsName=null;
   showView('auth');
 };
-
-window.openProfilePage = ()=>{
-  if(!userProfile){ alert('Not signed in.'); return; }
-  showView('profile-page');
-  // Header card
-  const hcard=el('profile-page-header');
-  const preferred=userProfile.preferredName||userProfile.name||'?';
-  const fullN=((userProfile.firstName||'')+(userProfile.lastName?' '+userProfile.lastName:'')).trim()||preferred;
-  const badges=getGlobalBadges(userProfile);
-  hcard.innerHTML=`<div style="display:flex;align-items:center;gap:14px">
-    <div style="width:56px;height:56px;border-radius:50%;background:#EEEDFE;color:#534AB7;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials(preferred)}</div>
-    <div>
-      <div style="font-size:20px;font-weight:700">${preferred}</div>
-      ${fullN!==preferred?`<div style="font-size:13px;color:#888;margin-top:2px">${fullN}</div>`:''}
-      <div class="badges-wrap" style="margin-top:6px">${renderBadges(badges)}</div>
-    </div>
-  </div>`;
-  // Pre-fill edit form
-  el('pp-firstname').value = userProfile.firstName||userProfile.name||'';
-  el('pp-lastname').value  = userProfile.lastName||'';
-  el('pp-preferred').value = userProfile.preferredName||userProfile.name||'';
-  el('pp-phone').value     = userProfile.phone||'';
-  el('pp-email').value     = userProfile.email||'';
-  el('pp-pref').value      = userProfile.preferredContact||'phone';
-  // Badges
-  const badgesEl=el('pp-badges');
-  if(badges.length) badgesEl.innerHTML='<div class="badges-wrap">'+renderBadges(badges)+'</div>';
-  else badgesEl.innerHTML='<p class="empty">No badges yet — attend more tournaments!</p>';
-  // History
-  const histEl=el('pp-history');
-  const h=userProfile;
-  const rows=[
-    {label:'Years attended', val:h.years||0},
-    {label:'Wins', val:h.wins||0},
-    {label:'Podiums', val:h.podiums||0},
-    {label:'Last place finishes', val:h.lastPlaces||0},
-    {label:'Years list', val:(h.yearsAttended||[]).join(', ')||'—'},
-  ];
-  histEl.innerHTML=rows.map(r=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ede6;font-size:13px"><span style="color:#888">${r.label}</span><span style="font-weight:600">${r.val}</span></div>`).join('');
-  if(h.gameWins&&Object.keys(h.gameWins).length){
-    histEl.innerHTML+=`<div style="margin-top:8px"><div class="sec-label">Game wins</div>${Object.entries(h.gameWins).map(([g,c])=>`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px"><span>${g}</span><span style="font-weight:600">${c}x</span></div>`).join('')}</div>`;
-  }
-};
-
-function getGlobalBadges(h){
-  return getPlayerBadgesFromProfile(h,'');
-}
-
-window.saveProfilePage = async ()=>{
-  const firstName = el('pp-firstname').value.trim();
-  const lastName  = el('pp-lastname').value.trim();
-  const preferred = el('pp-preferred').value.trim()||firstName;
-  const phone     = el('pp-phone').value.trim();
-  const email     = el('pp-email').value.trim();
-  const pref      = el('pp-pref').value;
-  const status    = el('pp-status');
-  if(!firstName){ status.innerHTML='<div class="alert alert-warn">First name is required.</div>'; return; }
-  const updates = {
-    firstName, lastName, preferredName:preferred, name:preferred,
-    phone: phone||currentUser?.phoneNumber||'',
-    email: email||currentUser?.email||'',
-    preferredContact:pref
-  };
-  try {
-    await update(ref(db,'players/'+currentUser.uid), updates);
-    userProfile = {...userProfile, ...updates};
-  } catch(err) {
-    status.innerHTML='<div class="alert alert-warn">Could not save: '+err.message+'</div>';
-    return;
-  }
-  userProfile = {...userProfile, ...updates};
-  status.innerHTML='<div class="alert alert-success">✓ Profile updated!</div>';
-  // Refresh header
-  el('home-user-label').textContent = isAdmin?'🛡 Admin · '+preferred:preferred;
-  setTimeout(()=>{ status.innerHTML=''; openProfilePage(); },800);
-};
-
-window.closeProfilePage = ()=>{ showView('home'); };
 
 // ── SMS LIMIT ─────────────────────────────────────────────
 async function checkAndLogSMS(){
@@ -1088,350 +954,6 @@ async function renderSMSPanel(){
 }
 
 // ── TOURNAMENT LIST ───────────────────────────────────────
-// ── GHOST PLAYER AUTO-LINK ───────────────────────────────
-async function linkGhostPlayerSlots(uid2, profile){
-  // When a player signs up, check every tournament for ghost slots matching their name
-  const snap = await get(ref(db,'tournaments'));
-  if(!snap.exists()) return;
-
-  const preferredName = profile.preferredName||profile.name||profile.firstName||'';
-  const firstName = (profile.firstName||'').trim().toLowerCase();
-  const lastName = (profile.lastName||'').trim().toLowerCase();
-  const preKey = profile._preKey||null;
-
-  const updates = {};
-  let matched = false;
-
-  Object.entries(snap.val()).forEach(([tid,t])=>{
-    if(!t||!t.ghostPlayers) return;
-    const ghostPlayers = t.ghostPlayers;
-
-    Object.entries(ghostPlayers).forEach(([gPreKey, gPlayerName])=>{
-      // Match by preKey (exact) or by name
-      const nameMatch = gPlayerName.toLowerCase()===preferredName.toLowerCase()
-        || gPlayerName.toLowerCase()===firstName
-        || gPlayerName.toLowerCase()===(firstName+' '+lastName);
-      const keyMatch = preKey && gPreKey===preKey;
-
-      if(keyMatch||nameMatch){
-        // Remove from ghostPlayers, add to playerUids
-        updates[`tournaments/${tid}/ghostPlayers/${gPreKey}`] = null;
-        updates[`tournaments/${tid}/playerUids/${uid2}`] = gPlayerName;
-        matched = true;
-      }
-    });
-  });
-
-  if(matched && Object.keys(updates).length){
-    // Use multi-path update
-    const dbRef = ref(db, '/');
-    await update(dbRef, updates);
-    console.log('Auto-linked ghost player slots for', preferredName);
-  }
-}
-
-
-// ── PLAYER VIEW ───────────────────────────────────────────
-function renderPlayerView(myName){
-  if(!S)return;
-  const header=el('tourney-header-label');
-  if(header)header.textContent=S.tourneyName+' '+S.tourneyYear;
-  hide('admin-area'); show('player-area');
-  const hcard=el('player-header-card');
-  if(hcard){
-    const badges=getPlayerBadges(myName);
-    hcard.innerHTML=`<div style="display:flex;align-items:center;gap:10px">
-      <div class="avatar" style="width:38px;height:38px;font-size:14px">${initials(myName)}</div>
-      <div><div style="font-size:15px;font-weight:700">${myName}</div><div class="badges-wrap">${renderBadges(badges)}</div></div>
-    </div>`;
-  }
-  showPlayerTab(_tab||'rank',myName);
-}
-function showPlayerTab(tab,myName){
-  _tab=tab;
-  myName=myName||actingAsName||(userProfile?.name)||'';
-  ['rank','teams','lb'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
-  const tv=el('pview-'+tab);if(tv)tv.classList.remove('hidden');
-  const tb=el('ptab-'+tab);if(tb)tb.classList.add('active');
-  if(tab==='rank')  renderPlayerRankings(myName);
-  if(tab==='teams') renderMyTeams(myName);
-  if(tab==='lb')    { renderPlayerLB(myName); renderAllPlayerBadges(); }
-}
-function renderPlayerRankings(myName){
-  const e=el('pview-rank'); if(!e) return;
-  const games=S.games||[], others=(S.players||[]).filter(p=>p!==myName);
-  if(!S.tournamentStarted){
-    e.innerHTML=`<div class="card"><div style="text-align:center;padding:20px"><div style="font-size:40px;margin-bottom:10px">⏳</div><div style="font-size:14px;font-weight:600">Waiting for host to start</div><div style="font-size:12px;color:#888;margin-top:6px">The host will start the tournament once everyone has joined.</div></div></div>`;return;
-  }
-  if(!games.length){e.innerHTML='<div class="card"><p class="empty">No games added yet. Check back soon!</p></div>';return;}
-  let html='<div class="card"><div class="card-title">🎯 Game rankings</div><div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Each game needs its own ranking. Tap a game to rank players.</div>';
-  games.forEach(g=>{
-    const gR=(S.gameRankings&&S.gameRankings[g.id])||{};
-    const myRank=gR[myName],rc=Object.keys(gR).length,total=(S.players||[]).length;
-    const isLocked=g.status==='locked'||g.status==='scoring';
-    if(isLocked){
-      html+=`<div style="background:#EAF3DE;border:1px solid #b2d88a;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">✅</div><div><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#27500A">Teams locked</div></div></div>`;
-    } else if(myRank){
-      html+=`<div style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">👍</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e">${rc}/${total} submitted</div></div><button class="btn btn-sm" onclick="openGameRanking('${g.id}','${esc(myName)}')" style="width:auto">Edit</button></div>`;
-    } else {
-      html+=`<div style="background:#FFFBEB;border:1px solid #fcd34d;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">🎯</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#7a4f00">${rc}/${total} done</div></div><button class="btn btn-sm btn-primary" onclick="openGameRanking('${g.id}','${esc(myName)}')" style="width:auto">Rank now</button></div>`;
-    }
-  });
-  html+='</div>';
-  e.innerHTML=html;
-}
-window.openGameRanking = (gameId,myName)=>{
-  const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
-  const others=(S.players||[]).filter(p=>p!==myName).sort((a,b)=>a.localeCompare(b));
-  const gR=(S.gameRankings&&S.gameRankings[gameId])||{};
-  let ranked=gR[myName]?gR[myName].filter(p=>others.includes(p)):[...others];
-  others.forEach(p=>{if(!ranked.includes(p))ranked.push(p);});
-  el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
-    <div class="modal-handle"></div>
-    <div class="modal-title"><span>Rank for: ${game.name}</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
-    <div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Hold and drag to reorder — 1 = best</div>
-    <div id="game-rank-list">${ranked.map((p,i)=>`<div class="rank-item" draggable="true" data-player="${esc(p)}"
-      ondragstart="dstart(event)" ondragover="dover(event,'game-rank-list')" ondrop="ddrop(event,'game-rank-list')" ondragleave="dleave(event)"
-      ontouchstart="tstart(event,'game-rank-list')" ontouchmove="tmove(event)" ontouchend="tend(event)">
-      <span style="color:#ccc;font-size:18px">⠿</span>
-      <span class="rank-num">${i+1}</span>
-      <div class="avatar">${initials(p)}</div>
-      <div style="flex:1"><div style="font-size:13px;font-weight:500">${p}</div><div class="badges-wrap" style="margin-top:2px">${renderBadges(getPlayerBadges(p))}</div></div>
-    </div>`).join('')}</div>
-    <div class="divider"></div>
-    <button class="btn btn-primary" onclick="submitGameRanking('${gameId}','${esc(myName)}')">✓ Submit for ${game.name}</button>
-    <div id="rank-submit-msg"></div>
-  </div></div>`;
-};
-window.submitGameRanking = async (gameId,myName)=>{
-  const items=Array.from(el('game-rank-list').querySelectorAll('.rank-item'));
-  const ranked=items.map(e=>e.dataset.player);
-  const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
-  if(!gameRankings[gameId])gameRankings[gameId]={};
-  gameRankings[gameId][myName]=ranked;
-  await update(ref(db,'tournaments/'+currentTourneyId),{gameRankings});
-  el('rank-submit-msg').innerHTML='<div class="alert alert-success" style="margin-top:8px">✓ Submitted!</div>';
-  setTimeout(()=>closeModal(),700);
-};
-function renderMyTeams(myName){
-  const e=el('pview-teams');if(!e)return;
-  const locked=(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring');
-  if(!locked.length){e.innerHTML='<div class="card"><p class="empty">Teams appear once rankings are locked.</p></div>';return;}
-
-  // Active game matchup display
-  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
-  let html='';
-  if(activeGame){
-    const teams=(S.teams&&S.teams[activeGame.id])||[];
-    const myTeam=teams.find(t=>t.p1===myName||t.p2===myName);
-    const b=S.bs&&S.bs[activeGame.id];
-    html+=`<div class="card" style="border-color:#7F77DD;border-width:2px">
-      <div class="card-title" style="color:#534AB7">▶ Now playing: ${activeGame.name}</div>`;
-    if(myTeam){
-      const partner=myTeam.p1===myName?myTeam.p2:myTeam.p1;
-      html+=`<div style="background:#EEEDFE;border-radius:10px;padding:12px;margin-bottom:10px">
-        <div style="font-size:11px;color:#888;margin-bottom:4px">Your team</div>
-        <div style="font-size:16px;font-weight:700">${myName} ${partner?'& '+partner:''}</div>
-      </div>`;
-      // Find my opponent
-      if(b){
-        const myMatch=findMyActiveMatch(b,myTeam,activeGame.format);
-        if(myMatch){
-          const oppTeam=myMatch.t1.id===myTeam.id?myMatch.t2:myMatch.t1;
-          const pending=S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][myMatch.id];
-          const myTeamSide=myMatch.t1.id===myTeam.id?'t1':'t2';
-          const mySubmitted=pending&&pending[myTeamSide];
-          html+=`<div style="font-size:11px;color:#888;margin-bottom:6px">vs</div>
-            <div style="background:#f8f7f4;border-radius:10px;padding:12px;margin-bottom:10px">
-              <div style="font-size:11px;color:#888;margin-bottom:4px">Opponents</div>
-              <div style="font-size:16px;font-weight:700">${teamLabel(oppTeam)}</div>
-            </div>`;
-          if(!myMatch.winner){
-            if(mySubmitted){
-              html+=`<div class="alert alert-info" style="font-size:11px">✓ You submitted ${mySubmitted.s1}–${mySubmitted.s2}. Waiting for opponents to confirm.</div>`;
-            } else {
-              html+=`<div style="font-size:13px;font-weight:600;margin-bottom:8px">Enter your score:</div>
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                  <div style="flex:1;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:4px">Your team</div>
-                    <input type="number" id="ps-${myMatch.id}-${myTeamSide==='t1'?1:2}" placeholder="0" style="width:70px;padding:8px;border:2px solid #7F77DD;border-radius:10px;font-size:20px;text-align:center;font-weight:700;margin:0"></div>
-                  <div style="font-size:18px;color:#aaa">–</div>
-                  <div style="flex:1;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:4px">Opponents</div>
-                    <input type="number" id="ps-${myMatch.id}-${myTeamSide==='t1'?2:1}" placeholder="0" style="width:70px;padding:8px;border:1px solid #ddd;border-radius:10px;font-size:20px;text-align:center;font-weight:700;margin:0"></div>
-                </div>
-                <button class="btn btn-primary" onclick="playerSubmitScore('${activeGame.id}','${myMatch.id}','${myTeamSide}')">✓ Submit score</button>`;
-            }
-          } else {
-            html+=`<div class="alert alert-success">✓ Result: ${teamLabel(myMatch.winner)} won ${myMatch.score1}–${myMatch.score2}</div>`;
-          }
-          html+=`<div id="ps-${myMatch.id}-status"></div>`;
-        }
-      }
-    } else {
-      html+=`<div class="alert alert-info" style="font-size:11px">You don't have a match in this game.</div>`;
-    }
-    // All matchups for active game
-    html+=`<div class="divider"></div><div style="font-size:12px;font-weight:600;color:#888;margin-bottom:8px">All matchups</div>`;
-    const allTeams=(S.teams&&S.teams[activeGame.id])||[];
-    for(let i=0;i<allTeams.length;i+=2){
-      if(i+1<allTeams.length){
-        const t1=allTeams[i],t2=allTeams[i+1];
-        const isMe=(t1.p1===myName||t1.p2===myName||t2.p1===myName||t2.p2===myName);
-        html+=`<div style="background:${isMe?'#EEEDFE':'#f8f7f4'};border-radius:9px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
-          <div style="flex:1;font-size:12px;font-weight:${isMe?'700':'500'}">${teamLabel(t1)}</div>
-          <div style="font-size:11px;color:#aaa">vs</div>
-          <div style="flex:1;font-size:12px;font-weight:${isMe?'700':'500'};text-align:right">${teamLabel(t2)}</div>
-        </div>`;
-      }
-    }
-    html+='</div>';
-  }
-
-  html+='<div class="card"><div class="card-title">👥 All my teams</div>';
-  locked.forEach(g=>{
-    const teams=(S.teams&&S.teams[g.id])||[],myTeam=teams.find(t=>t.p1===myName||t.p2===myName);
-    if(!myTeam)return;
-    const partner=myTeam.p1===myName?myTeam.p2:myTeam.p1,pts=S.points&&S.points[g.id]&&S.points[g.id][myName];
-    const isActive2=g.active||S.activeGameId===g.id;
-    html+=`<div class="player-row" style="${isActive2?'background:#FAFAFE':''}">
-      <div class="avatar" style="background:${isActive2?'#7F77DD':'#E1F5EE'};color:${isActive2?'#fff':'#085041'}">${isActive2?'▶':'🛡'}</div>
-      <div style="flex:1"><div style="font-size:13px;font-weight:600">${g.name}${isActive2?' <span class="tag" style="background:#7F77DD;color:#fff;font-size:9px">ACTIVE</span>':''}</div>
-      <div style="font-size:11px;color:#888">${partner?'With '+partner:'Solo'} · ${fmtL[g.format]||g.format}</div></div>
-      ${pts!==undefined?`<span class="tag tag-purple">${pts}pts</span>`:''}</div>`;
-  });
-  html+='</div>'; e.innerHTML=html;
-}
-
-function findMyActiveMatch(b,myTeam,fmt){
-  const allMatches=[];
-  if(fmt==='round-robin'&&b.matches) allMatches.push(...b.matches);
-  else if(fmt==='two-pool'){ if(b.poolAM)allMatches.push(...b.poolAM); if(b.poolBM)allMatches.push(...b.poolBM); if(b.crossover)allMatches.push(...b.crossover); }
-  else if(fmt==='single-elim'&&b.rounds) b.rounds.forEach(r=>allMatches.push(...r));
-  else if(fmt==='double-elim'){ if(b.winners)b.winners.forEach(r=>allMatches.push(...r)); if(b.losers)b.losers.forEach(r=>allMatches.push(...r)); if(b.grandFinal)allMatches.push(b.grandFinal); }
-  else if(fmt==='pool-playoff'&&b.pools){ b.pools.forEach(p=>allMatches.push(...p.matches)); if(b.knockout)allMatches.push(...b.knockout); }
-  return allMatches.find(m=>m&&!m.winner&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id))||null;
-}
-
-window.playerSubmitScore = async (gameId,matchId,teamSide)=>{
-  const inp1=el(`ps-${matchId}-1`),inp2=el(`ps-${matchId}-2`);
-  const rawS1=parseFloat(inp1?.value),rawS2=parseFloat(inp2?.value);
-  if(isNaN(rawS1)||isNaN(rawS2)){alert('Enter scores for both teams.');return;}
-  if(rawS1===rawS2){alert('No draws allowed.');return;}
-  // s1 is always team1 score, s2 is team2 score
-  const s1=teamSide==='t1'?rawS1:rawS2, s2=teamSide==='t1'?rawS2:rawS1;
-  const myName=actingAsName||(userProfile?.name)||'';
-  const existing=(S.pendingScores&&S.pendingScores[gameId]&&S.pendingScores[gameId][matchId])||{};
-  const newPending={...existing,[teamSide]:{s1,s2,submittedBy:myName,at:Date.now()}};
-  const otherSide=teamSide==='t1'?'t2':'t1';
-  const statusEl=el(`ps-${matchId}-status`);
-  if(existing[otherSide]&&existing[otherSide].s1===s1&&existing[otherSide].s2===s2){
-    // Both agree
-    await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:null});
-    // Find match type for saveMFMatch
-    const b=S.bs&&S.bs[gameId];
-    const {type,poolKey,ri}=findMatchMeta(b,matchId,gameId);
-    await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
-    if(statusEl)statusEl.innerHTML='<div class="alert alert-success">✓ Score confirmed!</div>';
-  } else {
-    await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:newPending});
-    if(statusEl)statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">✓ Score submitted — waiting for opponents to confirm.</div>';
-  }
-};
-
-function findMatchMeta(b,matchId,gameId){
-  const game=(S.games||[]).find(g=>g.id===gameId);
-  const fmt=game?.format||'round-robin';
-  if(fmt==='round-robin') return {type:'rr',poolKey:null,ri:null};
-  if(fmt==='two-pool'){
-    if(b.poolAM?.find(m=>m.id===matchId)) return {type:'pool',poolKey:'A',ri:null};
-    if(b.poolBM?.find(m=>m.id===matchId)) return {type:'pool',poolKey:'B',ri:null};
-    return {type:'cross',poolKey:null,ri:null};
-  }
-  if(fmt==='single-elim'){
-    for(let ri=0;ri<(b.rounds||[]).length;ri++) if(b.rounds[ri].find(m=>m.id===matchId)) return {type:'se',poolKey:null,ri};
-  }
-  if(fmt==='double-elim'){
-    for(let ri=0;ri<(b.winners||[]).length;ri++) if(b.winners[ri].find(m=>m.id===matchId)) return {type:'dew',poolKey:null,ri};
-    for(let ri=0;ri<(b.losers||[]).length;ri++) if(b.losers[ri].find(m=>m.id===matchId)) return {type:'del',poolKey:null,ri};
-    return {type:'degf',poolKey:null,ri:null};
-  }
-  if(fmt==='pool-playoff'){
-    for(let pi=0;pi<(b.pools||[]).length;pi++) if(b.pools[pi].matches.find(m=>m.id===matchId)) return {type:'pppool',poolKey:null,ri:pi};
-    return {type:'ko',poolKey:null,ri:null};
-  }
-  return {type:'rr',poolKey:null,ri:null};
-}
-function renderPlayerLB(myName){
-  const e=el('pview-lb');if(!e)return;
-  const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
-  let html='<div class="card"><div class="card-title">🏅 Leaderboard</div>';
-  if(!sorted.length)html+='<p class="empty">No data yet.</p>';
-  else html+=sorted.map((p,i)=>`<div class="lb-row"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div><div class="lb-name">${p}${p===myName?' <span style="font-size:10px;color:#534AB7">(you)</span>':''}</div><div class="lb-pts">${getTotalPts(p)}</div></div>`).join('');
-  html+='</div>';
-  html+='<div class="card"><div class="card-title">🎖 Badges</div><div id="all-player-badges"></div></div>';
-  e.innerHTML=html; renderAllPlayerBadges();
-}
-function renderAllPlayerBadges(){
-  const e=el('all-player-badges');if(!e)return;
-  e.innerHTML=(S.players||[]).map(p=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede6"><div style="font-size:13px;font-weight:600;margin-bottom:4px">${p}</div><div class="badges-wrap">${renderBadges(getPlayerBadges(p))}</div></div>`).join('');
-}
-
-// ── DRAG & DROP ───────────────────────────────────────────
-let _ds=null,_touchClone=null,_touchList=null,_touchOffX=0,_touchOffY=0;
-window.dstart=(e)=>{_ds=e.currentTarget;e.currentTarget.classList.add('dragging');e.dataTransfer.effectAllowed='move';};
-window.dover=(e,listId)=>{e.preventDefault();if(e.currentTarget!==_ds)e.currentTarget.classList.add('drag-over');};
-window.dleave=(e)=>{e.currentTarget.classList.remove('drag-over');};
-window.ddrop=(e,listId)=>{
-  e.preventDefault();e.currentTarget.classList.remove('drag-over');
-  if(!_ds||_ds===e.currentTarget)return;
-  const list=el(listId||'game-rank-list'),si=Array.from(list.children).indexOf(_ds),ti=Array.from(list.children).indexOf(e.currentTarget);
-  if(si<ti)e.currentTarget.after(_ds);else e.currentTarget.before(_ds);
-  _ds.classList.remove('dragging');
-  Array.from(list.querySelectorAll('.rank-item')).forEach((el2,i)=>{const sp=el2.querySelector('.rank-num');if(sp)sp.textContent=i+1;});
-};
-window.tstart=(e,listId)=>{
-  const item=e.currentTarget;_ds=item;_touchList=el(listId||'game-rank-list');
-  const rect=item.getBoundingClientRect(),touch=e.touches[0];
-  _touchOffX=touch.clientX-rect.left;_touchOffY=touch.clientY-rect.top;
-  _touchClone=item.cloneNode(true);
-  _touchClone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:.85;z-index:999;pointer-events:none;background:#EEEDFE;border:2px dashed #7F77DD;border-radius:9px;box-shadow:0 4px 12px rgba(0,0,0,.15);`;
-  document.body.appendChild(_touchClone);item.style.opacity='.3';e.preventDefault();
-};
-window.tmove=(e)=>{
-  if(!_touchClone||!_ds)return;
-  const touch=e.touches[0];
-  _touchClone.style.left=(touch.clientX-_touchOffX)+'px';_touchClone.style.top=(touch.clientY-_touchOffY)+'px';
-  Array.from(_touchList.querySelectorAll('.rank-item')).forEach(x=>x.classList.remove('drag-over'));
-  const target=Array.from(_touchList.querySelectorAll('.rank-item')).find(x=>{if(x===_ds)return false;const r=x.getBoundingClientRect();return touch.clientY>=r.top&&touch.clientY<=r.bottom;});
-  if(target)target.classList.add('drag-over');e.preventDefault();
-};
-window.tend=(e)=>{
-  if(!_ds||!_touchList)return;
-  const touch=e.changedTouches[0];
-  Array.from(_touchList.querySelectorAll('.rank-item')).forEach(x=>x.classList.remove('drag-over'));
-  const target=Array.from(_touchList.querySelectorAll('.rank-item')).find(x=>{if(x===_ds)return false;const r=x.getBoundingClientRect();return touch.clientY>=r.top&&touch.clientY<=r.bottom;});
-  if(target){const si=Array.from(_touchList.children).indexOf(_ds),ti=Array.from(_touchList.children).indexOf(target);if(si<ti)target.after(_ds);else target.before(_ds);Array.from(_touchList.querySelectorAll('.rank-item')).forEach((x,i)=>{const sp=x.querySelector('.rank-num');if(sp)sp.textContent=i+1;});}
-  _ds.style.opacity='';if(_touchClone){_touchClone.remove();_touchClone=null;}_ds=null;_touchList=null;
-};
-
-// ── POWER RANKINGS ────────────────────────────────────────
-function renderPowerRankings(){
-  const e=el('admin-power'); if(!e) return;
-  const games=S.games||[],players=S.players||[];
-  if(!players.length||!games.length){e.innerHTML='<div class="card"><p class="empty">Add players and games first.</p></div>';return;}
-  function avgForGame(gameId,player){const gR=(S.gameRankings&&S.gameRankings[gameId])||{},others=players.filter(p=>p!==player);let total=0,count=0;others.forEach(r=>{const rk=gR[r];if(rk){const i=rk.indexOf(player);if(i!==-1){total+=i+1;count++;}}});return count?total/count:null;}
-  function overallAvg(player){const avgs=games.map(g=>avgForGame(g.id,player)).filter(v=>v!==null);return avgs.length?avgs.reduce((a,b)=>a+b,0)/avgs.length:null;}
-  const sorted=players.slice().sort((a,b)=>{const aa=overallAvg(a),ba=overallAvg(b);if(aa===null&&ba===null)return 0;if(aa===null)return 1;if(ba===null)return -1;return aa-ba;});
-  let html=`<div class="card"><div class="card-title">📊 Power rankings</div><div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Lower avg = ranked better by peers.</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="text-align:left;padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;position:sticky;left:0;background:#fff">Player</th>${games.map(g=>`<th style="padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;color:#534AB7;text-align:center;white-space:nowrap">${g.name}</th>`).join('')}<th style="padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;text-align:center">Avg</th></tr></thead><tbody>`;
-  const n=players.length;
-  sorted.forEach((p,i)=>{
-    const avgs=games.map(g=>avgForGame(g.id,p)),oa=overallAvg(p),bg=i%2===0?'#fff':'#f8f7f4';
-    html+=`<tr style="background:${bg}"><td style="padding:6px 4px;font-weight:600;font-size:12px;position:sticky;left:0;background:${bg};white-space:nowrap"><div style="display:flex;align-items:center;gap:5px"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}" style="width:20px;height:20px;font-size:10px">${i+1}</div>${p}</div></td>${avgs.map(avg=>avg!==null?`<td style="padding:6px 4px;text-align:center;color:${avg<=3?'#27500A':avg>=n-1?'#c0392b':'#534AB7'};font-weight:${avg<=3||avg>=n-1?'700':'400'}">${avg.toFixed(2)}</td>`:`<td style="padding:6px 4px;text-align:center;color:#ccc">—</td>`).join('')}<td style="padding:6px 4px;text-align:center;font-weight:700">${oa!==null?oa.toFixed(2):'—'}</td></tr>`;
-  });
-  html+='</tbody></table></div></div>';
-  e.innerHTML=html;
-}
-
-
 function loadTournamentList(){
   onValue(ref(db,'tournaments'), snap=>{
     const all = snap.exists() ? snap.val() : {};
@@ -1440,11 +962,7 @@ function loadTournamentList(){
       if(!t||!t.tourneyName) return;
       // Show tournament if user is a participant or admin
       const myUid = actingAsUid||currentUser?.uid;
-      const isParticipant = (t.playerUids && t.playerUids[myUid]) ||
-        (t.ghostPlayers && userProfile &&
-          Object.values(t.ghostPlayers||{}).some(n=>
-            n.toLowerCase()===(userProfile.preferredName||userProfile.name||'').toLowerCase()
-          ));
+      const isParticipant = t.playerUids && t.playerUids[myUid];
       if(!isAdmin&&!isParticipant) return;
       if(t.tournamentFinalized) past.push({id,...t});
       else active.push({id,...t});
@@ -1476,113 +994,12 @@ function renderTourneyList(elId, list, isPast, showAll=false){
         <div style="font-size:20px">${isPast?'📜':'🏆'}</div>
       </div>
       ${!isPast&&t.tournamentStarted?'<div class="tag tag-green" style="margin-top:6px;font-size:10px">● In progress</div>':''}
-      ${isAdmin?`<div style="margin-top:8px;display:flex;gap:6px">
-        <button class="btn btn-sm btn-primary" onclick="openTournament('${t.id}')" style="width:auto;flex:1">Open</button>
+      ${showAll&&isAdmin?`<div style="margin-top:8px;display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="openTournament('${t.id}')" style="width:auto;flex:1">Open</button>
         <button class="btn btn-sm btn-danger" onclick="deleteTournament('${t.id}','${esc(t.tourneyName||'this tournament')}')" style="width:auto">🗑 Delete</button>
       </div>`:''}
     </div>`).join('');
 }
-
-// ── PENDING APPROVALS ────────────────────────────────────
-async function loadPendingApprovals(){
-  const snap = await get(ref(db,'pendingApprovals'));
-  const listEl = el('pending-approvals-list');
-  const badgeEl = el('pending-count-badge');
-  if(!listEl) return;
-
-  if(!snap.exists()||!Object.keys(snap.val()).length){
-    listEl.innerHTML='<p class="empty">No pending approvals. ✓</p>';
-    if(badgeEl) badgeEl.innerHTML='';
-    return;
-  }
-
-  const pending = snap.val();
-  const count = Object.keys(pending).length;
-  if(badgeEl) badgeEl.innerHTML=`<span class="tag tag-red" style="font-size:10px">${count}</span>`;
-
-  // Also load preAssignments for the link dropdown
-  const preSnap = await get(ref(db,'preAssignments'));
-  const preAssignments = preSnap.exists() ? preSnap.val() : {};
-
-  let html = Object.entries(pending).map(([uid2,p])=>{
-    const preOptions = Object.entries(preAssignments)
-      .map(([key,v])=>`<option value="${key}">${v.preferredName||v.firstName||v.nickname||'?'} ${v.lastName||''} ${v.years?'('+v.years+'yrs)':''}</option>`)
-      .join('');
-    return `<div style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:10px;padding:10px;margin-bottom:8px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:4px">
-        ${p.firstName||''} ${p.lastName||''}
-        <span style="font-size:10px;color:#888;font-weight:400">(${p.email||p.phone||'no contact'})</span>
-      </div>
-      <div style="font-size:11px;color:#888;margin-bottom:8px">Signed up ${p.signedUpAt?new Date(p.signedUpAt).toLocaleDateString():''} — no historical record found</div>
-      <div style="font-size:11px;font-weight:600;margin-bottom:4px">Link to existing player:</div>
-      <select id="link-select-${uid2}" style="font-size:12px;margin-bottom:6px">
-        <option value="">— select historical record —</option>
-        ${preOptions}
-      </select>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" style="flex:1" onclick="linkPendingPlayer('${uid2}')">🔗 Link & merge</button>
-        <button class="btn btn-success btn-sm" style="flex:1" onclick="approvePendingAsNew('${uid2}')">✓ Approve as new</button>
-        <button class="btn btn-sm btn-danger" style="flex:1" onclick="rejectPending('${uid2}')">✕ Reject</button>
-      </div>
-    </div>`;
-  }).join('');
-
-  listEl.innerHTML = html;
-}
-
-window.linkPendingPlayer = async (uid2)=>{
-  const preKey = el(`link-select-${uid2}`)?.value;
-  if(!preKey){ alert('Select a historical record to link to.'); return; }
-
-  const [playerSnap, preSnap] = await Promise.all([
-    get(ref(db,'players/'+uid2)),
-    get(ref(db,'preAssignments/'+preKey))
-  ]);
-
-  if(!playerSnap.exists()||!preSnap.exists()){ alert('Record not found.'); return; }
-
-  const player = playerSnap.val();
-  const pre = preSnap.val();
-
-  // Merge: historical data wins for stats, player's auth info is preserved
-  const merged = {
-    ...pre,
-    uid: uid2,
-    firstName: player.firstName||pre.firstName,
-    lastName: player.lastName||pre.lastName,
-    preferredName: player.preferredName||pre.preferredName||pre.nickname,
-    name: player.preferredName||pre.preferredName||pre.nickname,
-    phone: player.phone||pre.phone||'',
-    email: player.email||pre.email||'',
-    preferredContact: player.preferredContact||pre.preferredContact||'email',
-    linkedAt: Date.now(), pendingAdminReview: false, matchType: 'admin'
-  };
-
-  await set(ref(db,'players/'+uid2), merged);
-  await set(ref(db,'preAssignments/'+preKey), null);
-  await set(ref(db,'pendingApprovals/'+uid2), null);
-
-  alert(`✓ Linked! ${merged.firstName} ${merged.lastName} now has their full history and badges.`);
-  loadPendingApprovals();
-  loadGlobalPlayers();
-};
-
-window.approvePendingAsNew = async (uid2)=>{
-  // Just clear the pending flag — they stay as a new player
-  await update(ref(db,'players/'+uid2), { pendingAdminReview: false, approvedAt: Date.now() });
-  await set(ref(db,'pendingApprovals/'+uid2), null);
-  alert('✓ Approved as new player.');
-  loadPendingApprovals();
-  loadGlobalPlayers();
-};
-
-window.rejectPending = async (uid2)=>{
-  if(!confirm('Reject this signup? This will delete their account from the system.')) return;
-  await set(ref(db,'players/'+uid2), null);
-  await set(ref(db,'pendingApprovals/'+uid2), null);
-  alert('Signup rejected and removed.');
-  loadPendingApprovals();
-};
 
 window.deleteTournament = async (tid, name)=>{
   if(!isAdmin){ alert('Only the universal admin can delete tournaments.'); return; }
@@ -1636,7 +1053,7 @@ window.stopActingAs = ()=>{
 };
 
 // ── ADMIN PANEL ───────────────────────────────────────────
-window.openAdminPanel = ()=>{
+window.openAdminPanel=()=>{
   showView('admin-panel');
   renderSMSPanel();
   loadTournamentList();
@@ -1649,36 +1066,24 @@ function loadGlobalPlayers(searchTerm=''){
   get(ref(db,'players')).then(snap=>{
     const all = snap.exists() ? snap.val() : {};
     const e = el('global-players-list'); if(!e) return;
-    const entries = Object.entries(all);
-    if(!entries.length){ e.innerHTML='<p class="empty">No players in database yet.</p>'; return; }
-    const filtered = entries.filter(([uid2,p])=>{
+    const filtered = Object.entries(all).filter(([uid2,p])=>{
       if(!searchTerm) return true;
       const s=searchTerm.toLowerCase();
-      return (p.preferredName||p.name||'').toLowerCase().includes(s)||
-             (p.firstName||'').toLowerCase().includes(s)||
-             (p.lastName||'').toLowerCase().includes(s)||
-             (p.phone||'').includes(s)||
-             (p.email||'').toLowerCase().includes(s);
+      return (p.name||'').toLowerCase().includes(s)||(p.phone||'').includes(s)||(p.email||'').toLowerCase().includes(s);
     });
-    if(!filtered.length){ e.innerHTML='<p class="empty">No players match "'+searchTerm+'".</p>'; return; }
-    e.innerHTML=filtered.slice(0,50).map(([uid2,p])=>{
-      const preferred=p.preferredName||p.name||'?';
-      const fullN=((p.firstName||'')+(p.lastName?' '+p.lastName:'')).trim()||preferred;
+    if(!filtered.length){ e.innerHTML='<p class="empty">No players found.</p>'; return; }
+    e.innerHTML=filtered.slice(0,20).map(([uid2,p])=>{
       const badges=getPlayerBadgesFromProfile(p);
       return`<div class="player-row">
-        <div class="avatar">${initials(preferred)}</div>
+        <div class="avatar">${initials(p.name)}</div>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${preferred}${fullN!==preferred?' <span style="font-size:11px;color:#aaa">('+fullN+')</span>':''}</div>
+          <div style="font-size:13px;font-weight:600">${p.name||'?'}</div>
           <div style="font-size:11px;color:#888">${p.phone||''} ${p.email||''}</div>
           <div class="badges-wrap">${renderBadges(badges)}</div>
         </div>
         <button class="btn btn-sm" onclick="editGlobalPlayer('${uid2}')" style="width:auto">Edit</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteGlobalPlayer('${uid2}','${esc(preferred)}')" style="width:auto">🗑</button>
       </div>`;
     }).join('');
-  }).catch(err=>{
-    const e=el('global-players-list');
-    if(e) e.innerHTML='<p class="empty" style="color:#c0392b">Error loading players: '+err.message+'</p>';
   });
 }
 
@@ -1706,13 +1111,6 @@ window.editGlobalPlayer = (uid2)=>{
       <button class="btn btn-primary" onclick="saveGlobalPlayer('${uid2}')">✓ Save</button>
     </div></div>`;
   });
-};
-
-window.deleteGlobalPlayer = async (uid2, name)=>{
-  if(!isAdmin){ alert('Only the universal admin can delete players.'); return; }
-  if(!confirm(`Delete "${name}" from the global player database? This removes their profile and history permanently.`)) return;
-  await set(ref(db,'players/'+uid2), null);
-  loadGlobalPlayers();
 };
 
 window.saveGlobalPlayer = async (uid2)=>{
@@ -1743,12 +1141,9 @@ window.openAddGlobalPlayer = ()=>{
   el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title"><span>Add player</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
-    <div class="sec-label">First name</div><input type="text" id="np-firstname" placeholder="e.g. Chett">
-    <div class="sec-label">Last name <span style="color:#aaa;font-weight:400">(optional)</span></div><input type="text" id="np-lastname" placeholder="e.g. Bergman">
-    <div class="sec-label">Preferred name <span style="color:#aaa;font-weight:400">(shown in app — leave blank to use first name)</span></div><input type="text" id="np-preferred" placeholder="e.g. Chett or CB">
+    <div class="sec-label">Name</div><input type="text" id="np-name" placeholder="e.g. Chett">
     <div class="sec-label">Phone number</div><input type="tel" id="np-phone" placeholder="+1 555 000 0000">
     <div class="sec-label">Email</div><input type="email" id="np-email" placeholder="optional">
-    <div class="alert alert-info" style="font-size:11px;margin-top:4px">They can update their own name and info after signing in via their Profile page.</div>
     <div class="divider"></div>
     <button class="btn btn-primary" onclick="addGlobalPlayer()">+ Add player</button>
     <div id="np-status" style="margin-top:6px"></div>
@@ -1756,18 +1151,15 @@ window.openAddGlobalPlayer = ()=>{
 };
 
 window.addGlobalPlayer = async ()=>{
-  const firstName = el('np-firstname')?.value.trim()||el('np-name')?.value.trim()||'';
-  const lastName  = el('np-lastname')?.value.trim()||'';
-  const preferred = el('np-preferred')?.value.trim()||firstName;
+  const name  = el('np-name').value.trim();
   const phone = el('np-phone').value.trim();
   const email = el('np-email').value.trim();
   const status = el('np-status');
-  if(!firstName){ status.innerHTML='<div class="alert alert-warn">Enter a first name.</div>'; return; }
+  if(!name){ status.innerHTML='<div class="alert alert-warn">Enter a name.</div>'; return; }
+  // Create a pre-assignment record (links to real account when they sign in)
   const preKey = uid();
   const preData = {
-    firstName, lastName, preferredName: preferred,
-    name: preferred,
-    phone, email,
+    name, phone, email,
     preferredContact: phone ? 'phone' : 'email',
     years:0, wins:0, podiums:0, lastPlaces:0,
     yearsAttended:[], gameWins:{}, customBadges:[],
@@ -1831,7 +1223,6 @@ window.doCreateTournament = async ()=>{
     players:[], playerUids:{}, ghostPlayers:{}, games:[], teams:{}, scores:{}, bs:{},
     points:{}, gameRankings:{}, history:{}, customBadges:[],
     tiebreaker:{}, tournamentFinalized:false, tournamentStarted:false,
-    enabledBadges:{}, playerBadges:{},
     createdBy: currentUser.uid, createdAt: Date.now()
   };
   await set(ref(db,'tournaments/'+tid), doc);
@@ -1866,14 +1257,11 @@ window.openTournament = (tid)=>{
     if(!S.tiebreaker) S.tiebreaker={};
     if(!S.pendingScores) S.pendingScores={};
     if(!S.tourneyAdmins) S.tourneyAdmins={};
-    if(!S.playerBadges) S.playerBadges={};
-    if(!S.enabledBadges) S.enabledBadges={};
     if(!S.playerUids) S.playerUids={};
     if(!S.ghostPlayers) S.ghostPlayers={};
     const myUid = actingAsUid||currentUser?.uid;
     const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
-    isTourneyAdmin = isAdmin || !!(S.tourneyAdmins&&S.tourneyAdmins[myUid]);
-    // Load global player profiles into memory for badges/stats
+    isTourneyAdmin=isAdmin||!!(S.tourneyAdmins&&S.tourneyAdmins[myUid]);
     loadGlobalProfilesForTournament().then(()=>{
       if(isTourneyAdmin) renderAdminView();
       else renderPlayerView(myName);
@@ -1885,20 +1273,16 @@ function buildTournamentShell(){
   return`<div style="display:flex;align-items:center;gap:6px;margin-bottom:.75rem;padding-top:.5rem;flex-wrap:wrap">
     <button class="btn btn-sm" onclick="leaveTournament()" style="width:auto">← Back</button>
     <div style="font-size:13px;font-weight:600;flex:1;color:#534AB7;min-width:80px" id="tourney-header-label"></div>
-    <button class="btn btn-sm hidden" id="btn-player-view" onclick="switchToPlayerView()"
-      style="width:auto;background:#EAF3DE;border-color:#97C459;color:#27500A">👤 My Rankings</button>
-    <button class="btn btn-sm hidden" id="btn-admin-view" onclick="switchToAdminView()"
-      style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin View</button>
-    <button class="btn btn-sm hidden" id="btn-manage-admins" onclick="manageTourneyAdmins()"
-      style="width:auto;border-color:#e0ddd6;color:#888">👥 Admins</button>
+    <button class="btn btn-sm hidden" id="btn-player-view" onclick="switchToPlayerView()" style="width:auto;background:#EAF3DE;border-color:#97C459;color:#27500A">👤 My Rankings</button>
+    <button class="btn btn-sm hidden" id="btn-admin-view" onclick="switchToAdminView()" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin View</button>
+    <button class="btn btn-sm hidden" id="btn-manage-admins" onclick="manageTourneyAdmins()" style="width:auto;border-color:#e0ddd6;color:#888">👥 Admins</button>
   </div>
   <div id="admin-area" class="hidden">
     <div class="phase-tabs">
       <div class="phase-tab active" data-phase="setup">Setup</div>
       <div class="phase-tab" data-phase="games">Games</div>
       <div class="phase-tab" data-phase="rankings">Rankings</div>
-      <div class="phase-tab" data-phase="active-game">Active Game</div>
-      <div class="phase-tab" data-phase="scores">Score History</div>
+      <div class="phase-tab" data-phase="scores">Scores</div>
       <div class="phase-tab" data-phase="board">Leaderboard</div>
       <div class="phase-tab" data-phase="power">Power Rankings</div>
       <div class="phase-tab" data-phase="history">History</div>
@@ -1906,7 +1290,6 @@ function buildTournamentShell(){
     <div id="admin-setup"></div>
     <div id="admin-games" class="hidden"></div>
     <div id="admin-rankings" class="hidden"></div>
-    <div id="admin-active-game" class="hidden"></div>
     <div id="admin-scores" class="hidden"></div>
     <div id="admin-board" class="hidden"></div>
     <div id="admin-power" class="hidden"></div>
@@ -1931,132 +1314,85 @@ window.leaveTournament = ()=>{
   showView('home');
 };
 
-// Global profiles cache — loaded fresh each tournament
-let _globalProfiles = {};  // preferredName/nickname -> profile object
+let _globalProfiles={};
 
 async function loadGlobalProfilesForTournament(){
   if(!S) return;
-  const players = S.players||[];
+  const players=S.players||[];
   if(!players.length) return;
-
-  // Load all players from global DB
-  const [playersSnap, preSnap] = await Promise.all([
-    get(ref(db,'players')),
-    get(ref(db,'preAssignments'))
-  ]);
-
-  _globalProfiles = {};
-
-  // Index signed-up players by all their names
-  if(playersSnap.exists()){
-    Object.values(playersSnap.val()).forEach(p=>{
-      if(!p) return;
-      const names = [p.preferredName, p.name, p.firstName, p.nickname,
-                     ((p.firstName||'')+' '+(p.lastName||'')).trim()]
-        .filter(Boolean);
-      names.forEach(n=>{ if(n) _globalProfiles[n.trim()] = p; });
-    });
-  }
-
-  // Index pre-assignments (ghost players) by all their names
-  if(preSnap.exists()){
-    Object.values(preSnap.val()).forEach(p=>{
-      if(!p) return;
-      const names = [p.preferredName, p.nickname, p.firstName,
-                     ((p.firstName||'')+' '+(p.lastName||'')).trim()]
-        .filter(Boolean);
-      names.forEach(n=>{ if(n && !_globalProfiles[n.trim()]) _globalProfiles[n.trim()] = p; });
-    });
-  }
-
-  // Merge global data into S.history for any player not already there
-  const updates = {};
-  let needsUpdate = false;
-  players.forEach(playerName=>{
-    if(S.history && S.history[playerName] && S.history[playerName].years > 0) return; // already have data
-    const profile = _globalProfiles[playerName];
-    if(!profile) return;
-    const h = {
-      years:       profile.years||0,
-      wins:        profile.wins||0,
-      podiums:     profile.podiums||0,
-      lastPlaces:  profile.lastPlaces||0,
-      yearsAttended: profile.yearsAttended||[],
-      gameWins:    profile.gameWins||{},
-      gameStats:   profile.gameStats||{},
-    };
-    // Only update if they have actual history
-    if(h.years > 0 || h.wins > 0 || Object.keys(h.gameWins).length > 0){
-      updates['history/'+playerName] = h;
-      if(!S.history) S.history={};
-      S.history[playerName] = h; // update local state immediately
-      needsUpdate = true;
+  const [ps,prs]=await Promise.all([get(ref(db,'players')),get(ref(db,'preAssignments'))]);
+  _globalProfiles={};
+  if(ps.exists()) Object.values(ps.val()).forEach(p=>{
+    if(!p) return;
+    [p.preferredName,p.name,p.firstName,p.nickname,((p.firstName||'')+' '+(p.lastName||'')).trim()]
+      .filter(Boolean).forEach(n=>{if(n)_globalProfiles[n.trim()]=p;});
+  });
+  if(prs.exists()) Object.values(prs.val()).forEach(p=>{
+    if(!p) return;
+    [p.preferredName,p.nickname,p.firstName,((p.firstName||'')+' '+(p.lastName||'')).trim()]
+      .filter(Boolean).forEach(n=>{if(n&&!_globalProfiles[n.trim()])_globalProfiles[n.trim()]=p;});
+  });
+  const updates={};let dirty=false;
+  players.forEach(name=>{
+    if(S.history&&S.history[name]&&S.history[name].years>0) return;
+    const prof=_globalProfiles[name]; if(!prof) return;
+    const h={years:prof.years||0,wins:prof.wins||0,podiums:prof.podiums||0,
+      lastPlaces:prof.lastPlaces||0,yearsAttended:prof.yearsAttended||[],
+      gameWins:prof.gameWins||{},gameStats:prof.gameStats||{}};
+    if(h.years>0||h.wins>0||Object.keys(h.gameWins).length>0){
+      updates['history/'+name]=h;
+      if(!S.history)S.history={};
+      S.history[name]=h; dirty=true;
     }
   });
-
-  // Write merged history back to tournament (non-blocking)
-  if(needsUpdate && currentTourneyId){
-    update(ref(db,'tournaments/'+currentTourneyId), updates).catch(()=>{});
-  }
-}
-
-// Helper: get profile for a player name (checks global cache first, then tournament history)
-function getProfile(playerName){
-  return _globalProfiles[playerName] || {};
+  if(dirty&&currentTourneyId) update(ref(db,'tournaments/'+currentTourneyId),updates).catch(()=>{});
 }
 
 // ── ADMIN VIEW ────────────────────────────────────────────
 function renderAdminView(){
   if(!S) return;
-  const header = el('tourney-header-label');
-  if(header) header.textContent = S.tourneyName+' '+S.tourneyYear;
+  const header=el('tourney-header-label');
+  if(header) header.textContent=S.tourneyName+' '+S.tourneyYear;
   show('admin-area'); hide('player-area');
-  // Show My Rankings button if admin is also a player in this tournament
-  const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
-  const amPlayer = (S.players||[]).includes(myName);
-  const btnPlayer = el('btn-player-view');
-  const btnAdmins = el('btn-manage-admins');
-  if(btnPlayer) btnPlayer.classList.toggle('hidden', !amPlayer);
-  if(btnAdmins) btnAdmins.classList.remove('hidden');
+  const myName=actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
+  const amPlayer=(S.players||[]).includes(myName);
+  el('btn-player-view')?.classList.toggle('hidden',!amPlayer);
   el('btn-admin-view')?.classList.add('hidden');
+  el('btn-manage-admins')?.classList.remove('hidden');
   showAdminPhase(_phase||'setup');
 }
-
-window.switchToPlayerView = ()=>{
-  const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
+window.switchToPlayerView=()=>{
+  const myName=actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
   hide('admin-area');
   el('btn-player-view')?.classList.add('hidden');
   el('btn-admin-view')?.classList.remove('hidden');
   el('btn-manage-admins')?.classList.add('hidden');
   renderPlayerView(myName);
 };
-
-window.switchToAdminView = ()=>{
+window.switchToAdminView=()=>{
   show('admin-area'); hide('player-area');
   el('btn-admin-view')?.classList.add('hidden');
   el('btn-manage-admins')?.classList.remove('hidden');
-  const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
-  const amPlayer = (S.players||[]).includes(myName);
-  el('btn-player-view')?.classList.toggle('hidden', !amPlayer);
+  const myName=actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
+  el('btn-player-view')?.classList.toggle('hidden',!(S.players||[]).includes(myName));
   showAdminPhase(_phase||'setup');
 };
 
 function showAdminPhase(phase){
   _phase=phase;
-  ['setup','games','rankings','active-game','scores','board','power','history'].forEach(p=>{
+  ['setup','games','rankings','scores','board','power','history'].forEach(p=>{
     const panel=el('admin-'+p); if(panel) panel.classList.add('hidden');
     document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===p) t.classList.remove('active'); });
   });
   const target=el('admin-'+phase); if(target) target.classList.remove('hidden');
   document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===phase) t.classList.add('active'); });
-  if(phase==='setup')       renderAdminSetup();
-  if(phase==='games')       renderAdminGames();
-  if(phase==='rankings')    renderRankingStatus();
-  if(phase==='active-game') renderActiveGamePanel();
-  if(phase==='scores')      renderScoreHistory();
-  if(phase==='board')       { renderLeaderboard(); renderGPB(); updateStats(); renderTiebreakerPanel(); }
-  if(phase==='power')       renderPowerRankings();
-  if(phase==='history')     { renderHistoryList(); renderCustomBadges(); renderCustomBadgePlayerSelect(); }
+  if(phase==='setup')    renderAdminSetup();
+  if(phase==='games')    renderAdminGames();
+  if(phase==='rankings') renderRankingStatus();
+  if(phase==='scores')   renderMatchFeed();
+  if(phase==='board')    { renderLeaderboard(); renderGPB(); updateStats(); renderTiebreakerPanel(); }
+  if(phase==='power')    renderPowerRankings();
+  if(phase==='history')  { renderHistoryList(); renderCustomBadges(); renderCustomBadgePlayerSelect(); }
 }
 
 function renderAdminSetup(){
@@ -2084,8 +1420,8 @@ function renderAdminSetup(){
       <div class="card-title">🚀 Start tournament</div>
       <div id="start-tourney-body"></div>
       <div class="divider"></div>
-      <button class="btn btn-sm btn-primary" onclick="syncTournamentHistory()" style="width:auto;font-size:11px;margin-bottom:5px">🔄 Sync player history &amp; badges from global DB</button>
-      <div style="font-size:10px;color:#aaa;margin-bottom:10px">Pulls history, game stats and badges for all players in this tournament.</div>
+      <button class="btn btn-sm btn-primary" onclick="syncTournamentHistory()" style="width:auto;font-size:11px;margin-bottom:5px">Sync player history from global DB</button>
+      <div style="font-size:10px;color:#aaa;margin-bottom:10px">Pulls history, stats and badges for all players.</div>
       <div style="font-size:11px;color:#aaa;margin-bottom:6px;font-weight:600">🧪 TESTING</div>
       <button class="btn btn-sm" onclick="resetTournament()" style="width:auto;border-color:#f0a0a0;color:#c0392b;font-size:11px;margin-bottom:5px">🔄 Reset (keep players &amp; games)</button>
       <button class="btn btn-sm" onclick="fillTestRankings()" style="width:auto;border-color:#ccc;color:#888;font-size:11px;margin-bottom:8px">⚡ Fill random rankings</button>
@@ -2156,153 +1492,86 @@ function renderAdminGames(){
 }
 
 // ── PLAYERS ───────────────────────────────────────────────
-window.searchPlayersToAdd = async (term)=>{
+window.searchPlayersToAdd=async(term)=>{
   const e=el('player-search-results'); if(!e) return;
-  if(!term||term.length<2){ e.innerHTML=''; return; }
-  const currentPlayers=S.players||[];
-  const s=term.toLowerCase();
-
-  // Search both signed-up players AND pre-assignments (historical, not yet signed up)
-  const [playersSnap, preSnap] = await Promise.all([
-    get(ref(db,'players')),
-    get(ref(db,'preAssignments'))
-  ]);
-
+  if(!term||term.length<2){e.innerHTML='';return;}
+  const currentPlayers=S.players||[],s=term.toLowerCase();
+  const [ps,prs]=await Promise.all([get(ref(db,'players')),get(ref(db,'preAssignments'))]);
   const results=[];
-
-  // Signed-up players
-  if(playersSnap.exists()){
-    Object.entries(playersSnap.val()).forEach(([uid2,p])=>{
-      if(!p) return;
-      const displayN = p.preferredName||p.name||p.firstName||'';
-      const fullN = ((p.firstName||'')+ ' '+(p.lastName||'')).trim();
-      const searchable = [displayN,fullN,p.phone||'',p.email||''].join(' ').toLowerCase();
-      if(searchable.includes(s) && !currentPlayers.includes(displayN)){
-        results.push({
-          id: uid2, name: displayN, fullName: fullN,
-          sub: p.phone||p.email||'', tag:'Signed up',
-          tagCls:'tag-green', type:'player',
-          onclick:`addPlayerFromGlobal('${uid2}','${esc(displayN)}')`
-        });
-      }
-    });
-  }
-
-  // Pre-assignments (historical players not yet signed up)
-  if(preSnap.exists()){
-    Object.entries(preSnap.val()).forEach(([key,p])=>{
-      if(!p) return;
-      const displayN = p.preferredName||p.nickname||p.firstName||'';
-      const fullN = ((p.firstName||'')+(p.lastName?' '+p.lastName:'')).trim();
-      const searchable = [displayN,fullN,p.phone||'',p.email||''].join(' ').toLowerCase();
-      if(searchable.includes(s) && !currentPlayers.includes(displayN)){
-        results.push({
-          id: key, name: displayN, fullName: fullN,
-          sub: p.years?(p.years+'yrs · '+(p.wins?p.wins+'🏆 ':'')+(p.phone||p.email||'')):(p.phone||p.email||''),
-          tag:'Not signed up yet', tagCls:'tag-amber', type:'pre',
-          onclick:`addPlayerFromPre('${key}','${esc(displayN)}')`
-        });
-      }
-    });
-  }
-
-  if(!results.length){
-    e.innerHTML='<p class="empty" style="padding:6px">No matches. <button class="btn btn-sm btn-primary" onclick="openAddGlobalPlayer()" style="width:auto">+ Add new player</button></p>';
-    return;
-  }
-
+  if(ps.exists()) Object.entries(ps.val()).forEach(([uid2,p])=>{
+    if(!p) return;
+    const dn=p.preferredName||p.name||p.firstName||'';
+    const fn=((p.firstName||'')+' '+(p.lastName||'')).trim();
+    if([dn,fn,p.phone||'',p.email||''].join(' ').toLowerCase().includes(s)&&!currentPlayers.includes(dn))
+      results.push({id:uid2,name:dn,fullName:fn,sub:p.phone||p.email||'',tag:'Signed up',
+        tagCls:'tag-green',onclick:"addPlayerFromGlobal('"+uid2+"','"+esc(dn)+"')"});
+  });
+  if(prs.exists()) Object.entries(prs.val()).forEach(([key,p])=>{
+    if(!p) return;
+    const dn=p.preferredName||p.nickname||p.firstName||'';
+    const fn=((p.firstName||'')+(p.lastName?' '+p.lastName:'')).trim();
+    if([dn,fn,p.phone||'',p.email||''].join(' ').toLowerCase().includes(s)&&!currentPlayers.includes(dn))
+      results.push({id:key,name:dn,fullName:fn,
+        sub:p.years?(p.years+'yrs '+(p.wins?p.wins+' wins ':'')+(p.phone||p.email||'')):(p.phone||p.email||''),
+        tag:'Not signed up',tagCls:'tag-amber',onclick:"addPlayerFromPre('"+key+"','"+esc(dn)+"')"});
+  });
+  if(!results.length){e.innerHTML='<p class="empty" style="padding:6px">No matches. <button class="btn btn-sm btn-primary" onclick="openAddGlobalPlayer()" style="width:auto">+ Add new player</button></p>';return;}
   e.innerHTML=results.slice(0,8).map(r=>`
     <div class="player-search-result" onclick="${r.onclick}">
       <div class="avatar">${initials(r.name)}</div>
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:600">${r.name}${r.fullName&&r.fullName!==r.name?' <span style="font-size:11px;color:#aaa;font-weight:400">('+r.fullName+')</span>':''}</div>
-        <div style="font-size:11px;color:#888">${r.sub}</div>
-      </div>
+      <div style="flex:1"><div style="font-size:13px;font-weight:600">${r.name}</div>
+        <div style="font-size:11px;color:#888">${r.sub}</div></div>
       <div class="tag ${r.tagCls}" style="font-size:10px">${r.tag}</div>
     </div>`).join('');
 };
 
-window.addPlayerFromGlobal = async (playerUid, playerName)=>{
-  const players=[...(S.players||[])];
-  const playerUids={...(S.playerUids||{})};
-  if(players.includes(playerName)){ alert('Already added.'); return; }
-  players.push(playerName);
-  playerUids[playerUid]=playerName;
-
-  // Also sync their history immediately
-  const pSnap = await get(ref(db,'players/'+playerUid));
-  const updates = {players, playerUids};
+window.addPlayerFromGlobal=async(playerUid,playerName)=>{
+  const players=[...(S.players||[])],playerUids={...(S.playerUids||{})};
+  if(players.includes(playerName)){alert('Already added.');return;}
+  players.push(playerName); playerUids[playerUid]=playerName;
+  const pSnap=await get(ref(db,'players/'+playerUid));
+  const updates={players,playerUids};
   if(pSnap.exists()){
-    const p = pSnap.val();
-    if(p.years>0||p.wins>0||Object.keys(p.gameWins||{}).length>0){
-      updates['history/'+playerName] = {
-        years:p.years||0, wins:p.wins||0, podiums:p.podiums||0,
-        lastPlaces:p.lastPlaces||0, yearsAttended:p.yearsAttended||[],
-        gameWins:p.gameWins||{}, gameStats:p.gameStats||{},
-      };
-    }
+    const p=pSnap.val();
+    if(p.years>0||p.wins>0||Object.keys(p.gameWins||{}).length>0)
+      updates['history/'+playerName]={years:p.years||0,wins:p.wins||0,podiums:p.podiums||0,
+        lastPlaces:p.lastPlaces||0,yearsAttended:p.yearsAttended||[],
+        gameWins:p.gameWins||{},gameStats:p.gameStats||{}};
   }
-  await update(ref(db,'tournaments/'+currentTourneyId), updates);
+  await update(ref(db,'tournaments/'+currentTourneyId),updates);
   el('player-search-results').innerHTML='';
   if(el('player-search-input')) el('player-search-input').value='';
 };
 
-window.addPlayerFromPre = async (preKey, playerName)=>{
-  const players=[...(S.players||[])];
-  const ghostPlayers={...(S.ghostPlayers||{})};
-  if(players.includes(playerName)){ alert('Already added.'); return; }
-  players.push(playerName);
-  ghostPlayers[preKey]=playerName;
-
-  // Sync pre-assignment history into tournament
-  const preSnap = await get(ref(db,'preAssignments/'+preKey));
-  const updates = {players, ghostPlayers};
+window.addPlayerFromPre=async(preKey,playerName)=>{
+  const players=[...(S.players||[])],ghostPlayers={...(S.ghostPlayers||{})};
+  if(players.includes(playerName)){alert('Already added.');return;}
+  players.push(playerName); ghostPlayers[preKey]=playerName;
+  const preSnap=await get(ref(db,'preAssignments/'+preKey));
+  const updates={players,ghostPlayers};
   if(preSnap.exists()){
-    const p = preSnap.val();
-    if(p.years>0||p.wins>0||Object.keys(p.gameWins||{}).length>0){
-      updates['history/'+playerName] = {
-        years:p.years||0, wins:p.wins||0, podiums:p.podiums||0,
-        lastPlaces:p.lastPlaces||0, yearsAttended:p.yearsAttended||[],
-        gameWins:p.gameWins||{}, gameStats:p.gameStats||{},
-      };
-    }
+    const p=preSnap.val();
+    if(p.years>0||p.wins>0||Object.keys(p.gameWins||{}).length>0)
+      updates['history/'+playerName]={years:p.years||0,wins:p.wins||0,podiums:p.podiums||0,
+        lastPlaces:p.lastPlaces||0,yearsAttended:p.yearsAttended||[],
+        gameWins:p.gameWins||{},gameStats:p.gameStats||{}};
   }
-  await update(ref(db,'tournaments/'+currentTourneyId), updates);
+  await update(ref(db,'tournaments/'+currentTourneyId),updates);
   el('player-search-results').innerHTML='';
   if(el('player-search-input')) el('player-search-input').value='';
 };
 
-window.removePlayer = async (name)=>{
+window.removePlayer=async(name)=>{
   const ghostPlayers=S.ghostPlayers||{};
   const isGhost=Object.values(ghostPlayers).includes(name);
-
-  // Allow removing ghost players even after tournament started (they never ranked)
-  if(S.tournamentStarted && !isGhost){
-    alert('Tournament started — players locked.');
-    return;
-  }
-
-  if(!confirm(`Remove ${name} from this tournament?`)) return;
-
+  if(S.tournamentStarted&&!isGhost){alert('Tournament started — players locked.');return;}
+  if(!confirm('Remove '+name+' from this tournament?')) return;
   const players=(S.players||[]).filter(p=>p!==name);
-
-  // Also remove from ghostPlayers if they were a ghost slot
-  const newGhostPlayers={...ghostPlayers};
-  Object.entries(newGhostPlayers).forEach(([key,val])=>{
-    if(val===name) delete newGhostPlayers[key];
-  });
-
-  // Also remove from playerUids if they had signed up
+  const newGhosts={...ghostPlayers};
+  Object.entries(newGhosts).forEach(([k,v])=>{if(v===name)delete newGhosts[k];});
   const playerUids={...(S.playerUids||{})};
-  Object.entries(playerUids).forEach(([uid2,val])=>{
-    if(val===name) delete playerUids[uid2];
-  });
-
-  await update(ref(db,'tournaments/'+currentTourneyId),{
-    players,
-    ghostPlayers: newGhostPlayers,
-    playerUids
-  });
+  Object.entries(playerUids).forEach(([u,v])=>{if(v===name)delete playerUids[u];});
+  await update(ref(db,'tournaments/'+currentTourneyId),{players,ghostPlayers:newGhosts,playerUids});
 };
 
 function renderPlayerList(){
@@ -2315,12 +1584,11 @@ function renderPlayerList(){
     const ranked=(S.gameRankings&&Object.values(S.gameRankings).some(g=>g[p]))?
       '<span style="color:#27500A;font-weight:600;font-size:10px">✓ ranked</span>':
       '<span style="font-size:10px;color:#aaa">pending</span>';
-    const ghostPlayers=S.ghostPlayers||{};
-    const isGhost=Object.values(ghostPlayers).includes(p);
+    const isGhost=Object.values(S.ghostPlayers||{}).includes(p);
     return`<div class="player-row" style="${isGhost?'opacity:.8':''}">
       <div class="avatar" style="${isGhost?'background:#FEF3E2;color:#7a4f00':''}">${isGhost?'⏳':initials(p)}</div>
       <div style="flex:1">
-        <div style="font-size:13px;font-weight:600">${p} ${isGhost?'<span class="tag tag-amber" style="font-size:9px">awaiting signup</span>':''}</div>
+        <div style="font-size:13px;font-weight:600">${p}${isGhost?' <span class="tag" style="font-size:9px;background:#FEF3E2;color:#7a4f00">awaiting signup</span>':''}</div>
         <div class="badges-wrap" style="margin-top:3px">${renderBadges(badges)}</div>
       </div>
       ${ranked}
@@ -2626,63 +1894,8 @@ function mHTML(gid,m,pfx,onSave){
 }
 
 // ── MATCH FEED (SCORES TAB) ───────────────────────────────
-function renderScoreHistory(){
-  const e=el('admin-scores'); if(!e) return;
-  let html='<div class="card"><div class="card-title">📋 Score history</div>';
-  const allGames=S.games||[];
-  let anyScores=false;
-  allGames.forEach(game=>{
-    const scores=S.scores&&S.scores[game.id]||{};
-    if(!scores._fin) return;
-    anyScores=true;
-    const teams=S.teams&&S.teams[game.id]||[];
-    const pts=S.points&&S.points[game.id]||{};
-    const sorted=teams.slice().sort((a,b)=>{
-      const pa=Math.max(...[a.p1,a.p2].filter(Boolean).map(p=>pts[p]||0));
-      const pb=Math.max(...[b.p1,b.p2].filter(Boolean).map(p=>pts[p]||0));
-      return pb-pa;
-    });
-    html+=`<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #f0ede6">
-      <div style="font-size:13px;font-weight:700;margin-bottom:6px;color:#534AB7">${game.name} <span class="fbadge">${fmtL[game.format]||game.format}</span></div>`;
-    sorted.forEach((t,i)=>{
-      const p=Math.max(...[t.p1,t.p2].filter(Boolean).map(p=>pts[p]||0));
-      html+=`<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
-        <div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}" style="width:20px;height:20px;font-size:10px">${i+1}</div>
-        <div style="flex:1;font-size:12px">${teamLabel(t)}</div>
-        <span style="font-size:12px;font-weight:700;color:#534AB7">${p}pts</span>
-      </div>`;
-    });
-    html+='</div>';
-  });
-  if(!anyScores) html+='<p class="empty">No completed games yet.</p>';
-  html+='</div>';
-
-  // Pending approvals
-  const pending=S.pendingScores||{};
-  let pendingHtml='';
-  Object.entries(pending).forEach(([gid,matches])=>{
-    const game=(S.games||[]).find(g=>g.id===gid);if(!game)return;
-    Object.entries(matches||{}).forEach(([mid,subs])=>{
-      if(!subs)return;
-      const sub=subs.t1||subs.t2;if(!sub)return;
-      const {type,poolKey,ri}=findMatchMeta(S.bs&&S.bs[gid],mid,gid);
-      pendingHtml+=`<div style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:10px;padding:10px;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px">⏳ Pending — ${game.name}</div>
-        <div style="font-size:12px;margin-bottom:6px">Submitted: <strong>${sub.s1}–${sub.s2}</strong> by ${sub.submittedBy}</div>
-        ${subs.t1&&subs.t2?'<div style="font-size:11px;color:#888;margin-bottom:6px">Both teams submitted — scores differ.</div>':''}
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-success btn-sm" style="flex:1" onclick="approveMatchScore('${gid}','${mid}','${type}','${poolKey}',${ri})">✓ Approve ${sub.s1}–${sub.s2}</button>
-          <button class="btn btn-sm btn-danger" style="flex:1" onclick="rejectMatchScore('${gid}','${mid}')">✕ Reject</button>
-        </div>
-      </div>`;
-    });
-  });
-  if(pendingHtml) html='<div class="card"><div class="card-title">⏳ Pending approvals</div>'+pendingHtml+'</div>'+html;
-  e.innerHTML=html;
-}
-
 function renderMatchFeed(){
-  const e=el('admin-active-game'); if(!e) return;
+  const e=el('admin-scores'); if(!e) return;
   const lockedGames=(S.games||[]).filter(g=>(g.status==='locked'||g.status==='scoring')&&g.status!=='skipped');
   if(!lockedGames.length){ e.innerHTML='<div class="card"><div class="alert alert-info">No games with locked teams yet.</div></div>'; return; }
   let html='';
@@ -2936,160 +2149,6 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
   await update(ref(db,'tournaments/'+currentTourneyId+'/bs'),{[gameId]:b});
 };
 
-// ── ACTIVE GAME PANEL ────────────────────────────────────
-function renderActiveGamePanel(){
-  const e=el('admin-active-game'); if(!e) return;
-  const lockedGames=(S.games||[]).filter(g=>(g.status==='locked'||g.status==='scoring')&&g.status!=='skipped');
-  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
-
-  let html='';
-
-  // Game selector
-  html+=`<div class="card"><div class="card-title">▶ Activate a game</div>
-    <div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Only the active game can receive score entries from players.</div>`;
-  if(!lockedGames.length){
-    html+='<p class="empty">No games with teams yet. Lock rankings first.</p>';
-  } else {
-    lockedGames.forEach(g=>{
-      const isActive=g.active||S.activeGameId===g.id;
-      const fin=S.scores&&S.scores[g.id]&&S.scores[g.id]._fin;
-      html+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0ede6">
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${g.name} <span class="fbadge">${fmtL[g.format]||g.format}</span></div>
-          ${fin?'<span class="tag tag-green" style="font-size:10px">✓ Complete</span>':isActive?'<span class="tag" style="background:#7F77DD;color:#fff;font-size:10px">▶ ACTIVE</span>':''}
-        </div>
-        ${!fin?`<button class="btn btn-sm ${isActive?'btn-danger':'btn-success'}" onclick="${isActive?'deactivateGame':'activateGame'}('${g.id}')" style="width:auto">${isActive?'⏸ Deactivate':'▶ Activate'}</button>`:''}
-      </div>`;
-    });
-  }
-  html+='</div>';
-
-  // Active game matchup display + recommendations
-  if(activeGame){
-    const teams=(S.teams&&S.teams[activeGame.id])||[];
-    const b=S.bs&&S.bs[activeGame.id];
-    const fmt=activeGame.format;
-
-    // Get all matches for this game
-    const allMatches=getAllMatchesForGame(b,fmt);
-    const pending=allMatches.filter(m=>m&&!m.winner&&!m.bye&&m.t1&&m.t2);
-    const done=allMatches.filter(m=>m&&m.winner);
-    const total=allMatches.filter(m=>m&&!m.bye).length;
-    const pct=total?Math.round(done.length/total*100):0;
-
-    html+=`<div class="card"><div class="card-title">🎯 ${activeGame.name} — matchups</div>
-      <div style="height:5px;background:#f0ede6;border-radius:5px;margin-bottom:10px">
-        <div style="height:5px;background:#7F77DD;border-radius:5px;width:${pct}%"></div>
-      </div>
-      <div style="font-size:11px;color:#888;margin-bottom:10px">${done.length}/${total} matches complete</div>`;
-
-    if(pending.length){
-      // Recommend next 4 matches — try to keep players non-overlapping
-      const recommended=pickNextMatches(pending,4);
-      html+=`<div style="font-size:12px;font-weight:700;color:#534AB7;margin-bottom:8px">🎲 Recommended next matches</div>`;
-      recommended.forEach((m,i)=>{
-        const pfx=`mf-${activeGame.id}-${m.id}`;
-        html+=`<div style="background:#FAFAFE;border:2px solid #7F77DD;border-radius:12px;padding:12px;margin-bottom:8px">
-          <div style="font-size:10px;font-weight:700;color:#534AB7;margin-bottom:8px">MATCH ${i+1}</div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-            <div style="flex:1;font-size:13px;font-weight:600;text-align:center">${teamLabel(m.t1)}</div>
-            <div style="font-size:12px;color:#aaa;font-weight:700">VS</div>
-            <div style="flex:1;font-size:13px;font-weight:600;text-align:center">${teamLabel(m.t2)}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <input type="number" id="${pfx}-1" placeholder="Score" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:16px;text-align:center;margin:0;font-weight:700">
-            <span style="color:#aaa">–</span>
-            <input type="number" id="${pfx}-2" placeholder="Score" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:16px;text-align:center;margin:0;font-weight:700">
-          </div>
-          <button class="btn btn-success" style="margin-top:8px" onclick="saveMFMatch('${activeGame.id}','${m.id}','${m._type}','${m._poolKey||''}',${m._ri!==undefined?m._ri:'null'})">✓ Save result</button>
-        </div>`;
-      });
-
-      // Remaining matches
-      const remaining=pending.filter(m=>!recommended.find(r=>r.id===m.id));
-      if(remaining.length){
-        html+=`<div style="font-size:11px;color:#aaa;font-weight:700;margin:10px 0 6px">UPCOMING MATCHES</div>`;
-        remaining.forEach(m=>{
-          html+=`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0ede6;font-size:12px">
-            <div style="flex:1">${teamLabel(m.t1)}</div>
-            <div style="color:#aaa;font-size:10px">vs</div>
-            <div style="flex:1;text-align:right">${teamLabel(m.t2)}</div>
-          </div>`;
-        });
-      }
-    } else if(total>0){
-      html+=`<div class="alert alert-success">✓ All matches complete! Hit Finalize to award points.</div>`;
-      const fin=S.scores&&S.scores[activeGame.id]&&S.scores[activeGame.id]._fin;
-      if(!fin) html+=`<button class="btn btn-primary" onclick="finalizeGame('${activeGame.id}')">🏅 Finalize & award points</button>`;
-    }
-
-    // Completed matches collapsible
-    if(done.length){
-      html+=`<div style="font-size:11px;color:#aaa;font-weight:700;margin:10px 0 6px">COMPLETED</div>`;
-      done.forEach(m=>{
-        const loser=m.winner.id===m.t1.id?m.t2:m.t1;
-        html+=`<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #f0ede6;font-size:11px;color:#888">
-          <span style="color:#27500A;font-weight:600">✓ ${teamLabel(m.winner)}</span>
-          <span>${m.score1}–${m.score2}</span>
-          <span>def. ${teamLabel(loser)}</span>
-        </div>`;
-      });
-    }
-
-    // Standings for RR/pool formats
-    if((fmt==='round-robin'||fmt==='two-pool'||fmt==='pool-playoff')&&b){
-      html+=`<div style="margin-top:12px"><div style="font-size:12px;font-weight:700;margin-bottom:6px">Standings</div>`;
-      if(fmt==='round-robin'&&b.standings) html+=stHTML(teams,b.standings);
-      else if(fmt==='two-pool'){
-        html+=`<div class="pool-header" style="margin-bottom:5px">Pool A</div>${stHTML(b.poolA||[],b.poolASt||{})}`;
-        html+=`<div class="pool-header" style="margin-top:8px;margin-bottom:5px">Pool B</div>${stHTML(b.poolB||[],b.poolBSt||{})}`;
-      }
-      html+='</div>';
-    }
-    html+='</div>';
-  }
-
-  e.innerHTML=html;
-}
-
-function getAllMatchesForGame(b,fmt){
-  if(!b) return [];
-  const all=[];
-  function tag(m,type,poolKey,ri){ return m?{...m,_type:type,_poolKey:poolKey,_ri:ri}:null; }
-  if(fmt==='round-robin') (b.matches||[]).forEach(m=>all.push(tag(m,'rr',null,null)));
-  else if(fmt==='two-pool'){
-    (b.poolAM||[]).forEach(m=>all.push(tag(m,'pool','A',null)));
-    (b.poolBM||[]).forEach(m=>all.push(tag(m,'pool','B',null)));
-    (b.crossover||[]).forEach(m=>all.push(tag(m,'cross',null,null)));
-  }
-  else if(fmt==='single-elim') (b.rounds||[]).forEach((r,ri)=>r.forEach(m=>all.push(tag(m,'se',null,ri))));
-  else if(fmt==='double-elim'){
-    (b.winners||[]).forEach((r,ri)=>r.forEach(m=>all.push(tag(m,'dew',null,ri))));
-    (b.losers||[]).forEach((r,ri)=>r.forEach(m=>all.push(tag(m,'del',null,ri))));
-    if(b.grandFinal) all.push(tag(b.grandFinal,'degf',null,null));
-  }
-  else if(fmt==='pool-playoff'){
-    (b.pools||[]).forEach((p,pi)=>p.matches.forEach(m=>all.push(tag(m,'pppool',null,pi))));
-    (b.knockout||[]).forEach(m=>all.push(tag(m,'ko',null,null)));
-  }
-  return all.filter(Boolean);
-}
-
-function pickNextMatches(pending,n){
-  // Greedily pick up to n matches with no player overlap
-  const picked=[], usedPlayers=new Set();
-  // Use the stored random order if available, otherwise use pending order
-  const ordered=[...pending];
-  for(const m of ordered){
-    if(picked.length>=n) break;
-    const players=[m.t1?.p1,m.t1?.p2,m.t2?.p1,m.t2?.p2].filter(Boolean);
-    if(players.some(p=>usedPlayers.has(p))) continue;
-    picked.push(m);
-    players.forEach(p=>usedPlayers.add(p));
-  }
-  return picked;
-}
-
 window.finalizeGame = async (gameId)=>{
   const game=(S.games||[]).find(g=>g.id===gameId),teams=(S.teams&&S.teams[gameId])||[],b=S.bs&&S.bs[gameId],fmt=game.format,pl={},n=teams.length;
   if(fmt==='round-robin')sortBySt(teams,b.standings).forEach((t,i)=>{pl[t.id]=i+1;});
@@ -3135,7 +2194,7 @@ function renderLeaderboard(){
   html+=`<div class="card"><div class="card-title">📊 Points per game</div><div id="game-pts-breakdown"></div></div>`;
   html+=`<div class="card" id="tiebreaker-card"><div class="card-title">🏓 Overall tiebreaker</div><div id="tiebreaker-panel"></div></div>`;
   html+=`<div class="card"><div class="card-title">🏆 Declare champion</div><div class="alert alert-warn" style="font-size:11px">Do at end of day. Saves to history and awards all badges.</div><button class="btn btn-primary" onclick="declareTournamentWinner()">🏆 Finalize &amp; save to history</button><div id="declare-status"></div></div>`;
-  // Tournament admins managed via header button
+  html+=`<div class="card"><div class="card-title">👥 Tournament admins</div><div class="alert alert-info" style="font-size:11px;margin-bottom:8px">Add others who can approve scores and manage this tournament.</div><button class="btn" onclick="manageTourneyAdmins()">👥 Manage tournament admins</button></div>`;
   e.innerHTML=html;
   renderGPB(); updateStats(); renderTiebreakerPanel();
 }
@@ -3181,61 +2240,33 @@ window.saveTBMatch = async (key,p1,p2)=>{
   tiebreaker[key]={s1,s2,winner:s1>s2?p1:p2};
   await update(ref(db,'tournaments/'+currentTourneyId),{tiebreaker});
 };
-window.manageTourneyAdmins = ()=>{
+window.manageTourneyAdmins=()=>{
   get(ref(db,'players')).then(snap=>{
-    const all=snap.exists()?snap.val():{};
-    const tourneyAdmins=S.tourneyAdmins||{};
-    const myUid=currentUser?.uid;
-
-    // Build rows using string concat to avoid nested backtick issues
-    function adminRow(uid2,p){
-      const name=p.preferredName||p.name||'?';
-      return '<div class="player-row">'
-        +'<div class="avatar" style="background:#EEEDFE;color:#3C3489">🛡</div>'
-        +'<div style="flex:1"><div style="font-size:13px;font-weight:600">'+name+'</div>'
+    const all=snap.exists()?snap.val():{},ta=S.tourneyAdmins||{},myUid=currentUser?.uid;
+    function aRow(uid2,p){
+      const n=p.preferredName||p.name||'?';
+      return '<div class="player-row"><div class="avatar" style="background:#EEEDFE;color:#3C3489">🛡</div>'
+        +'<div style="flex:1"><div style="font-size:13px;font-weight:600">'+n+'</div>'
         +'<div style="font-size:11px;color:#888">'+(p.email||p.phone||'')+'</div></div>'
-        +'<button class="btn btn-sm btn-danger" onclick="toggleTourneyAdmin('+uid2+',false)" style="width:auto">Remove</button>'
-        +'</div>';
+        +'<button class="btn btn-sm btn-danger" data-uid="'+uid2+'" data-add="false" onclick="toggleTourneyAdmin(this)" style="width:auto">Remove</button></div>';
     }
     function addRow(uid2,p){
-      const name=p.preferredName||p.name||'?';
-      return '<div class="player-row">'
-        +'<div class="avatar">'+initials(name)+'</div>'
-        +'<div style="flex:1"><div style="font-size:13px;font-weight:600">'+name+'</div>'
+      const n=p.preferredName||p.name||'?';
+      return '<div class="player-row"><div class="avatar">'+initials(n)+'</div>'
+        +'<div style="flex:1"><div style="font-size:13px;font-weight:600">'+n+'</div>'
         +'<div style="font-size:11px;color:#888">'+(p.email||p.phone||'')+'</div></div>'
-        +'<button class="btn btn-sm btn-success" onclick="toggleTourneyAdmin('+uid2+',true)" style="width:auto">+ Add</button>'
-        +'</div>';
+        +'<button class="btn btn-sm btn-success" data-uid="'+uid2+'" data-add="true" onclick="toggleTourneyAdmin(this)" style="width:auto">+ Add</button></div>';
     }
-
-    const currentAdminsHtml = Object.entries(tourneyAdmins)
-      .map(([uid2])=>{ const p=all[uid2]; return p?adminRow(uid2,p):''; }).join('');
-
-    const tournamentPlayers = Object.entries(all).filter(([uid2,p])=>
-      uid2!==myUid && !tourneyAdmins[uid2] &&
-      (S.players||[]).includes(p.preferredName||p.name||''));
-
-    const otherUsers = Object.entries(all).filter(([uid2,p])=>
-      uid2!==myUid && !tourneyAdmins[uid2] &&
-      !(S.players||[]).includes(p.preferredName||p.name||''));
-
+    const curHtml=Object.entries(ta).map(([u])=>{const p=all[u];return p?aRow(u,p):'';}).join('');
+    const inT=Object.entries(all).filter(([u,p])=>u!==myUid&&!ta[u]&&(S.players||[]).includes(p.preferredName||p.name||''));
+    const others=Object.entries(all).filter(([u,p])=>u!==myUid&&!ta[u]&&!(S.players||[]).includes(p.preferredName||p.name||''));
     let html='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
       +'<div class="modal-handle"></div>'
-      +'<div class="modal-title"><span>👥 Tournament admins</span>'
-      +'<button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
-      +'<div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Admins can manage scores, approve results, and run the tournament alongside you.</div>';
-
-    if(currentAdminsHtml){
-      html+='<div style="font-size:11px;font-weight:700;color:#534AB7;margin-bottom:6px">Current admins</div>'
-        +currentAdminsHtml+'<div class="divider"></div>';
-    }
-    if(tournamentPlayers.length){
-      html+='<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">Players in this tournament</div>'
-        +tournamentPlayers.map(([u,p])=>addRow(u,p)).join('');
-    }
-    if(otherUsers.length){
-      html+='<div style="font-size:11px;font-weight:700;color:#aaa;margin:8px 0 6px">Other registered users</div>'
-        +otherUsers.slice(0,10).map(([u,p])=>addRow(u,p)).join('');
-    }
+      +'<div class="modal-title"><span>Tournament admins</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">X</button></div>'
+      +'<div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Admins can manage scores and run the tournament alongside you.</div>';
+    if(curHtml) html+='<div style="font-size:11px;font-weight:700;color:#534AB7;margin-bottom:6px">Current admins</div>'+curHtml+'<div class="divider"></div>';
+    if(inT.length) html+='<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">Players in this tournament</div>'+inT.map(([u,p])=>addRow(u,p)).join('');
+    if(others.length) html+='<div style="font-size:11px;font-weight:700;color:#aaa;margin:8px 0 6px">Other users</div>'+others.slice(0,10).map(([u,p])=>addRow(u,p)).join('');
     html+='</div></div>';
     el('modal-area').innerHTML=html;
   });
@@ -3248,217 +2279,647 @@ window.toggleTourneyAdmin = async (uid2,add)=>{
   manageTourneyAdmins();
 };
 
-window.declareTournamentWinner = async ()=>{
+window.declareTournamentWinner=async()=>{
   const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
   if(!sorted.length){alert('No players.');return;}
-  if(!confirm('Finalize this tournament? This will award all badges and cannot be undone.')) return;
-
+  if(!confirm('Finalize? This awards all badges and cannot be undone.')) return;
   const statusEl=el('declare-status');
-  statusEl.innerHTML='<div class="alert alert-info">⏳ Finalizing...</div>';
-
-  const winner=sorted[0], lastPlace=sorted[sorted.length-1], podium=sorted.slice(0,3);
-  const yr=S.tourneyYear||new Date().getFullYear();
-  const fy=S.foundingYear||2019;
-
-  // ── Step 1: Build updated history ──────────────────────
+  statusEl.innerHTML='<div class="alert alert-info">Finalizing...</div>';
+  const winner=sorted[0],last=sorted[sorted.length-1],podium=sorted.slice(0,3);
+  const yr=S.tourneyYear||new Date().getFullYear(),fy=S.foundingYear||2019;
   const history=JSON.parse(JSON.stringify(S.history||{}));
-  sorted.forEach(p=>{
-    if(!history[p]) history[p]={years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[],gameWins:{}};
-  });
+  sorted.forEach(p=>{if(!history[p])history[p]={years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[],gameWins:{}};});
   history[winner].wins=(history[winner].wins||0)+1;
   podium.slice(1).forEach(p=>{history[p].podiums=(history[p].podiums||0)+1;});
-  if(lastPlace&&lastPlace!==winner) history[lastPlace].lastPlaces=(history[lastPlace].lastPlaces||0)+1;
+  if(last&&last!==winner) history[last].lastPlaces=(history[last].lastPlaces||0)+1;
   sorted.forEach(p=>{
     history[p].years=(history[p].years||0)+1;
     if(!history[p].yearsAttended) history[p].yearsAttended=[];
     if(!history[p].yearsAttended.includes(yr)) history[p].yearsAttended.push(yr);
-    // Update game wins from this tournament's points
     (S.games||[]).forEach(g=>{
-      const pts=S.points&&S.points[g.id];
-      if(!pts) return;
-      const playerPts=pts[p]||0;
-      const maxPts=Math.max(...Object.values(pts));
-      if(playerPts===maxPts&&maxPts>0){
+      const pts=S.points&&S.points[g.id]; if(!pts) return;
+      const mp=Math.max(...Object.values(pts));
+      if((pts[p]||0)===mp&&mp>0){
         if(!history[p].gameWins) history[p].gameWins={};
         history[p].gameWins[g.name]=(history[p].gameWins[g.name]||0)+1;
       }
     });
   });
-
-  // ── Step 2: Compute newly earned badges this tournament ─
-  const newBadges={}; // player -> [{icon,name}]
+  const totalYrs=yr-fy+1;
+  const newBadges={};
   sorted.forEach(p=>{
-    const prev=S.history&&S.history[p]||{};
-    const curr=history[p];
-    const earned=[];
-    const totalYears=yr-fy+1;
-
-    // Compare prev vs curr to find NEW badges
+    const prev=S.history&&S.history[p]||{},curr=history[p],earned=[];
     if(!prev.years&&curr.years===1) earned.push({icon:'🌱',name:'First Timer'});
-    if(curr.years>=1) earned.push({icon:'📅',name:curr.years+' Year'+(curr.years!==1?'s':'')});
-    if(curr.years>=totalYears&&totalYears>=2&&!(prev.years>=totalYears)) earned.push({icon:'🔥',name:'Every Year'});
+    earned.push({icon:'📅',name:curr.years+' Year'+(curr.years!==1?'s':'')});
+    if(curr.years>=totalYrs&&totalYrs>=2&&!(prev.years>=totalYrs)) earned.push({icon:'🔥',name:'Every Year'});
     if(curr.years>=5&&(prev.years||0)<5) earned.push({icon:'⭐',name:'Veteran'});
-    if(curr.yearsAttended&&curr.yearsAttended.includes(fy)&&(!prev.yearsAttended||!prev.yearsAttended.includes(fy))) earned.push({icon:'🏛️',name:'Founding Member'});
-    if(curr.wins===1&&(prev.wins||0)===0) earned.push({icon:'🏆',name:'Champion'});
+    if(curr.yearsAttended?.includes(fy)&&!prev.yearsAttended?.includes(fy)) earned.push({icon:'🏛️',name:'Founding Member'});
+    if(curr.wins===1&&!prev.wins) earned.push({icon:'🏆',name:'Champion'});
     if(curr.wins>=2&&(prev.wins||0)<2) earned.push({icon:'🔱',name:'Dynasty'});
-    if(curr.podiums>=1&&(prev.podiums||0)===0) earned.push({icon:'🥉',name:'Podium Finish'});
-    if(curr.lastPlaces>=1&&(prev.lastPlaces||0)===0) earned.push({icon:'🪣',name:'Last Place'});
-    if(curr.years>=3&&!curr.wins&&!curr.podiums&&!((prev.years>=3)&&!prev.wins&&!prev.podiums)) earned.push({icon:'😅',name:'Winless Wonder'});
-    // Game specialist — new 2x wins
-    Object.entries(curr.gameWins||{}).forEach(([g,n])=>{
-      if(n>=2&&(prev.gameWins||{})[g]<2) earned.push({icon:'🎯',name:g+' Specialist'});
-    });
-    // Manual badges assigned this tournament
-    (S.playerBadges&&S.playerBadges[p]||[]).forEach(bid=>{
-      const bDef=getBadgeById(bid);
-      if(bDef) earned.push({icon:bDef.icon,name:bDef.name});
-    });
-    // Custom badges
+    if(curr.podiums>=1&&!prev.podiums) earned.push({icon:'🥉',name:'Podium Finish'});
+    if(curr.lastPlaces>=1&&!prev.lastPlaces) earned.push({icon:'🪣',name:'Last Place'});
+    if(curr.years>=3&&!curr.wins&&!curr.podiums) earned.push({icon:'😅',name:'Winless Wonder'});
+    Object.entries(curr.gameWins||{}).forEach(([g,n])=>{if(n>=2&&((prev.gameWins||{})[g]||0)<2)earned.push({icon:'🎯',name:g+' Specialist'});});
+    (S.playerBadges&&S.playerBadges[p]||[]).forEach(bid=>{const b=getBadgeById(bid);if(b)earned.push({icon:b.icon,name:b.name});});
     (S.customBadges||[]).filter(b=>b.player===p).forEach(b=>earned.push({icon:'✨',name:b.name}));
-
     if(earned.length) newBadges[p]=earned;
   });
-
-  // ── Step 3: Update global player profiles ──────────────
   for(const [uid2,pName] of Object.entries(S.playerUids||{})){
     if(!history[pName]) continue;
     const finishPos=sorted.indexOf(pName)+1;
     const osSnap=await get(ref(db,'players/'+uid2+'/overallStandings'));
-    const osUpdate={...(osSnap.val()||{})};
-    osUpdate[yr]=finishPos;
-    await update(ref(db,'players/'+uid2),{
-      years:history[pName].years, wins:history[pName].wins,
-      podiums:history[pName].podiums, lastPlaces:history[pName].lastPlaces,
-      yearsAttended:history[pName].yearsAttended, gameWins:history[pName].gameWins||{},
-      overallStandings:osUpdate
-    });
+    const os={...(osSnap.val()||{})}; os[yr]=finishPos;
+    await update(ref(db,'players/'+uid2),{years:history[pName].years,wins:history[pName].wins,
+      podiums:history[pName].podiums,lastPlaces:history[pName].lastPlaces,
+      yearsAttended:history[pName].yearsAttended,gameWins:history[pName].gameWins||{},
+      overallStandings:os});
   }
-
-  // ── Step 4: Save finalized state ───────────────────────
-  await update(ref(db,'tournaments/'+currentTourneyId),{
-    history, tournamentFinalized:true, finalizedAt:Date.now(),
-    finalStandings:sorted.map((p,i)=>({player:p,place:i+1,points:getTotalPts(p)})),
-    newBadgesEarned:newBadges
-  });
-
-  // ── Step 5: Build summary & send email ─────────────────
-  const summary=buildTournamentSummary(sorted,newBadges,yr);
-  await sendFinalizeSummaryEmail(summary,winner,yr);
-
-  statusEl.innerHTML=`<div class="alert alert-success" style="margin-top:8px">
-    🏆 <strong>${winner}</strong> wins ${yr}!<br>
-    Badges updated · Summary emailed to admins
-    <button class="btn btn-sm btn-primary" onclick="showTournamentSummaryModal()" style="width:100%;margin-top:8px">📋 View full summary</button>
-  </div>`;
+  await update(ref(db,'tournaments/'+currentTourneyId),{history,tournamentFinalized:true,
+    finalizedAt:Date.now(),finalStandings:sorted.map((p,i)=>({player:p,place:i+1,points:getTotalPts(p)})),
+    newBadgesEarned:newBadges});
+  statusEl.innerHTML='<div class="alert alert-success" style="margin-top:8px">🏆 <strong>'+winner+'</strong> wins '+yr+'!'
+    +'<br><button class="btn btn-sm btn-primary" onclick="showTournamentSummaryModal()" style="width:100%;margin-top:8px">View full summary</button></div>';
 };
 
-function buildTournamentSummary(sorted, newBadges, yr){
-  const name=S.tourneyName||('GG '+yr);
-  const skip=getSkippedIds();
-  const games=(S.games||[]).filter(g=>!skip.has(g.id)&&S.scores&&S.scores[g.id]&&S.scores[g.id]._fin);
-  const winner=sorted[0];
-  return {name, yr, winner, playerCount:sorted.length,
-    games, newBadges, sorted};
+// ── POWER RANKINGS ────────────────────────────────────────
+function renderPowerRankings(){
+  const e=el('admin-power'); if(!e) return;
+  const games=S.games||[],players=S.players||[];
+  if(!players.length||!games.length){e.innerHTML='<div class="card"><p class="empty">Add players and games first.</p></div>';return;}
+  function avgForGame(gameId,player){const gR=(S.gameRankings&&S.gameRankings[gameId])||{},others=players.filter(p=>p!==player);let total=0,count=0;others.forEach(r=>{const rk=gR[r];if(rk){const i=rk.indexOf(player);if(i!==-1){total+=i+1;count++;}}});return count?total/count:null;}
+  function overallAvg(player){const avgs=games.map(g=>avgForGame(g.id,player)).filter(v=>v!==null);return avgs.length?avgs.reduce((a,b)=>a+b,0)/avgs.length:null;}
+  const sorted=players.slice().sort((a,b)=>{const aa=overallAvg(a),ba=overallAvg(b);if(aa===null&&ba===null)return 0;if(aa===null)return 1;if(ba===null)return -1;return aa-ba;});
+  let html=`<div class="card"><div class="card-title">📊 Power rankings</div><div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Lower avg = ranked better by peers.</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="text-align:left;padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;position:sticky;left:0;background:#fff">Player</th>${games.map(g=>`<th style="padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;color:#534AB7;text-align:center;white-space:nowrap">${g.name}</th>`).join('')}<th style="padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;text-align:center">Avg</th></tr></thead><tbody>`;
+  const n=players.length;
+  sorted.forEach((p,i)=>{
+    const avgs=games.map(g=>avgForGame(g.id,p)),oa=overallAvg(p),bg=i%2===0?'#fff':'#f8f7f4';
+    html+=`<tr style="background:${bg}"><td style="padding:6px 4px;font-weight:600;font-size:12px;position:sticky;left:0;background:${bg};white-space:nowrap"><div style="display:flex;align-items:center;gap:5px"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}" style="width:20px;height:20px;font-size:10px">${i+1}</div>${p}</div></td>${avgs.map(avg=>avg!==null?`<td style="padding:6px 4px;text-align:center;color:${avg<=3?'#27500A':avg>=n-1?'#c0392b':'#534AB7'};font-weight:${avg<=3||avg>=n-1?'700':'400'}">${avg.toFixed(2)}</td>`:`<td style="padding:6px 4px;text-align:center;color:#ccc">—</td>`).join('')}<td style="padding:6px 4px;text-align:center;font-weight:700">${oa!==null?oa.toFixed(2):'—'}</td></tr>`;
+  });
+  html+='</tbody></table></div></div>';
+  e.innerHTML=html;
 }
 
-window.showTournamentSummaryModal = ()=>{
-  const finalized = S.finalStandings||[];
-  const sorted = finalized.length ? finalized.map(x=>x.player) :
-    (S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
-  const newBadges = S.newBadgesEarned||{};
-  const yr = S.tourneyYear||new Date().getFullYear();
-  const skip = getSkippedIds();
-  const games = (S.games||[]).filter(g=>!skip.has(g.id)&&S.scores&&S.scores[g.id]&&S.scores[g.id]._fin);
-  const winner = sorted[0]||'';
-
-  let html = '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-height:90vh">'
-    + '<div class="modal-handle"></div>'
-    + '<div class="modal-title"><div style="display:flex;width:100%;justify-content:space-between;align-items:center">'
-    + '<span>📋 ' + (S.tourneyName||'') + ' ' + yr + '</span>'
-    + '<button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div></div>';
-
-  // Champion banner
-  html += '<div style="background:linear-gradient(135deg,#C8A820,#a07818);border-radius:12px;padding:14px;text-align:center;margin-bottom:12px">'
-    + '<div style="font-size:32px">🏆</div>'
-    + '<div style="font-size:20px;font-weight:700;color:#fff;margin-top:4px">' + winner + '</div>'
-    + '<div style="font-size:12px;color:rgba(255,255,255,.8)">' + yr + ' Champion · ' + sorted.length + ' players</div>'
-    + '</div>';
-
-  // Standings
-  html += '<div style="font-size:12px;font-weight:700;color:#534AB7;margin-bottom:6px">🏅 Final Standings</div>';
-  sorted.forEach(function(p,i){
-    var pts = getTotalPts(p);
-    var bg = i===0?'#FFF3CD':i===1?'#EBF4FF':i===2?'#EAF3DE':'#fff';
-    var icon = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:'+bg+';border-radius:8px;margin-bottom:3px">'
-      + '<span style="font-size:14px;width:24px">'+(icon||(i+1)+'.')+'</span>'
-      + '<span style="flex:1;font-size:13px;font-weight:'+(i<3?'600':'400')+'">'+p+'</span>'
-      + '<span style="font-size:13px;font-weight:700;color:#534AB7">'+pts+' pts</span>'
-      + '</div>';
+// ── HISTORY & BADGES ──────────────────────────────────────
+function getPlayerBadges(name){
+  const gp=_globalProfiles[name]||{};
+  if(S.tournamentFinalized){
+    const h=(S.history&&S.history[name])||gp;
+    return getPlayerBadgesFromProfile(h,name);
+  }
+  return getPlayerBadgesFromProfile(gp,name);
+}
+function getPlayerBadgesFromProfile(h,name=''){
+  const badges=[],yr=S?.tourneyYear||new Date().getFullYear(),fy=S?.foundingYear||2019,totalYears=yr-fy+1;
+  h=h||{};
+  if(h.years===1)badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
+  if(h.years>=1)badges.push({cls:'badge-years',icon:'📅',text:h.years+' year'+(h.years!==1?'s':'')});
+  if(h.years>=totalYears&&totalYears>=2)badges.push({cls:'badge-everyyear',icon:'🔥',text:'Every Year'});
+  if(h.wins===1)badges.push({cls:'badge-champ',icon:'👑',text:'Champion'});
+  if(h.wins>=2)badges.push({cls:'badge-dynasty',icon:'🔱',text:'Dynasty ('+h.wins+'x)'});
+  if(h.podiums>=1&&!h.wins)badges.push({cls:'badge-podium',icon:'🥉',text:'Podium x'+h.podiums});
+  if(h.years>=5)badges.push({cls:'badge-veteran',icon:'⭐',text:'Veteran'});
+  if(h.yearsAttended&&h.yearsAttended.includes(fy))badges.push({cls:'badge-founder',icon:'🏛️',text:'Founding Member'});
+  if(h.years>=3&&!h.wins&&!h.podiums)badges.push({cls:'badge-winless',icon:'😅',text:'Winless Wonder'});
+  if(h.lastPlaces>=1)badges.push({cls:'badge-lastplace',icon:'🪣',text:'Last Place'+(h.lastPlaces>1?' x'+h.lastPlaces:'')});
+  if(h.gameWins)Object.entries(h.gameWins).forEach(e=>{if(e[1]>=2)badges.push({cls:'badge-specialist',icon:'🎯',text:e[0]+' Specialist'});});
+  (S?.customBadges||[]).filter(b=>b.player===name).forEach(b=>badges.push({cls:'badge-custom',icon:'✨',text:b.name}));
+  return badges;
+}
+function renderBadges(badges){ if(!badges||!badges.length)return''; return badges.map(b=>`<span class="badge ${b.cls}">${b.icon} ${b.text}</span>`).join(''); }
+function renderHistoryList(){
+  const e=el('admin-history'); if(!e) return;
+  let html='<div class="card"><div class="card-title">📜 Player history</div>';
+  (S.players||[]).forEach(p=>{
+    const h=(S.history&&S.history[p])||{};
+    html+=`<div style="padding:10px 0;border-bottom:1px solid #f0ede6">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+        <span style="font-size:13px;font-weight:600">${p}</span>
+        <button class="btn btn-sm" onclick="openEditHistory('${esc(p)}')" style="width:auto">Edit</button>
+      </div>
+      <div style="font-size:11px;color:#888;margin-bottom:5px">${h.years||0}yrs · ${h.wins||0}W · ${h.podiums||0}P · ${h.lastPlaces||0}L</div>
+      <div class="badges-wrap">${renderBadges(getPlayerBadges(p))}</div>
+    </div>`;
   });
-
-  // Game results
-  if(games.length){
-    html += '<div style="font-size:12px;font-weight:700;color:#534AB7;margin:12px 0 6px">🎯 Game Results</div>';
-    games.forEach(function(g){
-      var pts = (S.points&&S.points[g.id])||{};
-      var top = sorted.filter(function(p){return pts[p];}).sort(function(a,b){return (pts[b]||0)-(pts[a]||0);}).slice(0,3);
-      if(!top.length) return;
-      html += '<div style="padding:6px 0;border-bottom:1px solid #f0ede6;font-size:12px">'
-        + '<span style="font-weight:600">'+g.name+'</span>'
-        + ' <span style="color:#27500A">🥇'+top[0]+'('+( pts[top[0]]||0)+')</span>'
-        + (top[1]?' <span style="color:#1a5f9e">🥈'+top[1]+'('+(pts[top[1]]||0)+')</span>':'')
-        + (top[2]?' <span style="color:#27500A">🥉'+top[2]+'('+(pts[top[2]]||0)+')</span>':'')
-        + '</div>';
-    });
-  }
-
-  // New badges
-  var badgeEntries = Object.entries(newBadges);
-  if(badgeEntries.length){
-    html += '<div style="font-size:12px;font-weight:700;color:#534AB7;margin:12px 0 6px">🎖 New Badges Earned</div>';
-    badgeEntries.forEach(function(entry){
-      var p=entry[0], badges=entry[1];
-      html += '<div style="padding:6px 0;border-bottom:1px solid #f0ede6">'
-        + '<div style="font-size:12px;font-weight:600;margin-bottom:3px">'+p+'</div>'
-        + '<div class="badges-wrap">'
-        + badges.map(function(b){return '<span class="badge badge-custom">'+b.icon+' '+b.name+'</span>';}).join('')
-        + '</div></div>';
-    });
-  } else {
-    html += '<div class="alert alert-info" style="font-size:11px;margin-top:8px">No new badges earned this tournament.</div>';
-  }
-
-  html += '<button class="btn btn-sm btn-primary" onclick="copyTournamentSummary()" style="width:100%;margin-top:12px">📋 Copy summary to clipboard</button>';
-  html += '</div></div>';
-  el('modal-area').innerHTML = html;
+  html+='</div>';
+  html+=`<div class="card"><div class="card-title">⚙️ Custom badges</div>
+    <div class="sec-label">Badge name</div><input type="text" id="custom-badge-name" placeholder="e.g. Commissioner">
+    <div class="sec-label">Assign to</div><select id="custom-badge-player"><option value="">— select —</option></select>
+    <button class="btn btn-primary btn-sm" onclick="addCustomBadge()" style="width:auto">+ Add badge</button>
+    <div class="divider"></div><div id="custom-badges-list"></div>
+  </div>`;
+  e.innerHTML=html;
+  renderCustomBadges(); renderCustomBadgePlayerSelect();
+}
+window.openEditHistory = (name)=>{
+  const h=(S.history&&S.history[name])||{};
+  el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title"><span>Edit: ${name}</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
+    <div class="sec-label">Years</div><input type="number" id="eh-years" value="${h.years||0}" min="0">
+    <div class="sec-label">Wins</div><input type="number" id="eh-wins" value="${h.wins||0}" min="0">
+    <div class="sec-label">Podiums</div><input type="number" id="eh-podiums" value="${h.podiums||0}" min="0">
+    <div class="sec-label">Last places</div><input type="number" id="eh-last" value="${h.lastPlaces||0}" min="0">
+    <div class="sec-label">Years list (e.g. 2019,2020)</div><input type="text" id="eh-ylist" value="${(h.yearsAttended||[]).join(',')}">
+    <div class="sec-label">Game wins (game=count, e.g. Golf=3)</div><input type="text" id="eh-gw" value="${Object.entries(h.gameWins||{}).map(e=>e[0]+'='+e[1]).join(',')}">
+    <div class="divider"></div>
+    <button class="btn btn-primary" onclick="saveHistory('${esc(name)}')">✓ Save</button>
+  </div></div>`;
 };
+window.saveHistory = async (name)=>{
+  const ylist=el('eh-ylist').value.split(',').map(y=>parseInt(y.trim())).filter(Boolean);
+  const gameWins={};el('eh-gw').value.split(',').forEach(p=>{const kv=p.split('=');if(kv.length===2&&kv[0].trim())gameWins[kv[0].trim()]=parseInt(kv[1])||0;});
+  const history=JSON.parse(JSON.stringify(S.history||{}));
+  history[name]={years:parseInt(el('eh-years').value)||0,wins:parseInt(el('eh-wins').value)||0,podiums:parseInt(el('eh-podiums').value)||0,lastPlaces:parseInt(el('eh-last').value)||0,yearsAttended:ylist,gameWins};
+  await update(ref(db,'tournaments/'+currentTourneyId),{history});
+  closeModal();
+};
+window.addCustomBadge = async ()=>{
+  const name=el('custom-badge-name').value.trim(),player=el('custom-badge-player').value;
+  if(!name||!player){alert('Fill both fields.');return;}
+  const cb=[...(S.customBadges||[]),{name,player}];
+  await update(ref(db,'tournaments/'+currentTourneyId),{customBadges:cb});
+  el('custom-badge-name').value='';el('custom-badge-player').value='';
+};
+window.removeCustomBadge = async (i)=>{
+  const cb=(S.customBadges||[]).filter((_,idx)=>idx!==i);
+  await update(ref(db,'tournaments/'+currentTourneyId),{customBadges:cb});
+};
+function renderCustomBadges(){
+  const e=el('custom-badges-list');if(!e)return;
+  if(!(S.customBadges||[]).length){e.innerHTML='<p class="empty">No custom badges.</p>';return;}
+  e.innerHTML=(S.customBadges||[]).map((b,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0ede6"><span class="badge badge-custom">✨ ${b.name}</span><span style="flex:1;font-size:12px;color:#888">→ ${b.player}</span><button class="btn btn-sm btn-danger" onclick="removeCustomBadge(${i})" style="width:auto">✕</button></div>`).join('');
+}
+function renderCustomBadgePlayerSelect(){
+  const sel=el('custom-badge-player');if(!sel)return;
+  sel.innerHTML='<option value="">— select —</option>'+(S.players||[]).map(p=>`<option value="${esc(p)}">${p}</option>`).join('');
+}
 
-window.copyTournamentSummary = ()=>{
-  const sorted=(S.finalStandings||[]).map(x=>x.player);
-  const yr=S.tourneyYear||new Date().getFullYear();
-  const skip=getSkippedIds();
-  const games=(S.games||[]).filter(g=>!skip.has(g.id)&&S.scores&&S.scores[g.id]&&S.scores[g.id]._fin);
-  const newBadges=S.newBadgesEarned||{};
-  let text=(S.tourneyName||'GG')+' '+yr+' — Tournament Summary\n\n';
-  text+='FINAL STANDINGS\n';
-  sorted.forEach((p,i)=>{
-    const icon=['🥇','🥈','🥉'][i]||'';
-    text+=icon+(i+1)+'. '+p+' — '+getTotalPts(p)+' pts\n';
-  });
-  text+='\nGAME RESULTS\n';
+// ── PLAYER VIEW ───────────────────────────────────────────
+function renderPlayerView(myName){
+  if(!S)return;
+  const header=el('tourney-header-label');
+  if(header)header.textContent=S.tourneyName+' '+S.tourneyYear;
+  hide('admin-area'); show('player-area');
+  const hcard=el('player-header-card');
+  if(hcard){
+    const badges=getPlayerBadges(myName);
+    hcard.innerHTML=`<div style="display:flex;align-items:center;gap:10px">
+      <div class="avatar" style="width:38px;height:38px;font-size:14px">${initials(myName)}</div>
+      <div><div style="font-size:15px;font-weight:700">${myName}</div><div class="badges-wrap">${renderBadges(badges)}</div></div>
+    </div>`;
+  }
+  showPlayerTab(_tab||'rank',myName);
+}
+function showPlayerTab(tab,myName){
+  _tab=tab;
+  myName=myName||actingAsName||(userProfile?.name)||'';
+  ['rank','teams','lb'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
+  const tv=el('pview-'+tab);if(tv)tv.classList.remove('hidden');
+  const tb=el('ptab-'+tab);if(tb)tb.classList.add('active');
+  if(tab==='rank')  renderPlayerRankings(myName);
+  if(tab==='teams') renderMyTeams(myName);
+  if(tab==='lb')    { renderPlayerLB(myName); renderAllPlayerBadges(); }
+}
+function renderPlayerRankings(myName){
+  const e=el('pview-rank'); if(!e) return;
+  const games=S.games||[], others=(S.players||[]).filter(p=>p!==myName);
+  if(!S.tournamentStarted){
+    e.innerHTML=`<div class="card"><div style="text-align:center;padding:20px"><div style="font-size:40px;margin-bottom:10px">⏳</div><div style="font-size:14px;font-weight:600">Waiting for host to start</div><div style="font-size:12px;color:#888;margin-top:6px">The host will start the tournament once everyone has joined.</div></div></div>`;return;
+  }
+  if(!games.length){e.innerHTML='<div class="card"><p class="empty">No games added yet. Check back soon!</p></div>';return;}
+  let html='<div class="card"><div class="card-title">🎯 Game rankings</div><div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Each game needs its own ranking. Tap a game to rank players.</div>';
   games.forEach(g=>{
-    const pts=(S.points&&S.points[g.id])||{};
-    const top=sorted.filter(p=>pts[p]).sort((a,b)=>(pts[b]||0)-(pts[a]||0)).slice(0,3);
-    if(!top.length) return;
-    text+=g.name+': 🥇'+top[0]+(top[1]?' 🥈'+top[1]:'')+(top[2]?' 🥉'+top[2]:'')+' \n';
+    const gR=(S.gameRankings&&S.gameRankings[g.id])||{};
+    const myRank=gR[myName],rc=Object.keys(gR).length,total=(S.players||[]).length;
+    const isLocked=g.status==='locked'||g.status==='scoring';
+    if(isLocked){
+      html+=`<div style="background:#EAF3DE;border:1px solid #b2d88a;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">✅</div><div><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#27500A">Teams locked</div></div></div>`;
+    } else if(myRank){
+      html+=`<div style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">👍</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e">${rc}/${total} submitted</div></div><button class="btn btn-sm" onclick="openGameRanking('${g.id}','${esc(myName)}')" style="width:auto">Edit</button></div>`;
+    } else {
+      html+=`<div style="background:#FFFBEB;border:1px solid #fcd34d;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">🎯</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#7a4f00">${rc}/${total} done</div></div><button class="btn btn-sm btn-primary" onclick="openGameRanking('${g.id}','${esc(myName)}')" style="width:auto">Rank now</button></div>`;
+    }
   });
-  text+='\nNEW BADGES\n';
-  Object.entries(newBadges).forEach(([p,badges])=>{
-    text+=p+': '+badges.map(b=>b.icon+' '+b.name).join(', ')+'\n';
-  });
-  navigator.clipboard.writeText(text).then(()=>alert('Copied!'));
+  html+='</div>';
+  e.innerHTML=html;
+}
+window.openGameRanking=(gameId,myName)=>{
+  const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
+  const others=(S.players||[]).filter(p=>p!==myName);
+  const gR=(S.gameRankings&&S.gameRankings[gameId])||{};
+  const prevYear=(S.tourneyYear||new Date().getFullYear())-1;
+  function gs(name){return (_globalProfiles[name]&&_globalProfiles[name].gameStats&&_globalProfiles[name].gameStats[game.name])||null;}
+  function pr(name){return (_globalProfiles[name]&&_globalProfiles[name].overallStandings&&_globalProfiles[name].overallStandings[prevYear])||99;}
+  let ordered;
+  if(gR[myName]){
+    ordered=gR[myName].filter(p=>others.includes(p));
+    others.forEach(p=>{if(!ordered.includes(p))ordered.push(p);});
+  } else {
+    ordered=[...others].sort((a,b)=>{
+      const sa=gs(a),sb=gs(b),aa=sa?sa.avg_place:99,ab=sb?sb.avg_place:99;
+      return aa!==ab?aa-ab:pr(a)-pr(b);
+    });
+  }
+  function card(p,i){
+    const g2=gs(p);
+    const stats=g2?(g2.years_played+'yr'+(g2.years_played!==1?'s':'')+' · avg '+g2.avg_place.toFixed(1)+(g2.wins>0?' · '+g2.wins+'x🥇':'')):'No history';
+    return '<div class="rank-item" draggable="true" data-player="'+esc(p)+'"'
+      +' ondragstart="dstart(event)" ondragover="dover(event,\'game-rank-list\')" ondrop="ddrop(event,\'game-rank-list\')" ondragleave="dleave(event)"'
+      +' ontouchstart="tstart(event,\'game-rank-list\')" ontouchmove="tmove(event)" ontouchend="tend(event)">'
+      +'<span style="color:#ccc;font-size:18px;flex-shrink:0">⠿</span>'
+      +'<span class="rank-num" style="flex-shrink:0">'+(i+1)+'</span>'
+      +'<div class="avatar" style="flex-shrink:0">'+initials(p)+'</div>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:13px;font-weight:600">'+p+'</div>'
+      +'<div style="font-size:10px;color:'+(g2?'#534AB7':'#aaa')+'">'+stats+'</div>'
+      +'</div></div>';
+  }
+  el('modal-area').innerHTML='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
+    +'<div class="modal-handle"></div>'
+    +'<div class="modal-title"><span>Rank for: '+game.name+'</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
+    +'<div class="alert alert-info" style="font-size:11px;margin-bottom:6px"><strong>1 = best · drag to reorder</strong><br>Pre-sorted by historical avg. Tiebreak = last year overall.</div>'
+    +'<div id="game-rank-list">'+ordered.map((p,i)=>card(p,i)).join('')+'</div>'
+    +'<div class="divider"></div>'
+    +'<button class="btn btn-primary" onclick="submitGameRanking(this)" data-gid="'+gameId+'" data-name="'+esc(myName)+'">Submit for '+game.name+'</button>'
+    +'<div id="rank-submit-msg"></div>'
+    +'</div></div>';
 };
+window.submitGameRanking = async (btnOrId, myNameOrUndef)=>{
+  const gameId = typeof btnOrId==='string' ? btnOrId : btnOrId.dataset.gid;
+  const myName = typeof btnOrId==='string' ? myNameOrUndef : btnOrId.dataset.name;
+  const items=Array.from(el('game-rank-list').querySelectorAll('.rank-item'));
+  const ranked=items.map(e=>e.dataset.player);
+  const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
+  if(!gameRankings[gameId])gameRankings[gameId]={};
+  gameRankings[gameId][myName]=ranked;
+  await update(ref(db,'tournaments/'+currentTourneyId),{gameRankings});
+  el('rank-submit-msg').innerHTML='<div class="alert alert-success" style="margin-top:8px">✓ Submitted!</div>';
+  setTimeout(()=>closeModal(),700);
+};
+function renderMyTeams(myName){
+  const e=el('pview-teams');if(!e)return;
+  const locked=(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring');
+  if(!locked.length){e.innerHTML='<div class="card"><p class="empty">Teams appear once rankings are locked.</p></div>';return;}
+
+  // Active game matchup display
+  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
+  let html='';
+  if(activeGame){
+    const teams=(S.teams&&S.teams[activeGame.id])||[];
+    const myTeam=teams.find(t=>t.p1===myName||t.p2===myName);
+    const b=S.bs&&S.bs[activeGame.id];
+    html+=`<div class="card" style="border-color:#7F77DD;border-width:2px">
+      <div class="card-title" style="color:#534AB7">▶ Now playing: ${activeGame.name}</div>`;
+    if(myTeam){
+      const partner=myTeam.p1===myName?myTeam.p2:myTeam.p1;
+      html+=`<div style="background:#EEEDFE;border-radius:10px;padding:12px;margin-bottom:10px">
+        <div style="font-size:11px;color:#888;margin-bottom:4px">Your team</div>
+        <div style="font-size:16px;font-weight:700">${myName} ${partner?'& '+partner:''}</div>
+      </div>`;
+      // Find my opponent
+      if(b){
+        const myMatch=findMyActiveMatch(b,myTeam,activeGame.format);
+        if(myMatch){
+          const oppTeam=myMatch.t1.id===myTeam.id?myMatch.t2:myMatch.t1;
+          const pending=S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][myMatch.id];
+          const myTeamSide=myMatch.t1.id===myTeam.id?'t1':'t2';
+          const mySubmitted=pending&&pending[myTeamSide];
+          html+=`<div style="font-size:11px;color:#888;margin-bottom:6px">vs</div>
+            <div style="background:#f8f7f4;border-radius:10px;padding:12px;margin-bottom:10px">
+              <div style="font-size:11px;color:#888;margin-bottom:4px">Opponents</div>
+              <div style="font-size:16px;font-weight:700">${teamLabel(oppTeam)}</div>
+            </div>`;
+          if(!myMatch.winner){
+            if(mySubmitted){
+              html+=`<div class="alert alert-info" style="font-size:11px">✓ You submitted ${mySubmitted.s1}–${mySubmitted.s2}. Waiting for opponents to confirm.</div>`;
+            } else {
+              html+=`<div style="font-size:13px;font-weight:600;margin-bottom:8px">Enter your score:</div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                  <div style="flex:1;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:4px">Your team</div>
+                    <input type="number" id="ps-${myMatch.id}-${myTeamSide==='t1'?1:2}" placeholder="0" style="width:70px;padding:8px;border:2px solid #7F77DD;border-radius:10px;font-size:20px;text-align:center;font-weight:700;margin:0"></div>
+                  <div style="font-size:18px;color:#aaa">–</div>
+                  <div style="flex:1;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:4px">Opponents</div>
+                    <input type="number" id="ps-${myMatch.id}-${myTeamSide==='t1'?2:1}" placeholder="0" style="width:70px;padding:8px;border:1px solid #ddd;border-radius:10px;font-size:20px;text-align:center;font-weight:700;margin:0"></div>
+                </div>
+                <button class="btn btn-primary" onclick="playerSubmitScore('${activeGame.id}','${myMatch.id}','${myTeamSide}')">✓ Submit score</button>`;
+            }
+          } else {
+            html+=`<div class="alert alert-success">✓ Result: ${teamLabel(myMatch.winner)} won ${myMatch.score1}–${myMatch.score2}</div>`;
+          }
+          html+=`<div id="ps-${myMatch.id}-status"></div>`;
+        }
+      }
+    } else {
+      html+=`<div class="alert alert-info" style="font-size:11px">You don't have a match in this game.</div>`;
+    }
+    // All matchups for active game
+    html+=`<div class="divider"></div><div style="font-size:12px;font-weight:600;color:#888;margin-bottom:8px">All matchups</div>`;
+    const allTeams=(S.teams&&S.teams[activeGame.id])||[];
+    for(let i=0;i<allTeams.length;i+=2){
+      if(i+1<allTeams.length){
+        const t1=allTeams[i],t2=allTeams[i+1];
+        const isMe=(t1.p1===myName||t1.p2===myName||t2.p1===myName||t2.p2===myName);
+        html+=`<div style="background:${isMe?'#EEEDFE':'#f8f7f4'};border-radius:9px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+          <div style="flex:1;font-size:12px;font-weight:${isMe?'700':'500'}">${teamLabel(t1)}</div>
+          <div style="font-size:11px;color:#aaa">vs</div>
+          <div style="flex:1;font-size:12px;font-weight:${isMe?'700':'500'};text-align:right">${teamLabel(t2)}</div>
+        </div>`;
+      }
+    }
+    html+='</div>';
+  }
+
+  html+='<div class="card"><div class="card-title">👥 All my teams</div>';
+  locked.forEach(g=>{
+    const teams=(S.teams&&S.teams[g.id])||[],myTeam=teams.find(t=>t.p1===myName||t.p2===myName);
+    if(!myTeam)return;
+    const partner=myTeam.p1===myName?myTeam.p2:myTeam.p1,pts=S.points&&S.points[g.id]&&S.points[g.id][myName];
+    const isActive2=g.active||S.activeGameId===g.id;
+    html+=`<div class="player-row" style="${isActive2?'background:#FAFAFE':''}">
+      <div class="avatar" style="background:${isActive2?'#7F77DD':'#E1F5EE'};color:${isActive2?'#fff':'#085041'}">${isActive2?'▶':'🛡'}</div>
+      <div style="flex:1"><div style="font-size:13px;font-weight:600">${g.name}${isActive2?' <span class="tag" style="background:#7F77DD;color:#fff;font-size:9px">ACTIVE</span>':''}</div>
+      <div style="font-size:11px;color:#888">${partner?'With '+partner:'Solo'} · ${fmtL[g.format]||g.format}</div></div>
+      ${pts!==undefined?`<span class="tag tag-purple">${pts}pts</span>`:''}</div>`;
+  });
+  html+='</div>'; e.innerHTML=html;
+}
+
+function findMyActiveMatch(b,myTeam,fmt){
+  const allMatches=[];
+  if(fmt==='round-robin'&&b.matches) allMatches.push(...b.matches);
+  else if(fmt==='two-pool'){ if(b.poolAM)allMatches.push(...b.poolAM); if(b.poolBM)allMatches.push(...b.poolBM); if(b.crossover)allMatches.push(...b.crossover); }
+  else if(fmt==='single-elim'&&b.rounds) b.rounds.forEach(r=>allMatches.push(...r));
+  else if(fmt==='double-elim'){ if(b.winners)b.winners.forEach(r=>allMatches.push(...r)); if(b.losers)b.losers.forEach(r=>allMatches.push(...r)); if(b.grandFinal)allMatches.push(b.grandFinal); }
+  else if(fmt==='pool-playoff'&&b.pools){ b.pools.forEach(p=>allMatches.push(...p.matches)); if(b.knockout)allMatches.push(...b.knockout); }
+  return allMatches.find(m=>m&&!m.winner&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id))||null;
+}
+
+window.playerSubmitScore = async (gameId,matchId,teamSide)=>{
+  const inp1=el(`ps-${matchId}-1`),inp2=el(`ps-${matchId}-2`);
+  const rawS1=parseFloat(inp1?.value),rawS2=parseFloat(inp2?.value);
+  if(isNaN(rawS1)||isNaN(rawS2)){alert('Enter scores for both teams.');return;}
+  if(rawS1===rawS2){alert('No draws allowed.');return;}
+  // s1 is always team1 score, s2 is team2 score
+  const s1=teamSide==='t1'?rawS1:rawS2, s2=teamSide==='t1'?rawS2:rawS1;
+  const myName=actingAsName||(userProfile?.name)||'';
+  const existing=(S.pendingScores&&S.pendingScores[gameId]&&S.pendingScores[gameId][matchId])||{};
+  const newPending={...existing,[teamSide]:{s1,s2,submittedBy:myName,at:Date.now()}};
+  const otherSide=teamSide==='t1'?'t2':'t1';
+  const statusEl=el(`ps-${matchId}-status`);
+  if(existing[otherSide]&&existing[otherSide].s1===s1&&existing[otherSide].s2===s2){
+    // Both agree
+    await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:null});
+    // Find match type for saveMFMatch
+    const b=S.bs&&S.bs[gameId];
+    const {type,poolKey,ri}=findMatchMeta(b,matchId,gameId);
+    await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
+    if(statusEl)statusEl.innerHTML='<div class="alert alert-success">✓ Score confirmed!</div>';
+  } else {
+    await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:newPending});
+    if(statusEl)statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">✓ Score submitted — waiting for opponents to confirm.</div>';
+  }
+};
+
+function findMatchMeta(b,matchId,gameId){
+  const game=(S.games||[]).find(g=>g.id===gameId);
+  const fmt=game?.format||'round-robin';
+  if(fmt==='round-robin') return {type:'rr',poolKey:null,ri:null};
+  if(fmt==='two-pool'){
+    if(b.poolAM?.find(m=>m.id===matchId)) return {type:'pool',poolKey:'A',ri:null};
+    if(b.poolBM?.find(m=>m.id===matchId)) return {type:'pool',poolKey:'B',ri:null};
+    return {type:'cross',poolKey:null,ri:null};
+  }
+  if(fmt==='single-elim'){
+    for(let ri=0;ri<(b.rounds||[]).length;ri++) if(b.rounds[ri].find(m=>m.id===matchId)) return {type:'se',poolKey:null,ri};
+  }
+  if(fmt==='double-elim'){
+    for(let ri=0;ri<(b.winners||[]).length;ri++) if(b.winners[ri].find(m=>m.id===matchId)) return {type:'dew',poolKey:null,ri};
+    for(let ri=0;ri<(b.losers||[]).length;ri++) if(b.losers[ri].find(m=>m.id===matchId)) return {type:'del',poolKey:null,ri};
+    return {type:'degf',poolKey:null,ri:null};
+  }
+  if(fmt==='pool-playoff'){
+    for(let pi=0;pi<(b.pools||[]).length;pi++) if(b.pools[pi].matches.find(m=>m.id===matchId)) return {type:'pppool',poolKey:null,ri:pi};
+    return {type:'ko',poolKey:null,ri:null};
+  }
+  return {type:'rr',poolKey:null,ri:null};
+}
+function renderPlayerLB(myName){
+  const e=el('pview-lb');if(!e)return;
+  const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
+  let html='<div class="card"><div class="card-title">🏅 Leaderboard</div>';
+  if(!sorted.length)html+='<p class="empty">No data yet.</p>';
+  else html+=sorted.map((p,i)=>`<div class="lb-row"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div><div class="lb-name">${p}${p===myName?' <span style="font-size:10px;color:#534AB7">(you)</span>':''}</div><div class="lb-pts">${getTotalPts(p)}</div></div>`).join('');
+  html+='</div>';
+  html+='<div class="card"><div class="card-title">🎖 Badges</div><div id="all-player-badges"></div></div>';
+  e.innerHTML=html; renderAllPlayerBadges();
+}
+function renderAllPlayerBadges(){
+  const e=el('all-player-badges');if(!e)return;
+  e.innerHTML=(S.players||[]).map(p=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede6"><div style="font-size:13px;font-weight:600;margin-bottom:4px">${p}</div><div class="badges-wrap">${renderBadges(getPlayerBadges(p))}</div></div>`).join('');
+}
+
+// ── DRAG & DROP ───────────────────────────────────────────
+let _ds=null,_touchClone=null,_touchList=null,_touchOffX=0,_touchOffY=0;
+window.dstart=(e)=>{_ds=e.currentTarget;e.currentTarget.classList.add('dragging');e.dataTransfer.effectAllowed='move';};
+window.dover=(e,listId)=>{e.preventDefault();if(e.currentTarget!==_ds)e.currentTarget.classList.add('drag-over');};
+window.dleave=(e)=>{e.currentTarget.classList.remove('drag-over');};
+window.ddrop=(e,listId)=>{
+  e.preventDefault();e.currentTarget.classList.remove('drag-over');
+  if(!_ds||_ds===e.currentTarget)return;
+  const list=el(listId||'game-rank-list'),si=Array.from(list.children).indexOf(_ds),ti=Array.from(list.children).indexOf(e.currentTarget);
+  if(si<ti)e.currentTarget.after(_ds);else e.currentTarget.before(_ds);
+  _ds.classList.remove('dragging');
+  Array.from(list.querySelectorAll('.rank-item')).forEach((el2,i)=>{const sp=el2.querySelector('.rank-num');if(sp)sp.textContent=i+1;});
+};
+window.tstart=(e,listId)=>{
+  const item=e.currentTarget;_ds=item;_touchList=el(listId||'game-rank-list');
+  const rect=item.getBoundingClientRect(),touch=e.touches[0];
+  _touchOffX=touch.clientX-rect.left;_touchOffY=touch.clientY-rect.top;
+  _touchClone=item.cloneNode(true);
+  _touchClone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:.85;z-index:999;pointer-events:none;background:#EEEDFE;border:2px dashed #7F77DD;border-radius:9px;box-shadow:0 4px 12px rgba(0,0,0,.15);`;
+  document.body.appendChild(_touchClone);item.style.opacity='.3';e.preventDefault();
+};
+window.tmove=(e)=>{
+  if(!_touchClone||!_ds)return;
+  const touch=e.touches[0];
+  _touchClone.style.left=(touch.clientX-_touchOffX)+'px';_touchClone.style.top=(touch.clientY-_touchOffY)+'px';
+  Array.from(_touchList.querySelectorAll('.rank-item')).forEach(x=>x.classList.remove('drag-over'));
+  const target=Array.from(_touchList.querySelectorAll('.rank-item')).find(x=>{if(x===_ds)return false;const r=x.getBoundingClientRect();return touch.clientY>=r.top&&touch.clientY<=r.bottom;});
+  if(target)target.classList.add('drag-over');e.preventDefault();
+};
+window.tend=(e)=>{
+  if(!_ds||!_touchList)return;
+  const touch=e.changedTouches[0];
+  Array.from(_touchList.querySelectorAll('.rank-item')).forEach(x=>x.classList.remove('drag-over'));
+  const target=Array.from(_touchList.querySelectorAll('.rank-item')).find(x=>{if(x===_ds)return false;const r=x.getBoundingClientRect();return touch.clientY>=r.top&&touch.clientY<=r.bottom;});
+  if(target){const si=Array.from(_touchList.children).indexOf(_ds),ti=Array.from(_touchList.children).indexOf(target);if(si<ti)target.after(_ds);else target.before(_ds);Array.from(_touchList.querySelectorAll('.rank-item')).forEach((x,i)=>{const sp=x.querySelector('.rank-num');if(sp)sp.textContent=i+1;});}
+  _ds.style.opacity='';if(_touchClone){_touchClone.remove();_touchClone=null;}_ds=null;_touchList=null;
+};
+
+// ── RANKING GRID & XLSX UPLOAD ────────────────────────────
+function renderRankingUploadPlayerSelect(){
+  const sel=el('upload-ranking-player');if(!sel)return;
+  sel.innerHTML='<option value="">— select player —</option>'+(S.players||[]).map(p=>`<option value="${esc(p)}">${p}</option>`).join('');
+}
+window.renderRankingGrid = ()=>{
+  const wrap=el('ranking-grid-wrap');if(!wrap)return;
+  const playerName=el('upload-ranking-player')?.value;
+  const status=el('ranking-upload-status');if(status)status.innerHTML='';
+  if(!playerName){wrap.innerHTML='';return;}
+  const games=S.games||[],players=S.players||[];
+  const others=players.filter(p=>p!==playerName).sort((a,b)=>a.localeCompare(b));
+  if(!games.length||!others.length){wrap.innerHTML='<p class="empty">Add players and games first.</p>';return;}
+  function existingRank(gameId,op){const gR=(S.gameRankings&&S.gameRankings[gameId])||{};const ranked=gR[playerName]||[];const idx=ranked.indexOf(op);return idx>=0?idx+1:'';}
+  let html=`<div style="overflow-x:auto;margin-bottom:8px"><table id="ranking-grid-table" style="border-collapse:collapse;font-size:12px;width:100%"><thead><tr><th style="text-align:left;padding:6px 8px;background:#f8f7f4;border:1px solid #e0ddd6;font-weight:700;position:sticky;left:0;min-width:70px">Player</th>${games.map(g=>`<th style="padding:6px 8px;background:#EEEDFE;border:1px solid #e0ddd6;font-weight:700;color:#3C3489;text-align:center;white-space:nowrap">${g.name}</th>`).join('')}</tr></thead><tbody>`;
+  others.forEach(p=>{html+=`<tr><td style="padding:5px 8px;border:1px solid #e0ddd6;font-weight:600;background:#f8f7f4;position:sticky;left:0;white-space:nowrap">${p}</td>${games.map(g=>`<td style="border:1px solid #e0ddd6;padding:2px"><input type="number" min="1" max="${others.length}" data-player="${esc(p)}" data-game="${g.id}" value="${existingRank(g.id,p)}" placeholder="—" style="width:100%;min-width:40px;border:none;padding:5px 4px;font-size:13px;text-align:center;background:transparent;outline:none" oninput="highlightDupes('${g.id}')"></td>`).join('')}</tr>`;});
+  html+=`</tbody></table></div>
+  <div class="divider" style="margin:10px 0"></div>
+  <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:5px">📋 Paste from spreadsheet</div>
+  <div style="font-size:11px;color:#aaa;margin-bottom:5px">Copy just the number columns (include own dashed row). Players must be in A–Z order.</div>
+  <textarea id="grid-paste-box" rows="5" placeholder="Paste here then hit Fill grid..." style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:9px;font-size:12px;font-family:monospace;resize:vertical;margin-bottom:6px"></textarea>
+  <button class="btn btn-sm" onclick="pasteIntoGrid()" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489;margin-bottom:10px">↓ Fill grid from paste</button>
+  <div class="divider" style="margin:0 0 10px 0"></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <button class="btn btn-primary btn-sm" style="width:auto" onclick="saveRankingGrid()">💾 Save for ${playerName}</button>
+    <button class="btn btn-sm" style="width:auto;color:#888" onclick="clearRankingGrid()">✕ Clear</button>
+  </div>
+  <div style="font-size:10px;color:#aaa;margin-top:5px">Players sorted A–Z to match your spreadsheet. Duplicates turn red.</div>`;
+  wrap.innerHTML=html;
+};
+window.highlightDupes=(gameId)=>{
+  const inputs=document.querySelectorAll(`#ranking-grid-table input[data-game="${gameId}"]`);
+  const vals={};inputs.forEach(inp=>{const v=inp.value.trim();if(v)vals[v]=(vals[v]||0)+1;});
+  inputs.forEach(inp=>{const v=inp.value.trim();inp.style.background=v&&vals[v]>1?'#FEF2F2':'transparent';inp.style.color=v&&vals[v]>1?'#c0392b':'';});
+};
+window.clearRankingGrid=()=>{document.querySelectorAll('#ranking-grid-table input[type="number"]').forEach(inp=>{inp.value='';inp.style.background='transparent';inp.style.color='';});};
+window.pasteIntoGrid=()=>{
+  const playerName=el('upload-ranking-player')?.value;if(!playerName){alert('Select player first.');return;}
+  const raw=el('grid-paste-box')?.value.trim();if(!raw){alert('Paste data first.');return;}
+  const games=S.games||[],players=S.players||[];
+  const others=players.filter(p=>p!==playerName).sort((a,b)=>a.localeCompare(b));
+  const pastedRows=raw.split('\n').map(r=>r.trim()).filter(r=>r);
+  let gridRowIdx=0;
+  pastedRows.forEach(row=>{
+    const isDash=row.replace(/[-\s\t]/g,'')==='';if(isDash)return;
+    const cols=row.split(/\t|  +/).map(c=>c.trim());
+    if(gridRowIdx>=others.length)return;
+    const playerForRow=others[gridRowIdx];
+    games.forEach((g,ci)=>{
+      const val=cols[ci];if(!val||val.replace(/-/g,'')==='')return;
+      const rank=parseInt(val);if(isNaN(rank)||rank<=0)return;
+      const inp=document.querySelector(`#ranking-grid-table input[data-game="${g.id}"][data-player="${playerForRow.replace(/"/g,'&quot;')}"]`);
+      if(inp){inp.value=rank;highlightDupes(g.id);}
+    });
+    gridRowIdx++;
+  });
+  el('ranking-upload-status').innerHTML='<div class="alert alert-info" style="font-size:11px">✓ Grid filled — check for red duplicates then hit Save.</div>';
+  el('grid-paste-box').value='';
+};
+window.saveRankingGrid = async ()=>{
+  const playerName=el('upload-ranking-player')?.value;
+  const statusEl=el('ranking-upload-status');
+  if(!playerName){alert('Select player first.');return;}
+  const games=S.games||[];
+  const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
+  const summaryParts=[];let hasError=false;
+  games.forEach(g=>{
+    const inputs=document.querySelectorAll(`#ranking-grid-table input[data-game="${g.id}"]`);
+    if(!inputs.length)return;
+    const rankData=[],seen={};let dupeFound=false;
+    inputs.forEach(inp=>{const v=inp.value.trim(),rank=parseInt(v);if(!isNaN(rank)&&rank>0){if(seen[rank])dupeFound=true;seen[rank]=true;rankData.push({player:inp.dataset.player,rank});}});
+    if(dupeFound){hasError=true;statusEl.innerHTML=`<div class="alert alert-warn">Duplicate ranks in ${g.name}.</div>`;return;}
+    if(!rankData.length)return;
+    const sorted=rankData.sort((a,b)=>a.rank-b.rank).map(r=>r.player);
+    if(!gameRankings[g.id])gameRankings[g.id]={};
+    gameRankings[g.id][playerName]=sorted;
+    summaryParts.push(`${g.name}: ${sorted.length} players`);
+  });
+  if(hasError)return;
+  if(!summaryParts.length){statusEl.innerHTML='<div class="alert alert-warn">No rankings entered.</div>';return;}
+  await update(ref(db,'tournaments/'+currentTourneyId),{gameRankings});
+  statusEl.innerHTML=`<div class="alert alert-success" style="font-size:11px">✓ Saved for <strong>${playerName}</strong>: ${summaryParts.join(' · ')}</div>`;
+};
+window.handleXlsxUpload = async (event)=>{
+  const file=event.target.files[0];if(!file)return;
+  const statusEl=el('xlsx-upload-status');
+  statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">📂 Reading file...</div>';
+  if(!window.XLSX){
+    await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=()=>rej(new Error('Failed to load SheetJS'));document.head.appendChild(s);});
+  }
+  try{
+    const buf=await file.arrayBuffer(),wb=window.XLSX.read(buf,{type:'array'});
+    const players=S.players||[],games=S.games||[];
+    if(!players.length||!games.length){statusEl.innerHTML='<div class="alert alert-warn">Add players and games first.</div>';return;}
+    function norm(s){return String(s||'').toLowerCase().replace(/[\s\-_.]/g,'');}
+    function isDash(v){const s=String(v||'').trim();return!s||s.replace(/-/g,'').replace(/\s/g,'')===''; }
+    const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
+    const loadedPlayers=[],errors=[];
+    players.forEach(rater=>{
+      const sheetName=wb.SheetNames.find(s=>norm(s)===norm(rater)||norm(s).includes(norm(rater))||norm(rater).includes(norm(s)));
+      if(!sheetName){errors.push(rater);return;}
+      const ws=wb.Sheets[sheetName];
+      const rows=window.XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      let headerRowIdx=-1,gameCols=[];
+      rows.forEach((row,i)=>{
+        if(headerRowIdx>=0)return;
+        const vals=row.map(v=>String(v||'').trim());
+        if(vals.some(v=>norm(v)==='golf'||norm(v)==='bowling')){
+          headerRowIdx=i;
+          vals.forEach((v,ci)=>{
+            if(ci===0||!v||isDash(v))return;
+            if(norm(v).startsWith('avg')||norm(v).startsWith('rank'))return;
+            const match=games.find(g=>norm(g.name)===norm(v)||norm(g.name).includes(norm(v))||norm(v).includes(norm(g.name)));
+            if(match)gameCols.push({ci,gameId:match.id,gameName:match.name});
+          });
+        }
+      });
+      if(headerRowIdx<0||!gameCols.length){errors.push(rater+'(no cols)');return;}
+      const rankData={};gameCols.forEach(({gameId})=>{rankData[gameId]={};});
+      rows.slice(headerRowIdx+1).forEach(row=>{
+        const rowPlayer=String(row[0]||'').trim();if(!rowPlayer)return;
+        if(isDash(String(row[gameCols[0].ci]||'')))return;
+        const matched=players.find(p=>norm(p)===norm(rowPlayer)||norm(p).includes(norm(rowPlayer))||norm(rowPlayer).includes(norm(p)));
+        if(!matched)return;
+        gameCols.forEach(({ci,gameId})=>{const val=row[ci];if(val===''||val===null||val===undefined)return;const rank=parseInt(String(val));if(!isNaN(rank)&&rank>0)rankData[gameId][matched]=rank;});
+      });
+      let gamesLoaded=0;
+      gameCols.forEach(({gameId})=>{const pr=rankData[gameId];if(!Object.keys(pr).length)return;const sorted=Object.entries(pr).sort((a,b)=>a[1]-b[1]).map(e=>e[0]);if(!gameRankings[gameId])gameRankings[gameId]={};gameRankings[gameId][rater]=sorted;gamesLoaded++;});
+      if(gamesLoaded>0)loadedPlayers.push(rater);else errors.push(rater+'(no data)');
+    });
+    if(!loadedPlayers.length){statusEl.innerHTML=`<div class="alert alert-warn">Could not load any. Sheets: ${wb.SheetNames.join(', ')}</div>`;return;}
+    await update(ref(db,'tournaments/'+currentTourneyId),{gameRankings});
+    statusEl.innerHTML=`<div class="alert alert-success" style="font-size:11px">✓ Loaded <strong>${loadedPlayers.length} players</strong>: ${loadedPlayers.join(', ')}${errors.length?'<br>⚠️ Skipped: '+errors.join(', '):''}`;
+    event.target.value='';
+  }catch(err){statusEl.innerHTML=`<div class="alert alert-warn">❌ ${err.message}</div>`;}
+};
+
+// ── TEST HELPERS ──────────────────────────────────────────
+window.resetTournament = async ()=>{
+  if(!confirm('Reset? Clears rankings, teams, scores. Keeps players & games.'))return;
+  const games=(S.games||[]).map(g=>({...g,status:'pending'}));
+  await update(ref(db,'tournaments/'+currentTourneyId),{rankings:{},gameRankings:{},teams:{},scores:{},points:{},bs:{},tiebreaker:{},rankingsLocked:false,tournamentStarted:false,tournamentFinalized:false,games});
+};
+window.fillTestRankings = async ()=>{
+  const players=S.players||[],games=S.games||[];
+  if(!players.length||!games.length){alert('Add players and games first.');return;}
+  const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
+  games.forEach(g=>{if(!gameRankings[g.id])gameRankings[g.id]={};players.forEach(player=>{const others=players.filter(p=>p!==player).sort(()=>Math.random()-.5);gameRankings[g.id][player]=others;});});
+  await update(ref(db,'tournaments/'+currentTourneyId),{gameRankings});
+  alert('✓ Random rankings filled!');
+};
+
+// ── MODAL ─────────────────────────────────────────────────
+window.closeModal = ()=>{ const e=el('modal-area'); if(e)e.innerHTML=''; };
+
+// ── UTILS ─────────────────────────────────────────────────
+function showErr(el2,msg){ el2.innerHTML=`<div class="alert alert-danger">${msg}</div>`; }
+
+// ── INVITE LINK HANDLING ──────────────────────────────────
+const urlParams = new URLSearchParams(window.location.search);
+const inviteKey = urlParams.get('invite');
+const joinCode  = urlParams.get('join');
+if(inviteKey) localStorage.setItem('gg_invite_key', inviteKey);
+if(joinCode)  localStorage.setItem('gg_join_code', joinCode);
 
 </script>
 </body>
