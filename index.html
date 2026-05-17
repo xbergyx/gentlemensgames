@@ -726,7 +726,7 @@ window.handleHistoryImport=async(event)=>{
     const col=n=>hdrs.findIndex(h=>h.includes(n));
     const cN=col('nickname'),cF=col('first'),cL=col('last'),cP=col('preferred'),
           cPh=col('phone'),cEm=col('email'),cYr=col('years'),cW=col('wins'),
-          cPo=col('podium'),cLp=col('last place'),cYl=col('years list'),cGs=col('gamestats');
+          cPo=col('podium'),cLp=col('last place'),cYl=col('years list'),cGs=col('gamestats'),cGw=col('gamewins');
     let imported=0,updated=0,skipped=0;
     for(let i=hIdx+1;i<rows.length;i++){
       const row=rows[i];
@@ -741,9 +741,11 @@ window.handleHistoryImport=async(event)=>{
       const matchNames=[nick,fn2,pref,fn2+' '+ln2,pref+' '+ln2].filter(Boolean).map(n=>n.trim().toLowerCase());
       let gameStats={};
       try{ if(cGs>=0&&row[cGs]) gameStats=JSON.parse(String(row[cGs])); }catch(e){}
+      let gameWins={};
+      try{ if(cGw>=0&&row[cGw]) gameWins=JSON.parse(String(row[cGw])); }catch(e){}
       const pd={nickname:nick,firstName:fn2,lastName:ln2,preferredName:pref,name:pref,
         phone,email,preferredContact:phone?'phone':'email',years,wins,podiums,lastPlaces,
-        yearsAttended,matchNames,gameStats,importedFrom:'GG_Complete_History',importedAt:Date.now()};
+        yearsAttended,matchNames,gameStats,gameWins,importedFrom:'GG_Complete_History',importedAt:Date.now()};
       try{
         // Check signed-up players first
         const eu=await findPlayerByMatchNames(matchNames,phone,email,fn2,ln2);
@@ -892,6 +894,12 @@ window.syncTournamentHistory=async()=>{
       gameWins:   prof.gameWins||{},
       gameStats:  prof.gameStats||{}
     };
+    // Sanity check: if gameWins is empty but gameStats has wins, rebuild it
+    if(Object.keys(h.gameWins).length===0&&h.gameStats){
+      Object.entries(h.gameStats).forEach(([game,gs])=>{
+        if(gs.wins>0) h.gameWins[game]=gs.wins;
+      });
+    }
     updates['history/'+playerName]=h;
 
     // Update _globalProfiles cache
