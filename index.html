@@ -126,7 +126,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 </head>
 <body>
 <div class="app" id="app">
-  <div id="view-loading" style="display:flex;align-items:center;justify-content:center;min-height:100vh">
+  <div id="view-loading" style="position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:#f5f4f0;z-index:9998">
     <div style="text-align:center">
       <div style="font-size:48px;margin-bottom:12px">🏆</div>
       <div style="font-size:16px;font-weight:600;color:#534AB7">Gentleman's Games</div>
@@ -1438,9 +1438,16 @@ async function loadGlobalProfilesForTournament(){
         if(key&&!_globalProfiles[key]) _globalProfiles[key]=p;
       });
   });
-  // Also index tournament history directly for fallback
+  // Also index tournament history directly — merge so gameStats from history wins
   if(S.history) Object.entries(S.history).forEach(([name,h])=>{
-    if(h&&!_globalProfiles[name]) _globalProfiles[name]=h;
+    if(!h) return;
+    if(_globalProfiles[name]){
+      // Merge: keep profile data but add gameStats from history if profile lacks it
+      if(h.gameStats&&!_globalProfiles[name].gameStats)
+        _globalProfiles[name]={..._globalProfiles[name],gameStats:h.gameStats};
+    } else {
+      _globalProfiles[name]=h;
+    }
   });
   const updates={};let dirty=false;
   players.forEach(name=>{
@@ -2623,9 +2630,9 @@ function renderPlayerRankings(myName){
     if(isLocked){
       html+=`<div style="background:#EAF3DE;border:1px solid #b2d88a;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">✅</div><div><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#27500A">Teams locked</div></div></div>`;
     } else if(myRank){
-      html+=`<div style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">👍</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e">${rc}/${total} submitted</div></div><button class="btn btn-sm" onclick="openGameRanking('${g.id}','${esc(myName)}')" style="width:auto">Edit</button></div>`;
+      html+=`<div onclick="openGameRanking('${g.id}','${esc(myName)}')" style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.05)"><div style="font-size:22px;pointer-events:none">👍</div><div style="flex:1;pointer-events:none"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e">${rc}/${total} submitted — tap to edit</div></div><div style="font-size:20px;color:#1a5f9e;pointer-events:none">›</div></div>`;
     } else {
-      html+=`<div style="background:#FFFBEB;border:1px solid #fcd34d;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">🎯</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#7a4f00">${rc}/${total} done</div></div><button class="btn btn-sm btn-primary" onclick="openGameRanking('${g.id}','${esc(myName)}')" style="width:auto">Rank now</button></div>`;
+      html+=`<div onclick="openGameRanking('${g.id}','${esc(myName)}')" style="background:#FFFBEB;border:1px solid #fcd34d;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.05)"><div style="font-size:22px;pointer-events:none">🎯</div><div style="flex:1;pointer-events:none"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#7a4f00">${rc}/${total} done — tap to rank</div></div><div style="font-size:20px;color:#534AB7;pointer-events:none">›</div></div>`;
     }
   });
   html+='</div>';
