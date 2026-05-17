@@ -47,7 +47,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .badge-veteran{background:#F5F3FF;color:#6d28d9;border-color:#c4b5fd}
 .badge-founder{background:#FDF2F8;color:#9d174d;border-color:#f9a8d4}
 .badge-winless{background:#F9FAFB;color:#374151;border-color:#d1d5db}
-.badge-specialist{background:#ECFDF5;color:#065f46;border-color:#6ee7b7}
+.badge-specialist{background:#ECFDF5;color:#065f46;border-color:#6ee7b7}.badge-gamewinner{background:#EAF3DE;color:#27500A;border-color:#97C459}
 .badge-custom{background:#FFF1F2;color:#9f1239;border-color:#fda4af}
 .badge-lastplace{background:#FEF2F2;color:#991b1b;border-color:#fca5a5}
 .badge-everyyear{background:#FFF7ED;color:#7c2d12;border-color:#fb923c}
@@ -2615,7 +2615,18 @@ function getPlayerBadgesFromProfile(h,name=''){
   if(h.yearsAttended&&h.yearsAttended.includes(fy))badges.push({cls:'badge-founder',icon:'🏛️',text:'Founding Member'});
   if(h.years>=3&&!h.wins&&!h.podiums)badges.push({cls:'badge-winless',icon:'😅',text:'Winless Wonder'});
   if(h.lastPlaces>=1)badges.push({cls:'badge-lastplace',icon:'🪣',text:'Last Place'+(h.lastPlaces>1?' x'+h.lastPlaces:'')});
-  if(h.gameWins)Object.entries(h.gameWins).forEach(e=>{if(e[1]>=2)badges.push({cls:'badge-specialist',icon:'🎯',text:e[0]+' Specialist'});});
+  // Game win badges — show for every game won at least once, with count
+  const gameIcons={'Golf':'⛳','Bowling':'🎳','Cornhole':'🌽','Kan Jam':'🥏',
+    'Spikeball':'🏐','Beer Darts':'🎯','Beer Die':'🎲','Cocaine':'🃏',
+    'Bucketball':'🪣','Beer Pong':'🏓'};
+  if(h.gameWins) Object.entries(h.gameWins).forEach(([game,count])=>{
+    if(count<1) return;
+    const icon=gameIcons[game]||'🏅';
+    const times=count>=2?' '+count+'x':'';
+    // Specialist badge for 2+ wins
+    if(count>=2) badges.push({cls:'badge-specialist',icon,text:game+' Champ'+times});
+    else badges.push({cls:'badge-gamewinner',icon,text:game+' Champ'});
+  });
   (S?.customBadges||[]).filter(b=>b.player===name).forEach(b=>badges.push({cls:'badge-custom',icon:'✨',text:b.name}));
   return badges;
 }
