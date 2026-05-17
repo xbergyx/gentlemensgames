@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#7F77DD">
 <title>Gentleman's Games</title>
 <link rel="manifest" href="/manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1571,8 +1572,11 @@ window.openTournament = (tid)=>{
     const myUid = actingAsUid||currentUser?.uid;
     const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
     isTourneyAdmin = isAdmin || !!(S.tourneyAdmins&&S.tourneyAdmins[myUid]);
-    if(isTourneyAdmin) renderAdminView();
-    else renderPlayerView(myName);
+    // Load global player profiles into memory for badges/stats
+    loadGlobalProfilesForTournament().then(()=>{
+      if(isTourneyAdmin) renderAdminView();
+      else renderPlayerView(myName);
+    });
   });
 };
 
@@ -1622,9 +1626,83 @@ function buildTournamentShell(){
 }
 
 window.leaveTournament = ()=>{
-  currentTourneyId=null; S=null;
+  currentTourneyId=null; S=null; _globalProfiles={};
   showView('home');
 };
+
+// Global profiles cache — loaded fresh each tournament
+let _globalProfiles = {};  // preferredName/nickname -> profile object
+
+async function loadGlobalProfilesForTournament(){
+  if(!S) return;
+  const players = S.players||[];
+  if(!players.length) return;
+
+  // Load all players from global DB
+  const [playersSnap, preSnap] = await Promise.all([
+    get(ref(db,'players')),
+    get(ref(db,'preAssignments'))
+  ]);
+
+  _globalProfiles = {};
+
+  // Index signed-up players by all their names
+  if(playersSnap.exists()){
+    Object.values(playersSnap.val()).forEach(p=>{
+      if(!p) return;
+      const names = [p.preferredName, p.name, p.firstName, p.nickname,
+                     ((p.firstName||'')+' '+(p.lastName||'')).trim()]
+        .filter(Boolean);
+      names.forEach(n=>{ if(n) _globalProfiles[n.trim()] = p; });
+    });
+  }
+
+  // Index pre-assignments (ghost players) by all their names
+  if(preSnap.exists()){
+    Object.values(preSnap.val()).forEach(p=>{
+      if(!p) return;
+      const names = [p.preferredName, p.nickname, p.firstName,
+                     ((p.firstName||'')+' '+(p.lastName||'')).trim()]
+        .filter(Boolean);
+      names.forEach(n=>{ if(n && !_globalProfiles[n.trim()]) _globalProfiles[n.trim()] = p; });
+    });
+  }
+
+  // Merge global data into S.history for any player not already there
+  const updates = {};
+  let needsUpdate = false;
+  players.forEach(playerName=>{
+    if(S.history && S.history[playerName] && S.history[playerName].years > 0) return; // already have data
+    const profile = _globalProfiles[playerName];
+    if(!profile) return;
+    const h = {
+      years:       profile.years||0,
+      wins:        profile.wins||0,
+      podiums:     profile.podiums||0,
+      lastPlaces:  profile.lastPlaces||0,
+      yearsAttended: profile.yearsAttended||[],
+      gameWins:    profile.gameWins||{},
+      gameStats:   profile.gameStats||{},
+    };
+    // Only update if they have actual history
+    if(h.years > 0 || h.wins > 0 || Object.keys(h.gameWins).length > 0){
+      updates['history/'+playerName] = h;
+      if(!S.history) S.history={};
+      S.history[playerName] = h; // update local state immediately
+      needsUpdate = true;
+    }
+  });
+
+  // Write merged history back to tournament (non-blocking)
+  if(needsUpdate && currentTourneyId){
+    update(ref(db,'tournaments/'+currentTourneyId), updates).catch(()=>{});
+  }
+}
+
+// Helper: get profile for a player name (checks global cache first, then tournament history)
+function getProfile(playerName){
+  return _globalProfiles[playerName] || {};
+}
 
 // ── ADMIN VIEW ────────────────────────────────────────────
 function renderAdminView(){
@@ -1705,6 +1783,8 @@ function renderAdminSetup(){
       <div class="card-title">🚀 Start tournament</div>
       <div id="start-tourney-body"></div>
       <div class="divider"></div>
+      <button class="btn btn-sm btn-primary" onclick="syncTournamentHistory()" style="width:auto;font-size:11px;margin-bottom:5px">🔄 Sync player history &amp; badges from global DB</button>
+      <div style="font-size:10px;color:#aaa;margin-bottom:10px">Pulls history, game stats and badges for all players in this tournament.</div>
       <div style="font-size:11px;color:#aaa;margin-bottom:6px;font-weight:600">🧪 TESTING</div>
       <button class="btn btn-sm" onclick="resetTournament()" style="width:auto;border-color:#f0a0a0;color:#c0392b;font-size:11px;margin-bottom:5px">🔄 Reset (keep players &amp; games)</button>
       <button class="btn btn-sm" onclick="fillTestRankings()" style="width:auto;border-color:#ccc;color:#888;font-size:11px;margin-bottom:8px">⚡ Fill random rankings</button>
@@ -1847,20 +1927,46 @@ window.addPlayerFromGlobal = async (playerUid, playerName)=>{
   if(players.includes(playerName)){ alert('Already added.'); return; }
   players.push(playerName);
   playerUids[playerUid]=playerName;
-  await update(ref(db,'tournaments/'+currentTourneyId),{players,playerUids});
+
+  // Also sync their history immediately
+  const pSnap = await get(ref(db,'players/'+playerUid));
+  const updates = {players, playerUids};
+  if(pSnap.exists()){
+    const p = pSnap.val();
+    if(p.years>0||p.wins>0||Object.keys(p.gameWins||{}).length>0){
+      updates['history/'+playerName] = {
+        years:p.years||0, wins:p.wins||0, podiums:p.podiums||0,
+        lastPlaces:p.lastPlaces||0, yearsAttended:p.yearsAttended||[],
+        gameWins:p.gameWins||{}, gameStats:p.gameStats||{},
+      };
+    }
+  }
+  await update(ref(db,'tournaments/'+currentTourneyId), updates);
   el('player-search-results').innerHTML='';
   if(el('player-search-input')) el('player-search-input').value='';
 };
 
 window.addPlayerFromPre = async (preKey, playerName)=>{
-  // Add a historical (pre-signed-up) player to the tournament
-  // They'll be linked when they sign up
   const players=[...(S.players||[])];
-  const ghostPlayers={...(S.ghostPlayers||{})};  // preKey -> playerName mapping
+  const ghostPlayers={...(S.ghostPlayers||{})};
   if(players.includes(playerName)){ alert('Already added.'); return; }
   players.push(playerName);
-  ghostPlayers[preKey]=playerName;  // track that this slot is waiting for signup
-  await update(ref(db,'tournaments/'+currentTourneyId),{players,ghostPlayers});
+  ghostPlayers[preKey]=playerName;
+
+  // Sync pre-assignment history into tournament
+  const preSnap = await get(ref(db,'preAssignments/'+preKey));
+  const updates = {players, ghostPlayers};
+  if(preSnap.exists()){
+    const p = preSnap.val();
+    if(p.years>0||p.wins>0||Object.keys(p.gameWins||{}).length>0){
+      updates['history/'+playerName] = {
+        years:p.years||0, wins:p.wins||0, podiums:p.podiums||0,
+        lastPlaces:p.lastPlaces||0, yearsAttended:p.yearsAttended||[],
+        gameWins:p.gameWins||{}, gameStats:p.gameStats||{},
+      };
+    }
+  }
+  await update(ref(db,'tournaments/'+currentTourneyId), updates);
   el('player-search-results').innerHTML='';
   if(el('player-search-input')) el('player-search-input').value='';
 };
@@ -2835,779 +2941,213 @@ window.toggleTourneyAdmin = async (uid2,add)=>{
 window.declareTournamentWinner = async ()=>{
   const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
   if(!sorted.length){alert('No players.');return;}
-  const winner=sorted[0],lastPlace=sorted[sorted.length-1],podium=sorted.slice(0,3);
+  if(!confirm('Finalize this tournament? This will award all badges and cannot be undone.')) return;
+
+  const statusEl=el('declare-status');
+  statusEl.innerHTML='<div class="alert alert-info">⏳ Finalizing...</div>';
+
+  const winner=sorted[0], lastPlace=sorted[sorted.length-1], podium=sorted.slice(0,3);
+  const yr=S.tourneyYear||new Date().getFullYear();
+  const fy=S.foundingYear||2019;
+
+  // ── Step 1: Build updated history ──────────────────────
   const history=JSON.parse(JSON.stringify(S.history||{}));
-  sorted.forEach(p=>{if(!history[p])history[p]={years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[],gameWins:{}};});
+  sorted.forEach(p=>{
+    if(!history[p]) history[p]={years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[],gameWins:{}};
+  });
   history[winner].wins=(history[winner].wins||0)+1;
   podium.slice(1).forEach(p=>{history[p].podiums=(history[p].podiums||0)+1;});
-  if(lastPlace&&lastPlace!==winner)history[lastPlace].lastPlaces=(history[lastPlace].lastPlaces||0)+1;
-  sorted.forEach(p=>{history[p].years=(history[p].years||0)+1;if(!history[p].yearsAttended)history[p].yearsAttended=[];if(!history[p].yearsAttended.includes(S.tourneyYear))history[p].yearsAttended.push(S.tourneyYear);});
-  // Also update global player profiles
-  for(const [uid2,pData] of Object.entries(S.playerUids||{})){
-    const name=pData;
-    if(!history[name])continue;
-    // Get this player's finishing position
-    const finishPos=sorted.indexOf(name)+1;
-    const osUpdate={...(await get(ref(db,'players/'+uid2+'/overallStandings'))).val()||{}};
-    osUpdate[S.tourneyYear||new Date().getFullYear()]=finishPos;
+  if(lastPlace&&lastPlace!==winner) history[lastPlace].lastPlaces=(history[lastPlace].lastPlaces||0)+1;
+  sorted.forEach(p=>{
+    history[p].years=(history[p].years||0)+1;
+    if(!history[p].yearsAttended) history[p].yearsAttended=[];
+    if(!history[p].yearsAttended.includes(yr)) history[p].yearsAttended.push(yr);
+    // Update game wins from this tournament's points
+    (S.games||[]).forEach(g=>{
+      const pts=S.points&&S.points[g.id];
+      if(!pts) return;
+      const playerPts=pts[p]||0;
+      const maxPts=Math.max(...Object.values(pts));
+      if(playerPts===maxPts&&maxPts>0){
+        if(!history[p].gameWins) history[p].gameWins={};
+        history[p].gameWins[g.name]=(history[p].gameWins[g.name]||0)+1;
+      }
+    });
+  });
+
+  // ── Step 2: Compute newly earned badges this tournament ─
+  const newBadges={}; // player -> [{icon,name}]
+  sorted.forEach(p=>{
+    const prev=S.history&&S.history[p]||{};
+    const curr=history[p];
+    const earned=[];
+    const totalYears=yr-fy+1;
+
+    // Compare prev vs curr to find NEW badges
+    if(!prev.years&&curr.years===1) earned.push({icon:'🌱',name:'First Timer'});
+    if(curr.years>=1) earned.push({icon:'📅',name:curr.years+' Year'+(curr.years!==1?'s':'')});
+    if(curr.years>=totalYears&&totalYears>=2&&!(prev.years>=totalYears)) earned.push({icon:'🔥',name:'Every Year'});
+    if(curr.years>=5&&(prev.years||0)<5) earned.push({icon:'⭐',name:'Veteran'});
+    if(curr.yearsAttended&&curr.yearsAttended.includes(fy)&&(!prev.yearsAttended||!prev.yearsAttended.includes(fy))) earned.push({icon:'🏛️',name:'Founding Member'});
+    if(curr.wins===1&&(prev.wins||0)===0) earned.push({icon:'🏆',name:'Champion'});
+    if(curr.wins>=2&&(prev.wins||0)<2) earned.push({icon:'🔱',name:'Dynasty'});
+    if(curr.podiums>=1&&(prev.podiums||0)===0) earned.push({icon:'🥉',name:'Podium Finish'});
+    if(curr.lastPlaces>=1&&(prev.lastPlaces||0)===0) earned.push({icon:'🪣',name:'Last Place'});
+    if(curr.years>=3&&!curr.wins&&!curr.podiums&&!((prev.years>=3)&&!prev.wins&&!prev.podiums)) earned.push({icon:'😅',name:'Winless Wonder'});
+    // Game specialist — new 2x wins
+    Object.entries(curr.gameWins||{}).forEach(([g,n])=>{
+      if(n>=2&&(prev.gameWins||{})[g]<2) earned.push({icon:'🎯',name:g+' Specialist'});
+    });
+    // Manual badges assigned this tournament
+    (S.playerBadges&&S.playerBadges[p]||[]).forEach(bid=>{
+      const bDef=getBadgeById(bid);
+      if(bDef) earned.push({icon:bDef.icon,name:bDef.name});
+    });
+    // Custom badges
+    (S.customBadges||[]).filter(b=>b.player===p).forEach(b=>earned.push({icon:'✨',name:b.name}));
+
+    if(earned.length) newBadges[p]=earned;
+  });
+
+  // ── Step 3: Update global player profiles ──────────────
+  for(const [uid2,pName] of Object.entries(S.playerUids||{})){
+    if(!history[pName]) continue;
+    const finishPos=sorted.indexOf(pName)+1;
+    const osSnap=await get(ref(db,'players/'+uid2+'/overallStandings'));
+    const osUpdate={...(osSnap.val()||{})};
+    osUpdate[yr]=finishPos;
     await update(ref(db,'players/'+uid2),{
-      years:history[name].years,wins:history[name].wins,
-      podiums:history[name].podiums,lastPlaces:history[name].lastPlaces,
-      yearsAttended:history[name].yearsAttended,
+      years:history[pName].years, wins:history[pName].wins,
+      podiums:history[pName].podiums, lastPlaces:history[pName].lastPlaces,
+      yearsAttended:history[pName].yearsAttended, gameWins:history[pName].gameWins||{},
       overallStandings:osUpdate
     });
   }
-  await update(ref(db,'tournaments/'+currentTourneyId),{history,tournamentFinalized:true});
-  el('declare-status').innerHTML=`<div class="alert alert-success" style="margin-top:8px">🏆 <strong>${winner}</strong> wins! Badges updated!</div>`;
-};
 
-// ── POWER RANKINGS ────────────────────────────────────────
-function renderPowerRankings(){
-  const e=el('admin-power'); if(!e) return;
-  const games=S.games||[],players=S.players||[];
-  if(!players.length||!games.length){e.innerHTML='<div class="card"><p class="empty">Add players and games first.</p></div>';return;}
-  function avgForGame(gameId,player){const gR=(S.gameRankings&&S.gameRankings[gameId])||{},others=players.filter(p=>p!==player);let total=0,count=0;others.forEach(r=>{const rk=gR[r];if(rk){const i=rk.indexOf(player);if(i!==-1){total+=i+1;count++;}}});return count?total/count:null;}
-  function overallAvg(player){const avgs=games.map(g=>avgForGame(g.id,player)).filter(v=>v!==null);return avgs.length?avgs.reduce((a,b)=>a+b,0)/avgs.length:null;}
-  const sorted=players.slice().sort((a,b)=>{const aa=overallAvg(a),ba=overallAvg(b);if(aa===null&&ba===null)return 0;if(aa===null)return 1;if(ba===null)return -1;return aa-ba;});
-  let html=`<div class="card"><div class="card-title">📊 Power rankings</div><div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Lower avg = ranked better by peers.</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="text-align:left;padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;position:sticky;left:0;background:#fff">Player</th>${games.map(g=>`<th style="padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;color:#534AB7;text-align:center;white-space:nowrap">${g.name}</th>`).join('')}<th style="padding:6px 4px;border-bottom:2px solid #e8e6df;font-weight:700;text-align:center">Avg</th></tr></thead><tbody>`;
-  const n=players.length;
-  sorted.forEach((p,i)=>{
-    const avgs=games.map(g=>avgForGame(g.id,p)),oa=overallAvg(p),bg=i%2===0?'#fff':'#f8f7f4';
-    html+=`<tr style="background:${bg}"><td style="padding:6px 4px;font-weight:600;font-size:12px;position:sticky;left:0;background:${bg};white-space:nowrap"><div style="display:flex;align-items:center;gap:5px"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}" style="width:20px;height:20px;font-size:10px">${i+1}</div>${p}</div></td>${avgs.map(avg=>avg!==null?`<td style="padding:6px 4px;text-align:center;color:${avg<=3?'#27500A':avg>=n-1?'#c0392b':'#534AB7'};font-weight:${avg<=3||avg>=n-1?'700':'400'}">${avg.toFixed(2)}</td>`:`<td style="padding:6px 4px;text-align:center;color:#ccc">—</td>`).join('')}<td style="padding:6px 4px;text-align:center;font-weight:700">${oa!==null?oa.toFixed(2):'—'}</td></tr>`;
+  // ── Step 4: Save finalized state ───────────────────────
+  await update(ref(db,'tournaments/'+currentTourneyId),{
+    history, tournamentFinalized:true, finalizedAt:Date.now(),
+    finalStandings:sorted.map((p,i)=>({player:p,place:i+1,points:getTotalPts(p)})),
+    newBadgesEarned:newBadges
   });
-  html+='</tbody></table></div></div>';
-  e.innerHTML=html;
-}
 
+  // ── Step 5: Build summary & send email ─────────────────
+  const summary=buildTournamentSummary(sorted,newBadges,yr);
+  await sendFinalizeSummaryEmail(summary,winner,yr);
 
-// ── BADGE LIBRARY ─────────────────────────────────────────
-// All possible badges. auto=calculated automatically, manual=admin assigns
-const BADGE_LIBRARY = [
-  // Attendance
-  { id:'first-timer',   cat:'Attendance', icon:'🌱', name:'First Timer',        desc:'First ever GG appearance',         auto:true  },
-  { id:'years',         cat:'Attendance', icon:'📅', name:'Years Attended',      desc:'One badge per year attended',      auto:true  },
-  { id:'every-year',    cat:'Attendance', icon:'🔥', name:'Every Year',          desc:'Attended every GG since founding', auto:true  },
-  { id:'founding',      cat:'Attendance', icon:'🏛️', name:'Founding Member',     desc:'Attended the first GG in 2019',   auto:true  },
-  { id:'veteran',       cat:'Attendance', icon:'⭐', name:'Veteran',             desc:'5+ years attended',                auto:true  },
-  // Performance
-  { id:'champion',      cat:'Performance',icon:'👑', name:'Champion',            desc:'Won the overall tournament',       auto:true  },
-  { id:'dynasty',       cat:'Performance',icon:'🔱', name:'Dynasty',             desc:'Won the tournament 2+ times',      auto:true  },
-  { id:'podium',        cat:'Performance',icon:'🥉', name:'Podium Finish',       desc:'Finished 2nd or 3rd',              auto:true  },
-  { id:'last-place',    cat:'Performance',icon:'🪣', name:'Last Place',          desc:'Finished last',                    auto:true  },
-  { id:'winless',       cat:'Performance',icon:'😅', name:'Winless Wonder',      desc:'3+ years, never won or podiumed',  auto:true  },
-  { id:'specialist',    cat:'Performance',icon:'🎯', name:'Game Specialist',     desc:'Won the same game 2+ times',       auto:true  },
-  // Sport-specific (manual)
-  { id:'golf-king',     cat:'Sport',      icon:'⛳', name:'Golf King',           desc:'Best golfer at GG',                auto:false },
-  { id:'bowling-king',  cat:'Sport',      icon:'🎳', name:'Bowling King',        desc:'Best bowler at GG',                auto:false },
-  { id:'cornhole-king', cat:'Sport',      icon:'🌽', name:'Cornhole King',       desc:'Best cornhole player at GG',       auto:false },
-  { id:'beer-pong-king',cat:'Sport',      icon:'🏓', name:'Beer Pong King',      desc:'Best beer pong player at GG',      auto:false },
-  { id:'spikeball-king',cat:'Sport',      icon:'🏐', name:'Spikeball King',      desc:'Best spikeball player at GG',      auto:false },
-  { id:'beer-darts',    cat:'Sport',      icon:'🎯', name:'Beer Darts Champ',    desc:'Reigning beer darts champion',     auto:false },
-  { id:'beer-die',      cat:'Sport',      icon:'🎲', name:'Beer Die Champ',      desc:'Reigning beer die champion',       auto:false },
-  { id:'cocaine-champ', cat:'Sport',      icon:'🃏', name:'Cocaine Champ',       desc:'Reigning cocaine champion',        auto:false },
-  { id:'kanjam-king',   cat:'Sport',      icon:'🥏', name:'Kan Jam King',        desc:'Best kan jam player at GG',        auto:false },
-  // Character
-  { id:'commissioner',  cat:'Character',  icon:'🎩', name:'Commissioner',        desc:'The host and organizer',           auto:false },
-  { id:'mvp',           cat:'Character',  icon:'🌟', name:'MVP',                 desc:'Most Valuable Player',             auto:false },
-  { id:'comeback-kid',  cat:'Character',  icon:'📈', name:'Comeback Kid',        desc:'Biggest improvement year over year',auto:false },
-  { id:'crowd-fav',     cat:'Character',  icon:'🎉', name:'Crowd Favorite',      desc:'The people\'s champion',           auto:false },
-  { id:'trash-talk',    cat:'Character',  icon:'🗣️', name:'Trash Talker',        desc:'Loudest mouth on the court',       auto:false },
-  { id:'sportsmanship', cat:'Character',  icon:'🤝', name:'Good Sport',          desc:'Best sportsmanship award',         auto:false },
-  { id:'upset',         cat:'Character',  icon:'💥', name:'Upset King',          desc:'Beat the highest ranked player',   auto:false },
-  { id:'clutch',        cat:'Character',  icon:'🧊', name:'Clutch',              desc:'Won in overtime / extra points',   auto:false },
-  // Custom
-  { id:'custom',        cat:'Custom',     icon:'✨', name:'Custom Badge',        desc:'Admin-defined custom badge',       auto:false },
-];
-
-function getBadgeById(id){ return BADGE_LIBRARY.find(b=>b.id===id)||null; }
-
-// Get enabled badges from settings (global + tournament override)
-function getEnabledBadgeIds(){
-  const global=(S?S.enabledBadges:null)||{};
-  // Default: all auto badges on, manual badges off
-  const enabled=new Set();
-  BADGE_LIBRARY.forEach(b=>{
-    const setting=global[b.id];
-    if(setting===true) enabled.add(b.id);
-    else if(setting===false) {/* disabled */}
-    else if(b.auto) enabled.add(b.id); // default on for auto badges
-  });
-  return enabled;
-}
-
-// ── HISTORY & BADGES ──────────────────────────────────────
-function getPlayerBadges(name){ return getPlayerBadgesFromProfile(S.history&&S.history[name]||{},name); }
-function getPlayerBadgesFromProfile(h,name=''){
-  const enabled=getEnabledBadgeIds();
-  const badges=[];
-  const fy=S?.foundingYear||2019, yr=S?.tourneyYear||new Date().getFullYear(), totalYears=yr-fy+1;
-  h=h||{};
-  if(enabled.has('first-timer')&&h.years===1) badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
-  if(enabled.has('years')&&h.years>=1) badges.push({cls:'badge-years',icon:'📅',text:h.years+' year'+(h.years!==1?'s':'')});
-  if(enabled.has('every-year')&&h.years>=totalYears&&totalYears>=2) badges.push({cls:'badge-everyyear',icon:'🔥',text:'Every Year'});
-  if(enabled.has('champion')&&h.wins===1) badges.push({cls:'badge-champ',icon:'🏆',text:'Champion'});
-  if(enabled.has('dynasty')&&h.wins>=2) badges.push({cls:'badge-dynasty',icon:'🔱',text:'Dynasty ('+h.wins+'x)'});
-  if(enabled.has('podium')&&h.podiums>=1&&!h.wins) badges.push({cls:'badge-podium',icon:'🥉',text:'Podium x'+h.podiums});
-  if(enabled.has('veteran')&&h.years>=5) badges.push({cls:'badge-veteran',icon:'⭐',text:'Veteran'});
-  if(enabled.has('founding')&&h.yearsAttended&&h.yearsAttended.includes(fy)) badges.push({cls:'badge-founder',icon:'🏛️',text:'Founding Member'});
-  if(enabled.has('winless')&&h.years>=3&&!h.wins&&!h.podiums) badges.push({cls:'badge-winless',icon:'😅',text:'Winless Wonder'});
-  if(enabled.has('last-place')&&h.lastPlaces>=1) badges.push({cls:'badge-lastplace',icon:'🪣',text:'Last Place'+(h.lastPlaces>1?' x'+h.lastPlaces:'')});
-  if(enabled.has('specialist')&&h.gameWins) Object.entries(h.gameWins).forEach(([g,c])=>{ if(c>=2) badges.push({cls:'badge-specialist',icon:'🎯',text:g+' Specialist'}); });
-  // Manual badges assigned to this player
-  const manualBadges=(S?.playerBadges&&name&&S.playerBadges[name])||[];
-  manualBadges.forEach(bid=>{ const bDef=getBadgeById(bid); if(bDef&&enabled.has(bid)) badges.push({cls:'badge-custom',icon:bDef.icon,text:bDef.name}); });
-  // Legacy custom badges
-  (S?.customBadges||[]).filter(b=>b.player===name).forEach(b=>badges.push({cls:'badge-custom',icon:'✨',text:b.name}));
-  return badges;
-}
-function renderBadges(badges){ if(!badges||!badges.length)return''; return badges.map(b=>`<span class="badge ${b.cls}">${b.icon} ${b.text}</span>`).join(''); }
-function renderHistoryList(){
-  const e=el('admin-history'); if(!e) return;
-  let html=`<div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div class="card-title" style="margin:0">📜 Player history</div>
-      <button class="btn btn-sm btn-primary" onclick="openBadgeManager()" style="width:auto">🎖 Manage badges</button>
-    </div>`;
-  (S.players||[]).forEach(p=>{
-    const h=(S.history&&S.history[p])||{};
-    html+=`<div style="padding:10px 0;border-bottom:1px solid #f0ede6">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
-        <span style="font-size:13px;font-weight:600">${p}</span>
-        <button class="btn btn-sm" onclick="openEditHistory('${esc(p)}')" style="width:auto">Edit</button>
-      </div>
-      <div style="font-size:11px;color:#888;margin-bottom:5px">${h.years||0}yrs · ${h.wins||0}W · ${h.podiums||0}P · ${h.lastPlaces||0}L</div>
-      <div class="badges-wrap">${renderBadges(getPlayerBadges(p))}</div>
-    </div>`;
-  });
-  html+='</div>';
-  html+=`<div class="card"><div class="card-title">⚙️ Custom badges</div>
-    <div class="sec-label">Badge name</div><input type="text" id="custom-badge-name" placeholder="e.g. Commissioner">
-    <div class="sec-label">Assign to</div><select id="custom-badge-player"><option value="">— select —</option></select>
-    <button class="btn btn-primary btn-sm" onclick="addCustomBadge()" style="width:auto">+ Add badge</button>
-    <div class="divider"></div><div id="custom-badges-list"></div>
+  statusEl.innerHTML=`<div class="alert alert-success" style="margin-top:8px">
+    🏆 <strong>${winner}</strong> wins ${yr}!<br>
+    Badges updated · Summary emailed to admins
+    <button class="btn btn-sm btn-primary" onclick="showTournamentSummaryModal()" style="width:100%;margin-top:8px">📋 View full summary</button>
   </div>`;
-  e.innerHTML=html;
-  renderCustomBadges(); renderCustomBadgePlayerSelect();
-}
-// ── BADGE MANAGEMENT ─────────────────────────────────────
-window.openBadgeManager = ()=>{
-  // Shows all badges with toggle switches + player assignment
-  const enabled=getEnabledBadgeIds();
-  const cats=[...new Set(BADGE_LIBRARY.map(b=>b.cat))];
-  let html=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-height:85vh">
-    <div class="modal-handle"></div>
-    <div class="modal-title"><span>🎖 Badge Manager</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
-    <div class="alert alert-info" style="font-size:11px;margin-bottom:12px">Toggle badges on/off globally. Auto badges calculate automatically. Manual badges you assign to players below.</div>`;
+};
 
-  cats.forEach(cat=>{
-    html+=`<div style="font-size:12px;font-weight:700;color:#534AB7;margin:12px 0 6px">${cat}</div>`;
-    BADGE_LIBRARY.filter(b=>b.cat===cat).forEach(b=>{
-      const isOn=enabled.has(b.id);
-      html+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0ede6">
-        <span style="font-size:20px;width:28px;text-align:center">${b.icon}</span>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${b.name} <span style="font-size:10px;color:#aaa;font-weight:400">${b.auto?'auto':'manual'}</span></div>
-          <div style="font-size:11px;color:#888">${b.desc}</div>
-        </div>
-        <div class="toggle-track ${isOn?'on':''}" onclick="toggleBadge('${b.id}',${!isOn})" style="flex-shrink:0"><div class="toggle-thumb"></div></div>
-      </div>`;
-    });
+function buildTournamentSummary(sorted, newBadges, yr){
+  const name=S.tourneyName||('GG '+yr);
+  const skip=getSkippedIds();
+  const games=(S.games||[]).filter(g=>!skip.has(g.id)&&S.scores&&S.scores[g.id]&&S.scores[g.id]._fin);
+  const winner=sorted[0];
+  return {name, yr, winner, playerCount:sorted.length,
+    games, newBadges, sorted};
+}
+
+window.showTournamentSummaryModal = ()=>{
+  const finalized = S.finalStandings||[];
+  const sorted = finalized.length ? finalized.map(x=>x.player) :
+    (S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
+  const newBadges = S.newBadgesEarned||{};
+  const yr = S.tourneyYear||new Date().getFullYear();
+  const skip = getSkippedIds();
+  const games = (S.games||[]).filter(g=>!skip.has(g.id)&&S.scores&&S.scores[g.id]&&S.scores[g.id]._fin);
+  const winner = sorted[0]||'';
+
+  let html = '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-height:90vh">'
+    + '<div class="modal-handle"></div>'
+    + '<div class="modal-title"><div style="display:flex;width:100%;justify-content:space-between;align-items:center">'
+    + '<span>📋 ' + (S.tourneyName||'') + ' ' + yr + '</span>'
+    + '<button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div></div>';
+
+  // Champion banner
+  html += '<div style="background:linear-gradient(135deg,#C8A820,#a07818);border-radius:12px;padding:14px;text-align:center;margin-bottom:12px">'
+    + '<div style="font-size:32px">🏆</div>'
+    + '<div style="font-size:20px;font-weight:700;color:#fff;margin-top:4px">' + winner + '</div>'
+    + '<div style="font-size:12px;color:rgba(255,255,255,.8)">' + yr + ' Champion · ' + sorted.length + ' players</div>'
+    + '</div>';
+
+  // Standings
+  html += '<div style="font-size:12px;font-weight:700;color:#534AB7;margin-bottom:6px">🏅 Final Standings</div>';
+  sorted.forEach(function(p,i){
+    var pts = getTotalPts(p);
+    var bg = i===0?'#FFF3CD':i===1?'#EBF4FF':i===2?'#EAF3DE':'#fff';
+    var icon = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:'+bg+';border-radius:8px;margin-bottom:3px">'
+      + '<span style="font-size:14px;width:24px">'+(icon||(i+1)+'.')+'</span>'
+      + '<span style="flex:1;font-size:13px;font-weight:'+(i<3?'600':'400')+'">'+p+'</span>'
+      + '<span style="font-size:13px;font-weight:700;color:#534AB7">'+pts+' pts</span>'
+      + '</div>';
   });
 
-  html+=`<div class="divider"></div>
-    <div style="font-size:12px;font-weight:700;color:#534AB7;margin-bottom:8px">Assign manual badges to players</div>
-    <select id="badge-assign-player" style="margin-bottom:8px"><option value="">— select player —</option>${(S.players||[]).map(p=>`<option value="${p}">${p}</option>`).join('')}</select>
-    <div id="badge-assign-list"></div>
-  </div></div>`;
-
-  el('modal-area').innerHTML=html;
-  el('badge-assign-player').addEventListener('change', renderBadgeAssignList);
-};
-
-window.toggleBadge = async (badgeId, on)=>{
-  const enabledBadges=JSON.parse(JSON.stringify(S.enabledBadges||{}));
-  enabledBadges[badgeId]=on;
-  await update(ref(db,'tournaments/'+currentTourneyId),{enabledBadges});
-  // Re-render the modal
-  openBadgeManager();
-};
-
-window.renderBadgeAssignList = ()=>{
-  const player=el('badge-assign-player')?.value; if(!player) return;
-  const e=el('badge-assign-list'); if(!e) return;
-  const enabled=getEnabledBadgeIds();
-  const assigned=(S.playerBadges&&S.playerBadges[player])||[];
-  const manualBadges=BADGE_LIBRARY.filter(b=>!b.auto&&b.id!=='custom'&&enabled.has(b.id));
-  if(!manualBadges.length){ e.innerHTML='<p class="empty">No manual badges enabled. Toggle some on above.</p>'; return; }
-  e.innerHTML=manualBadges.map(b=>{
-    const has=assigned.includes(b.id);
-    return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0ede6">
-      <span style="font-size:18px">${b.icon}</span>
-      <div style="flex:1;font-size:12px;font-weight:500">${b.name}</div>
-      <button class="btn btn-sm ${has?'btn-danger':'btn-success'}" onclick="togglePlayerBadge('${esc(player)}','${b.id}',${!has})" style="width:auto">${has?'Remove':'Assign'}</button>
-    </div>`;
-  }).join('');
-};
-
-window.togglePlayerBadge = async (player, badgeId, assign)=>{
-  const playerBadges=JSON.parse(JSON.stringify(S.playerBadges||{}));
-  if(!playerBadges[player]) playerBadges[player]=[];
-  if(assign){ if(!playerBadges[player].includes(badgeId)) playerBadges[player].push(badgeId); }
-  else { playerBadges[player]=playerBadges[player].filter(b=>b!==badgeId); }
-  await update(ref(db,'tournaments/'+currentTourneyId),{playerBadges});
-  renderBadgeAssignList();
-};
-
-window.openEditHistory = (name)=>{
-  const h=(S.history&&S.history[name])||{};
-  el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
-    <div class="modal-handle"></div>
-    <div class="modal-title"><span>Edit: ${name}</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
-    <div class="sec-label">Years</div><input type="number" id="eh-years" value="${h.years||0}" min="0">
-    <div class="sec-label">Wins</div><input type="number" id="eh-wins" value="${h.wins||0}" min="0">
-    <div class="sec-label">Podiums</div><input type="number" id="eh-podiums" value="${h.podiums||0}" min="0">
-    <div class="sec-label">Last places</div><input type="number" id="eh-last" value="${h.lastPlaces||0}" min="0">
-    <div class="sec-label">Years list (e.g. 2019,2020)</div><input type="text" id="eh-ylist" value="${(h.yearsAttended||[]).join(',')}">
-    <div class="sec-label">Game wins (game=count, e.g. Golf=3)</div><input type="text" id="eh-gw" value="${Object.entries(h.gameWins||{}).map(e=>e[0]+'='+e[1]).join(',')}">
-    <div class="divider"></div>
-    <button class="btn btn-primary" onclick="saveHistory('${esc(name)}')">✓ Save</button>
-  </div></div>`;
-};
-window.saveHistory = async (name)=>{
-  const ylist=el('eh-ylist').value.split(',').map(y=>parseInt(y.trim())).filter(Boolean);
-  const gameWins={};el('eh-gw').value.split(',').forEach(p=>{const kv=p.split('=');if(kv.length===2&&kv[0].trim())gameWins[kv[0].trim()]=parseInt(kv[1])||0;});
-  const history=JSON.parse(JSON.stringify(S.history||{}));
-  history[name]={years:parseInt(el('eh-years').value)||0,wins:parseInt(el('eh-wins').value)||0,podiums:parseInt(el('eh-podiums').value)||0,lastPlaces:parseInt(el('eh-last').value)||0,yearsAttended:ylist,gameWins};
-  await update(ref(db,'tournaments/'+currentTourneyId),{history});
-  closeModal();
-};
-window.addCustomBadge = async ()=>{
-  const name=el('custom-badge-name').value.trim(),player=el('custom-badge-player').value;
-  if(!name||!player){alert('Fill both fields.');return;}
-  const cb=[...(S.customBadges||[]),{name,player}];
-  await update(ref(db,'tournaments/'+currentTourneyId),{customBadges:cb});
-  el('custom-badge-name').value='';el('custom-badge-player').value='';
-};
-window.removeCustomBadge = async (i)=>{
-  const cb=(S.customBadges||[]).filter((_,idx)=>idx!==i);
-  await update(ref(db,'tournaments/'+currentTourneyId),{customBadges:cb});
-};
-function renderCustomBadges(){
-  const e=el('custom-badges-list');if(!e)return;
-  if(!(S.customBadges||[]).length){e.innerHTML='<p class="empty">No custom badges.</p>';return;}
-  e.innerHTML=(S.customBadges||[]).map((b,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0ede6"><span class="badge badge-custom">✨ ${b.name}</span><span style="flex:1;font-size:12px;color:#888">→ ${b.player}</span><button class="btn btn-sm btn-danger" onclick="removeCustomBadge(${i})" style="width:auto">✕</button></div>`).join('');
-}
-function renderCustomBadgePlayerSelect(){
-  const sel=el('custom-badge-player');if(!sel)return;
-  sel.innerHTML='<option value="">— select —</option>'+(S.players||[]).map(p=>`<option value="${esc(p)}">${p}</option>`).join('');
-}
-
-// ── PLAYER VIEW ───────────────────────────────────────────
-function renderPlayerView(myName){
-  if(!S)return;
-  const header=el('tourney-header-label');
-  if(header)header.textContent=S.tourneyName+' '+S.tourneyYear;
-  hide('admin-area'); show('player-area');
-  const hcard=el('player-header-card');
-  if(hcard){
-    const badges=getPlayerBadges(myName);
-    hcard.innerHTML=`<div style="display:flex;align-items:center;gap:10px">
-      <div class="avatar" style="width:38px;height:38px;font-size:14px">${initials(myName)}</div>
-      <div><div style="font-size:15px;font-weight:700">${myName}</div><div class="badges-wrap">${renderBadges(badges)}</div></div>
-    </div>`;
-  }
-  showPlayerTab(_tab||'rank',myName);
-}
-function showPlayerTab(tab,myName){
-  _tab=tab;
-  myName=myName||actingAsName||(userProfile?.name)||'';
-  ['rank','teams','lb'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
-  const tv=el('pview-'+tab);if(tv)tv.classList.remove('hidden');
-  const tb=el('ptab-'+tab);if(tb)tb.classList.add('active');
-  if(tab==='rank')  renderPlayerRankings(myName);
-  if(tab==='teams') renderMyTeams(myName);
-  if(tab==='lb')    { renderPlayerLB(myName); renderAllPlayerBadges(); }
-}
-function renderPlayerRankings(myName){
-  const e=el('pview-rank'); if(!e) return;
-  const games=S.games||[], others=(S.players||[]).filter(p=>p!==myName);
-  if(!S.tournamentStarted){
-    e.innerHTML=`<div class="card"><div style="text-align:center;padding:20px"><div style="font-size:40px;margin-bottom:10px">⏳</div><div style="font-size:14px;font-weight:600">Waiting for host to start</div><div style="font-size:12px;color:#888;margin-top:6px">The host will start the tournament once everyone has joined.</div></div></div>`;return;
-  }
-  if(!games.length){e.innerHTML='<div class="card"><p class="empty">No games added yet. Check back soon!</p></div>';return;}
-  let html='<div class="card"><div class="card-title">🎯 Game rankings</div><div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Each game needs its own ranking. Tap a game to rank players.</div>';
-  games.forEach(g=>{
-    const gR=(S.gameRankings&&S.gameRankings[g.id])||{};
-    const myRank=gR[myName],rc=Object.keys(gR).length,total=(S.players||[]).length;
-    const isLocked=g.status==='locked'||g.status==='scoring';
-    if(isLocked){
-      html+=`<div style="background:#EAF3DE;border:1px solid #b2d88a;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">✅</div><div><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#27500A">Teams locked</div></div></div>`;
-    } else if(myRank){
-      html+=`<div style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">👍</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e">${rc}/${total} submitted</div></div><button class="btn btn-sm" onclick="openGameRanking('${g.id}','${esc(myName)}')" style="width:auto">Edit</button></div>`;
-    } else {
-      html+=`<div style="background:#FFFBEB;border:1px solid #fcd34d;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">🎯</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#7a4f00">${rc}/${total} done</div></div><button class="btn btn-sm btn-primary" onclick="openGameRanking('${g.id}','${esc(myName)}')" style="width:auto">Rank now</button></div>`;
-    }
-  });
-  html+='</div>';
-  e.innerHTML=html;
-}
-window.openGameRanking = async (gameId,myName)=>{
-  const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
-  const others=(S.players||[]).filter(p=>p!==myName);
-  const gR=(S.gameRankings&&S.gameRankings[gameId])||{};
-
-  // Get game stats for all players from global DB
-  const playerProfiles={};
-  const snap=await get(ref(db,'players'));
-  if(snap.exists()){
-    Object.values(snap.val()).forEach(p=>{
-      if(p&&p.name) playerProfiles[p.name]={...p};
-      if(p&&p.preferredName) playerProfiles[p.preferredName]={...p};
+  // Game results
+  if(games.length){
+    html += '<div style="font-size:12px;font-weight:700;color:#534AB7;margin:12px 0 6px">🎯 Game Results</div>';
+    games.forEach(function(g){
+      var pts = (S.points&&S.points[g.id])||{};
+      var top = sorted.filter(function(p){return pts[p];}).sort(function(a,b){return (pts[b]||0)-(pts[a]||0);}).slice(0,3);
+      if(!top.length) return;
+      html += '<div style="padding:6px 0;border-bottom:1px solid #f0ede6;font-size:12px">'
+        + '<span style="font-weight:600">'+g.name+'</span>'
+        + ' <span style="color:#27500A">🥇'+top[0]+'('+( pts[top[0]]||0)+')</span>'
+        + (top[1]?' <span style="color:#1a5f9e">🥈'+top[1]+'('+(pts[top[1]]||0)+')</span>':'')
+        + (top[2]?' <span style="color:#27500A">🥉'+top[2]+'('+(pts[top[2]]||0)+')</span>':'')
+        + '</div>';
     });
   }
 
-  // Get previous year overall standings for tiebreaking
-  const thisYear=S.tourneyYear||new Date().getFullYear();
-  const prevYear=thisYear-1;
-
-  function getGameStats(playerName){
-    const profile=playerProfiles[playerName]||{};
-    const gs=(profile.gameStats||{})[game.name];
-    return gs||null;
-  }
-  function getPrevYearRank(playerName){
-    const profile=playerProfiles[playerName]||{};
-    const os=profile.overallStandings||{};
-    return os[prevYear]||99;
-  }
-
-  // Smart default order: sort by avg_place ASC, tiebreak by prev year overall result
-  let smartOrdered;
-  if(gR[myName]){
-    // Already ranked — use their existing order
-    smartOrdered=gR[myName].filter(p=>others.includes(p));
-    others.forEach(p=>{if(!smartOrdered.includes(p))smartOrdered.push(p);});
+  // New badges
+  var badgeEntries = Object.entries(newBadges);
+  if(badgeEntries.length){
+    html += '<div style="font-size:12px;font-weight:700;color:#534AB7;margin:12px 0 6px">🎖 New Badges Earned</div>';
+    badgeEntries.forEach(function(entry){
+      var p=entry[0], badges=entry[1];
+      html += '<div style="padding:6px 0;border-bottom:1px solid #f0ede6">'
+        + '<div style="font-size:12px;font-weight:600;margin-bottom:3px">'+p+'</div>'
+        + '<div class="badges-wrap">'
+        + badges.map(function(b){return '<span class="badge badge-custom">'+b.icon+' '+b.name+'</span>';}).join('')
+        + '</div></div>';
+    });
   } else {
-    // First time — sort by game avg_place, tiebreak by prev year standing
-    smartOrdered=[...others].sort((a,b)=>{
-      const sa=getGameStats(a), sb=getGameStats(b);
-      const avgA=sa?sa.avg_place:99, avgB=sb?sb.avg_place:99;
-      if(avgA!==avgB) return avgA-avgB;
-      // Tiebreak: previous year overall result (lower = better)
-      return getPrevYearRank(a)-getPrevYearRank(b);
-    });
+    html += '<div class="alert alert-info" style="font-size:11px;margin-top:8px">No new badges earned this tournament.</div>';
   }
 
-  function playerCard(p,i){
-    const gs=getGameStats(p);
-    const statsStr=gs
-      ? `${gs.years_played} yr${gs.years_played!==1?'s':''} · avg ${gs.avg_place.toFixed(1)} · ${gs.wins>0?gs.wins+'x 🥇':''}`.trim()
-      : 'No history for this game';
-    const isNew=!gs;
-    return `<div class="rank-item" draggable="true" data-player="${esc(p)}"
-      ondragstart="dstart(event)" ondragover="dover(event,'game-rank-list')" ondrop="ddrop(event,'game-rank-list')" ondragleave="dleave(event)"
-      ontouchstart="tstart(event,'game-rank-list')" ontouchmove="tmove(event)" ontouchend="tend(event)">
-      <span style="color:#ccc;font-size:18px;flex-shrink:0">⠿</span>
-      <span class="rank-num" style="flex-shrink:0">${i+1}</span>
-      <div class="avatar" style="flex-shrink:0">${initials(p)}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600">${p}</div>
-        <div style="font-size:10px;color:${isNew?'#aaa':'#534AB7'};margin-top:1px">${statsStr}</div>
-      </div>
-    </div>`;
-  }
-
-  el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
-    <div class="modal-handle"></div>
-    <div class="modal-title"><span>Rank for: ${game.name}</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
-    <div class="alert alert-info" style="font-size:11px;margin-bottom:6px">
-      <strong>1 = best player, drag to reorder.</strong><br>
-      Pre-sorted by historical avg placement. Tiebreaks use last year's overall result.
-    </div>
-    <div style="font-size:10px;color:#aaa;margin-bottom:10px">
-      Stats shown: years played this game · average place · wins
-    </div>
-    <div id="game-rank-list">${smartOrdered.map((p,i)=>playerCard(p,i)).join('')}</div>
-    <div class="divider"></div>
-    <button class="btn btn-primary" onclick="submitGameRanking('${gameId}','${esc(myName)}')">✓ Submit for ${game.name}</button>
-    <div id="rank-submit-msg"></div>
-  </div></div>`;
+  html += '<button class="btn btn-sm btn-primary" onclick="copyTournamentSummary()" style="width:100%;margin-top:12px">📋 Copy summary to clipboard</button>';
+  html += '</div></div>';
+  el('modal-area').innerHTML = html;
 };
-window.submitGameRanking = async (gameId,myName)=>{
-  const items=Array.from(el('game-rank-list').querySelectorAll('.rank-item'));
-  const ranked=items.map(e=>e.dataset.player);
-  const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
-  if(!gameRankings[gameId])gameRankings[gameId]={};
-  gameRankings[gameId][myName]=ranked;
-  await update(ref(db,'tournaments/'+currentTourneyId),{gameRankings});
-  el('rank-submit-msg').innerHTML='<div class="alert alert-success" style="margin-top:8px">✓ Submitted!</div>';
-  setTimeout(()=>closeModal(),700);
-};
-function renderMyTeams(myName){
-  const e=el('pview-teams');if(!e)return;
-  const locked=(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring');
-  if(!locked.length){e.innerHTML='<div class="card"><p class="empty">Teams appear once rankings are locked.</p></div>';return;}
 
-  // Active game matchup display
-  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
-  let html='';
-  if(activeGame){
-    const teams=(S.teams&&S.teams[activeGame.id])||[];
-    const myTeam=teams.find(t=>t.p1===myName||t.p2===myName);
-    const b=S.bs&&S.bs[activeGame.id];
-    html+=`<div class="card" style="border-color:#7F77DD;border-width:2px">
-      <div class="card-title" style="color:#534AB7">▶ Now playing: ${activeGame.name}</div>`;
-    if(myTeam){
-      const partner=myTeam.p1===myName?myTeam.p2:myTeam.p1;
-      html+=`<div style="background:#EEEDFE;border-radius:10px;padding:12px;margin-bottom:10px">
-        <div style="font-size:11px;color:#888;margin-bottom:4px">Your team</div>
-        <div style="font-size:16px;font-weight:700">${myName} ${partner?'& '+partner:''}</div>
-      </div>`;
-      // Find my opponent
-      if(b){
-        const myMatch=findMyActiveMatch(b,myTeam,activeGame.format);
-        if(myMatch){
-          const oppTeam=myMatch.t1.id===myTeam.id?myMatch.t2:myMatch.t1;
-          const pending=S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][myMatch.id];
-          const myTeamSide=myMatch.t1.id===myTeam.id?'t1':'t2';
-          const mySubmitted=pending&&pending[myTeamSide];
-          html+=`<div style="font-size:11px;color:#888;margin-bottom:6px">vs</div>
-            <div style="background:#f8f7f4;border-radius:10px;padding:12px;margin-bottom:10px">
-              <div style="font-size:11px;color:#888;margin-bottom:4px">Opponents</div>
-              <div style="font-size:16px;font-weight:700">${teamLabel(oppTeam)}</div>
-            </div>`;
-          if(!myMatch.winner){
-            if(mySubmitted){
-              html+=`<div class="alert alert-info" style="font-size:11px">✓ You submitted ${mySubmitted.s1}–${mySubmitted.s2}. Waiting for opponents to confirm.</div>`;
-            } else {
-              html+=`<div style="font-size:13px;font-weight:600;margin-bottom:8px">Enter your score:</div>
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                  <div style="flex:1;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:4px">Your team</div>
-                    <input type="number" id="ps-${myMatch.id}-${myTeamSide==='t1'?1:2}" placeholder="0" style="width:70px;padding:8px;border:2px solid #7F77DD;border-radius:10px;font-size:20px;text-align:center;font-weight:700;margin:0"></div>
-                  <div style="font-size:18px;color:#aaa">–</div>
-                  <div style="flex:1;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:4px">Opponents</div>
-                    <input type="number" id="ps-${myMatch.id}-${myTeamSide==='t1'?2:1}" placeholder="0" style="width:70px;padding:8px;border:1px solid #ddd;border-radius:10px;font-size:20px;text-align:center;font-weight:700;margin:0"></div>
-                </div>
-                <button class="btn btn-primary" onclick="playerSubmitScore('${activeGame.id}','${myMatch.id}','${myTeamSide}')">✓ Submit score</button>`;
-            }
-          } else {
-            html+=`<div class="alert alert-success">✓ Result: ${teamLabel(myMatch.winner)} won ${myMatch.score1}–${myMatch.score2}</div>`;
-          }
-          html+=`<div id="ps-${myMatch.id}-status"></div>`;
-        }
-      }
-    } else {
-      html+=`<div class="alert alert-info" style="font-size:11px">You don't have a match in this game.</div>`;
-    }
-    // All matchups for active game
-    html+=`<div class="divider"></div><div style="font-size:12px;font-weight:600;color:#888;margin-bottom:8px">All matchups</div>`;
-    const allTeams=(S.teams&&S.teams[activeGame.id])||[];
-    for(let i=0;i<allTeams.length;i+=2){
-      if(i+1<allTeams.length){
-        const t1=allTeams[i],t2=allTeams[i+1];
-        const isMe=(t1.p1===myName||t1.p2===myName||t2.p1===myName||t2.p2===myName);
-        html+=`<div style="background:${isMe?'#EEEDFE':'#f8f7f4'};border-radius:9px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
-          <div style="flex:1;font-size:12px;font-weight:${isMe?'700':'500'}">${teamLabel(t1)}</div>
-          <div style="font-size:11px;color:#aaa">vs</div>
-          <div style="flex:1;font-size:12px;font-weight:${isMe?'700':'500'};text-align:right">${teamLabel(t2)}</div>
-        </div>`;
-      }
-    }
-    html+='</div>';
-  }
-
-  html+='<div class="card"><div class="card-title">👥 All my teams</div>';
-  locked.forEach(g=>{
-    const teams=(S.teams&&S.teams[g.id])||[],myTeam=teams.find(t=>t.p1===myName||t.p2===myName);
-    if(!myTeam)return;
-    const partner=myTeam.p1===myName?myTeam.p2:myTeam.p1,pts=S.points&&S.points[g.id]&&S.points[g.id][myName];
-    const isActive2=g.active||S.activeGameId===g.id;
-    html+=`<div class="player-row" style="${isActive2?'background:#FAFAFE':''}">
-      <div class="avatar" style="background:${isActive2?'#7F77DD':'#E1F5EE'};color:${isActive2?'#fff':'#085041'}">${isActive2?'▶':'🛡'}</div>
-      <div style="flex:1"><div style="font-size:13px;font-weight:600">${g.name}${isActive2?' <span class="tag" style="background:#7F77DD;color:#fff;font-size:9px">ACTIVE</span>':''}</div>
-      <div style="font-size:11px;color:#888">${partner?'With '+partner:'Solo'} · ${fmtL[g.format]||g.format}</div></div>
-      ${pts!==undefined?`<span class="tag tag-purple">${pts}pts</span>`:''}</div>`;
+window.copyTournamentSummary = ()=>{
+  const sorted=(S.finalStandings||[]).map(x=>x.player);
+  const yr=S.tourneyYear||new Date().getFullYear();
+  const skip=getSkippedIds();
+  const games=(S.games||[]).filter(g=>!skip.has(g.id)&&S.scores&&S.scores[g.id]&&S.scores[g.id]._fin);
+  const newBadges=S.newBadgesEarned||{};
+  let text=(S.tourneyName||'GG')+' '+yr+' — Tournament Summary\n\n';
+  text+='FINAL STANDINGS\n';
+  sorted.forEach((p,i)=>{
+    const icon=['🥇','🥈','🥉'][i]||'';
+    text+=icon+(i+1)+'. '+p+' — '+getTotalPts(p)+' pts\n';
   });
-  html+='</div>'; e.innerHTML=html;
-}
-
-function findMyActiveMatch(b,myTeam,fmt){
-  const allMatches=[];
-  if(fmt==='round-robin'&&b.matches) allMatches.push(...b.matches);
-  else if(fmt==='two-pool'){ if(b.poolAM)allMatches.push(...b.poolAM); if(b.poolBM)allMatches.push(...b.poolBM); if(b.crossover)allMatches.push(...b.crossover); }
-  else if(fmt==='single-elim'&&b.rounds) b.rounds.forEach(r=>allMatches.push(...r));
-  else if(fmt==='double-elim'){ if(b.winners)b.winners.forEach(r=>allMatches.push(...r)); if(b.losers)b.losers.forEach(r=>allMatches.push(...r)); if(b.grandFinal)allMatches.push(b.grandFinal); }
-  else if(fmt==='pool-playoff'&&b.pools){ b.pools.forEach(p=>allMatches.push(...p.matches)); if(b.knockout)allMatches.push(...b.knockout); }
-  return allMatches.find(m=>m&&!m.winner&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id))||null;
-}
-
-window.playerSubmitScore = async (gameId,matchId,teamSide)=>{
-  const inp1=el(`ps-${matchId}-1`),inp2=el(`ps-${matchId}-2`);
-  const rawS1=parseFloat(inp1?.value),rawS2=parseFloat(inp2?.value);
-  if(isNaN(rawS1)||isNaN(rawS2)){alert('Enter scores for both teams.');return;}
-  if(rawS1===rawS2){alert('No draws allowed.');return;}
-  // s1 is always team1 score, s2 is team2 score
-  const s1=teamSide==='t1'?rawS1:rawS2, s2=teamSide==='t1'?rawS2:rawS1;
-  const myName=actingAsName||(userProfile?.name)||'';
-  const existing=(S.pendingScores&&S.pendingScores[gameId]&&S.pendingScores[gameId][matchId])||{};
-  const newPending={...existing,[teamSide]:{s1,s2,submittedBy:myName,at:Date.now()}};
-  const otherSide=teamSide==='t1'?'t2':'t1';
-  const statusEl=el(`ps-${matchId}-status`);
-  if(existing[otherSide]&&existing[otherSide].s1===s1&&existing[otherSide].s2===s2){
-    // Both agree
-    await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:null});
-    // Find match type for saveMFMatch
-    const b=S.bs&&S.bs[gameId];
-    const {type,poolKey,ri}=findMatchMeta(b,matchId,gameId);
-    await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
-    if(statusEl)statusEl.innerHTML='<div class="alert alert-success">✓ Score confirmed!</div>';
-  } else {
-    await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:newPending});
-    if(statusEl)statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">✓ Score submitted — waiting for opponents to confirm.</div>';
-  }
-};
-
-function findMatchMeta(b,matchId,gameId){
-  const game=(S.games||[]).find(g=>g.id===gameId);
-  const fmt=game?.format||'round-robin';
-  if(fmt==='round-robin') return {type:'rr',poolKey:null,ri:null};
-  if(fmt==='two-pool'){
-    if(b.poolAM?.find(m=>m.id===matchId)) return {type:'pool',poolKey:'A',ri:null};
-    if(b.poolBM?.find(m=>m.id===matchId)) return {type:'pool',poolKey:'B',ri:null};
-    return {type:'cross',poolKey:null,ri:null};
-  }
-  if(fmt==='single-elim'){
-    for(let ri=0;ri<(b.rounds||[]).length;ri++) if(b.rounds[ri].find(m=>m.id===matchId)) return {type:'se',poolKey:null,ri};
-  }
-  if(fmt==='double-elim'){
-    for(let ri=0;ri<(b.winners||[]).length;ri++) if(b.winners[ri].find(m=>m.id===matchId)) return {type:'dew',poolKey:null,ri};
-    for(let ri=0;ri<(b.losers||[]).length;ri++) if(b.losers[ri].find(m=>m.id===matchId)) return {type:'del',poolKey:null,ri};
-    return {type:'degf',poolKey:null,ri:null};
-  }
-  if(fmt==='pool-playoff'){
-    for(let pi=0;pi<(b.pools||[]).length;pi++) if(b.pools[pi].matches.find(m=>m.id===matchId)) return {type:'pppool',poolKey:null,ri:pi};
-    return {type:'ko',poolKey:null,ri:null};
-  }
-  return {type:'rr',poolKey:null,ri:null};
-}
-function renderPlayerLB(myName){
-  const e=el('pview-lb');if(!e)return;
-  const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
-  let html='<div class="card"><div class="card-title">🏅 Leaderboard</div>';
-  if(!sorted.length)html+='<p class="empty">No data yet.</p>';
-  else html+=sorted.map((p,i)=>`<div class="lb-row"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div><div class="lb-name">${p}${p===myName?' <span style="font-size:10px;color:#534AB7">(you)</span>':''}</div><div class="lb-pts">${getTotalPts(p)}</div></div>`).join('');
-  html+='</div>';
-  html+='<div class="card"><div class="card-title">🎖 Badges</div><div id="all-player-badges"></div></div>';
-  e.innerHTML=html; renderAllPlayerBadges();
-}
-function renderAllPlayerBadges(){
-  const e=el('all-player-badges');if(!e)return;
-  e.innerHTML=(S.players||[]).map(p=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede6"><div style="font-size:13px;font-weight:600;margin-bottom:4px">${p}</div><div class="badges-wrap">${renderBadges(getPlayerBadges(p))}</div></div>`).join('');
-}
-
-// ── DRAG & DROP ───────────────────────────────────────────
-let _ds=null,_touchClone=null,_touchList=null,_touchOffX=0,_touchOffY=0;
-window.dstart=(e)=>{_ds=e.currentTarget;e.currentTarget.classList.add('dragging');e.dataTransfer.effectAllowed='move';};
-window.dover=(e,listId)=>{e.preventDefault();if(e.currentTarget!==_ds)e.currentTarget.classList.add('drag-over');};
-window.dleave=(e)=>{e.currentTarget.classList.remove('drag-over');};
-window.ddrop=(e,listId)=>{
-  e.preventDefault();e.currentTarget.classList.remove('drag-over');
-  if(!_ds||_ds===e.currentTarget)return;
-  const list=el(listId||'game-rank-list'),si=Array.from(list.children).indexOf(_ds),ti=Array.from(list.children).indexOf(e.currentTarget);
-  if(si<ti)e.currentTarget.after(_ds);else e.currentTarget.before(_ds);
-  _ds.classList.remove('dragging');
-  Array.from(list.querySelectorAll('.rank-item')).forEach((el2,i)=>{const sp=el2.querySelector('.rank-num');if(sp)sp.textContent=i+1;});
-};
-window.tstart=(e,listId)=>{
-  const item=e.currentTarget;_ds=item;_touchList=el(listId||'game-rank-list');
-  const rect=item.getBoundingClientRect(),touch=e.touches[0];
-  _touchOffX=touch.clientX-rect.left;_touchOffY=touch.clientY-rect.top;
-  _touchClone=item.cloneNode(true);
-  _touchClone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:.85;z-index:999;pointer-events:none;background:#EEEDFE;border:2px dashed #7F77DD;border-radius:9px;box-shadow:0 4px 12px rgba(0,0,0,.15);`;
-  document.body.appendChild(_touchClone);item.style.opacity='.3';e.preventDefault();
-};
-window.tmove=(e)=>{
-  if(!_touchClone||!_ds)return;
-  const touch=e.touches[0];
-  _touchClone.style.left=(touch.clientX-_touchOffX)+'px';_touchClone.style.top=(touch.clientY-_touchOffY)+'px';
-  Array.from(_touchList.querySelectorAll('.rank-item')).forEach(x=>x.classList.remove('drag-over'));
-  const target=Array.from(_touchList.querySelectorAll('.rank-item')).find(x=>{if(x===_ds)return false;const r=x.getBoundingClientRect();return touch.clientY>=r.top&&touch.clientY<=r.bottom;});
-  if(target)target.classList.add('drag-over');e.preventDefault();
-};
-window.tend=(e)=>{
-  if(!_ds||!_touchList)return;
-  const touch=e.changedTouches[0];
-  Array.from(_touchList.querySelectorAll('.rank-item')).forEach(x=>x.classList.remove('drag-over'));
-  const target=Array.from(_touchList.querySelectorAll('.rank-item')).find(x=>{if(x===_ds)return false;const r=x.getBoundingClientRect();return touch.clientY>=r.top&&touch.clientY<=r.bottom;});
-  if(target){const si=Array.from(_touchList.children).indexOf(_ds),ti=Array.from(_touchList.children).indexOf(target);if(si<ti)target.after(_ds);else target.before(_ds);Array.from(_touchList.querySelectorAll('.rank-item')).forEach((x,i)=>{const sp=x.querySelector('.rank-num');if(sp)sp.textContent=i+1;});}
-  _ds.style.opacity='';if(_touchClone){_touchClone.remove();_touchClone=null;}_ds=null;_touchList=null;
-};
-
-// ── RANKING GRID & XLSX UPLOAD ────────────────────────────
-function renderRankingUploadPlayerSelect(){
-  const sel=el('upload-ranking-player');if(!sel)return;
-  sel.innerHTML='<option value="">— select player —</option>'+(S.players||[]).map(p=>`<option value="${esc(p)}">${p}</option>`).join('');
-}
-window.renderRankingGrid = ()=>{
-  const wrap=el('ranking-grid-wrap');if(!wrap)return;
-  const playerName=el('upload-ranking-player')?.value;
-  const status=el('ranking-upload-status');if(status)status.innerHTML='';
-  if(!playerName){wrap.innerHTML='';return;}
-  const games=S.games||[],players=S.players||[];
-  const others=players.filter(p=>p!==playerName).sort((a,b)=>a.localeCompare(b));
-  if(!games.length||!others.length){wrap.innerHTML='<p class="empty">Add players and games first.</p>';return;}
-  function existingRank(gameId,op){const gR=(S.gameRankings&&S.gameRankings[gameId])||{};const ranked=gR[playerName]||[];const idx=ranked.indexOf(op);return idx>=0?idx+1:'';}
-  let html=`<div style="overflow-x:auto;margin-bottom:8px"><table id="ranking-grid-table" style="border-collapse:collapse;font-size:12px;width:100%"><thead><tr><th style="text-align:left;padding:6px 8px;background:#f8f7f4;border:1px solid #e0ddd6;font-weight:700;position:sticky;left:0;min-width:70px">Player</th>${games.map(g=>`<th style="padding:6px 8px;background:#EEEDFE;border:1px solid #e0ddd6;font-weight:700;color:#3C3489;text-align:center;white-space:nowrap">${g.name}</th>`).join('')}</tr></thead><tbody>`;
-  others.forEach(p=>{html+=`<tr><td style="padding:5px 8px;border:1px solid #e0ddd6;font-weight:600;background:#f8f7f4;position:sticky;left:0;white-space:nowrap">${p}</td>${games.map(g=>`<td style="border:1px solid #e0ddd6;padding:2px"><input type="number" min="1" max="${others.length}" data-player="${esc(p)}" data-game="${g.id}" value="${existingRank(g.id,p)}" placeholder="—" style="width:100%;min-width:40px;border:none;padding:5px 4px;font-size:13px;text-align:center;background:transparent;outline:none" oninput="highlightDupes('${g.id}')"></td>`).join('')}</tr>`;});
-  html+=`</tbody></table></div>
-  <div class="divider" style="margin:10px 0"></div>
-  <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:5px">📋 Paste from spreadsheet</div>
-  <div style="font-size:11px;color:#aaa;margin-bottom:5px">Copy just the number columns (include own dashed row). Players must be in A–Z order.</div>
-  <textarea id="grid-paste-box" rows="5" placeholder="Paste here then hit Fill grid..." style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:9px;font-size:12px;font-family:monospace;resize:vertical;margin-bottom:6px"></textarea>
-  <button class="btn btn-sm" onclick="pasteIntoGrid()" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489;margin-bottom:10px">↓ Fill grid from paste</button>
-  <div class="divider" style="margin:0 0 10px 0"></div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap">
-    <button class="btn btn-primary btn-sm" style="width:auto" onclick="saveRankingGrid()">💾 Save for ${playerName}</button>
-    <button class="btn btn-sm" style="width:auto;color:#888" onclick="clearRankingGrid()">✕ Clear</button>
-  </div>
-  <div style="font-size:10px;color:#aaa;margin-top:5px">Players sorted A–Z to match your spreadsheet. Duplicates turn red.</div>`;
-  wrap.innerHTML=html;
-};
-window.highlightDupes=(gameId)=>{
-  const inputs=document.querySelectorAll(`#ranking-grid-table input[data-game="${gameId}"]`);
-  const vals={};inputs.forEach(inp=>{const v=inp.value.trim();if(v)vals[v]=(vals[v]||0)+1;});
-  inputs.forEach(inp=>{const v=inp.value.trim();inp.style.background=v&&vals[v]>1?'#FEF2F2':'transparent';inp.style.color=v&&vals[v]>1?'#c0392b':'';});
-};
-window.clearRankingGrid=()=>{document.querySelectorAll('#ranking-grid-table input[type="number"]').forEach(inp=>{inp.value='';inp.style.background='transparent';inp.style.color='';});};
-window.pasteIntoGrid=()=>{
-  const playerName=el('upload-ranking-player')?.value;if(!playerName){alert('Select player first.');return;}
-  const raw=el('grid-paste-box')?.value.trim();if(!raw){alert('Paste data first.');return;}
-  const games=S.games||[],players=S.players||[];
-  const others=players.filter(p=>p!==playerName).sort((a,b)=>a.localeCompare(b));
-  const pastedRows=raw.split('\n').map(r=>r.trim()).filter(r=>r);
-  let gridRowIdx=0;
-  pastedRows.forEach(row=>{
-    const isDash=row.replace(/[-\s\t]/g,'')==='';if(isDash)return;
-    const cols=row.split(/\t|  +/).map(c=>c.trim());
-    if(gridRowIdx>=others.length)return;
-    const playerForRow=others[gridRowIdx];
-    games.forEach((g,ci)=>{
-      const val=cols[ci];if(!val||val.replace(/-/g,'')==='')return;
-      const rank=parseInt(val);if(isNaN(rank)||rank<=0)return;
-      const inp=document.querySelector(`#ranking-grid-table input[data-game="${g.id}"][data-player="${playerForRow.replace(/"/g,'&quot;')}"]`);
-      if(inp){inp.value=rank;highlightDupes(g.id);}
-    });
-    gridRowIdx++;
-  });
-  el('ranking-upload-status').innerHTML='<div class="alert alert-info" style="font-size:11px">✓ Grid filled — check for red duplicates then hit Save.</div>';
-  el('grid-paste-box').value='';
-};
-window.saveRankingGrid = async ()=>{
-  const playerName=el('upload-ranking-player')?.value;
-  const statusEl=el('ranking-upload-status');
-  if(!playerName){alert('Select player first.');return;}
-  const games=S.games||[];
-  const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
-  const summaryParts=[];let hasError=false;
+  text+='\nGAME RESULTS\n';
   games.forEach(g=>{
-    const inputs=document.querySelectorAll(`#ranking-grid-table input[data-game="${g.id}"]`);
-    if(!inputs.length)return;
-    const rankData=[],seen={};let dupeFound=false;
-    inputs.forEach(inp=>{const v=inp.value.trim(),rank=parseInt(v);if(!isNaN(rank)&&rank>0){if(seen[rank])dupeFound=true;seen[rank]=true;rankData.push({player:inp.dataset.player,rank});}});
-    if(dupeFound){hasError=true;statusEl.innerHTML=`<div class="alert alert-warn">Duplicate ranks in ${g.name}.</div>`;return;}
-    if(!rankData.length)return;
-    const sorted=rankData.sort((a,b)=>a.rank-b.rank).map(r=>r.player);
-    if(!gameRankings[g.id])gameRankings[g.id]={};
-    gameRankings[g.id][playerName]=sorted;
-    summaryParts.push(`${g.name}: ${sorted.length} players`);
+    const pts=(S.points&&S.points[g.id])||{};
+    const top=sorted.filter(p=>pts[p]).sort((a,b)=>(pts[b]||0)-(pts[a]||0)).slice(0,3);
+    if(!top.length) return;
+    text+=g.name+': 🥇'+top[0]+(top[1]?' 🥈'+top[1]:'')+(top[2]?' 🥉'+top[2]:'')+' \n';
   });
-  if(hasError)return;
-  if(!summaryParts.length){statusEl.innerHTML='<div class="alert alert-warn">No rankings entered.</div>';return;}
-  await update(ref(db,'tournaments/'+currentTourneyId),{gameRankings});
-  statusEl.innerHTML=`<div class="alert alert-success" style="font-size:11px">✓ Saved for <strong>${playerName}</strong>: ${summaryParts.join(' · ')}</div>`;
-};
-window.handleXlsxUpload = async (event)=>{
-  const file=event.target.files[0];if(!file)return;
-  const statusEl=el('xlsx-upload-status');
-  statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">📂 Reading file...</div>';
-  if(!window.XLSX){
-    await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=()=>rej(new Error('Failed to load SheetJS'));document.head.appendChild(s);});
-  }
-  try{
-    const buf=await file.arrayBuffer(),wb=window.XLSX.read(buf,{type:'array'});
-    const players=S.players||[],games=S.games||[];
-    if(!players.length||!games.length){statusEl.innerHTML='<div class="alert alert-warn">Add players and games first.</div>';return;}
-    function norm(s){return String(s||'').toLowerCase().replace(/[\s\-_.]/g,'');}
-    function isDash(v){const s=String(v||'').trim();return!s||s.replace(/-/g,'').replace(/\s/g,'')===''; }
-    const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
-    const loadedPlayers=[],errors=[];
-    players.forEach(rater=>{
-      const sheetName=wb.SheetNames.find(s=>norm(s)===norm(rater)||norm(s).includes(norm(rater))||norm(rater).includes(norm(s)));
-      if(!sheetName){errors.push(rater);return;}
-      const ws=wb.Sheets[sheetName];
-      const rows=window.XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-      let headerRowIdx=-1,gameCols=[];
-      rows.forEach((row,i)=>{
-        if(headerRowIdx>=0)return;
-        const vals=row.map(v=>String(v||'').trim());
-        if(vals.some(v=>norm(v)==='golf'||norm(v)==='bowling')){
-          headerRowIdx=i;
-          vals.forEach((v,ci)=>{
-            if(ci===0||!v||isDash(v))return;
-            if(norm(v).startsWith('avg')||norm(v).startsWith('rank'))return;
-            const match=games.find(g=>norm(g.name)===norm(v)||norm(g.name).includes(norm(v))||norm(v).includes(norm(g.name)));
-            if(match)gameCols.push({ci,gameId:match.id,gameName:match.name});
-          });
-        }
-      });
-      if(headerRowIdx<0||!gameCols.length){errors.push(rater+'(no cols)');return;}
-      const rankData={};gameCols.forEach(({gameId})=>{rankData[gameId]={};});
-      rows.slice(headerRowIdx+1).forEach(row=>{
-        const rowPlayer=String(row[0]||'').trim();if(!rowPlayer)return;
-        if(isDash(String(row[gameCols[0].ci]||'')))return;
-        const matched=players.find(p=>norm(p)===norm(rowPlayer)||norm(p).includes(norm(rowPlayer))||norm(rowPlayer).includes(norm(p)));
-        if(!matched)return;
-        gameCols.forEach(({ci,gameId})=>{const val=row[ci];if(val===''||val===null||val===undefined)return;const rank=parseInt(String(val));if(!isNaN(rank)&&rank>0)rankData[gameId][matched]=rank;});
-      });
-      let gamesLoaded=0;
-      gameCols.forEach(({gameId})=>{const pr=rankData[gameId];if(!Object.keys(pr).length)return;const sorted=Object.entries(pr).sort((a,b)=>a[1]-b[1]).map(e=>e[0]);if(!gameRankings[gameId])gameRankings[gameId]={};gameRankings[gameId][rater]=sorted;gamesLoaded++;});
-      if(gamesLoaded>0)loadedPlayers.push(rater);else errors.push(rater+'(no data)');
-    });
-    if(!loadedPlayers.length){statusEl.innerHTML=`<div class="alert alert-warn">Could not load any. Sheets: ${wb.SheetNames.join(', ')}</div>`;return;}
-    await update(ref(db,'tournaments/'+currentTourneyId),{gameRankings});
-    statusEl.innerHTML=`<div class="alert alert-success" style="font-size:11px">✓ Loaded <strong>${loadedPlayers.length} players</strong>: ${loadedPlayers.join(', ')}${errors.length?'<br>⚠️ Skipped: '+errors.join(', '):''}`;
-    event.target.value='';
-  }catch(err){statusEl.innerHTML=`<div class="alert alert-warn">❌ ${err.message}</div>`;}
+  text+='\nNEW BADGES\n';
+  Object.entries(newBadges).forEach(([p,badges])=>{
+    text+=p+': '+badges.map(b=>b.icon+' '+b.name).join(', ')+'\n';
+  });
+  navigator.clipboard.writeText(text).then(()=>alert('Copied!'));
 };
 
-// ── TEST HELPERS ──────────────────────────────────────────
-window.resetTournament = async ()=>{
-  if(!confirm('Reset? Clears rankings, teams, scores. Keeps players & games.'))return;
-  const games=(S.games||[]).map(g=>({...g,status:'pending'}));
-  await update(ref(db,'tournaments/'+currentTourneyId),{rankings:{},gameRankings:{},teams:{},scores:{},points:{},bs:{},tiebreaker:{},rankingsLocked:false,tournamentStarted:false,tournamentFinalized:false,games});
-};
-window.fillTestRankings = async ()=>{
-  const players=S.players||[],games=S.games||[];
-  if(!players.length||!games.length){alert('Add players and games first.');return;}
-  const gameRankings=JSON.parse(JSON.stringify(S.gameRankings||{}));
-  games.forEach(g=>{if(!gameRankings[g.id])gameRankings[g.id]={};players.forEach(player=>{const others=players.filter(p=>p!==player).sort(()=>Math.random()-.5);gameRankings[g.id][player]=others;});});
-  await update(ref(db,'tournaments/'+currentTourneyId),{gameRankings});
-  alert('✓ Random rankings filled!');
-};
 
-// ── MODAL ─────────────────────────────────────────────────
-window.closeModal = ()=>{ const e=el('modal-area'); if(e)e.innerHTML=''; };
-
-// ── UTILS ─────────────────────────────────────────────────
-function showErr(el2,msg){ el2.innerHTML=`<div class="alert alert-danger">${msg}</div>`; }
-
-// ── INVITE LINK HANDLING ──────────────────────────────────
-const urlParams = new URLSearchParams(window.location.search);
-const inviteKey = urlParams.get('invite');
-const joinCode  = urlParams.get('join');
-if(inviteKey) localStorage.setItem('gg_invite_key', inviteKey);
-if(joinCode)  localStorage.setItem('gg_join_code', joinCode);
-
-</script>
-</body>
-</html>
