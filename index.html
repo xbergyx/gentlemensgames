@@ -798,6 +798,8 @@ window.syncTournamentHistory=async()=>{
   const players=S.players||[];
   if(!players.length){alert('No players to sync.');return;}
   const [ps,prs]=await Promise.all([get(ref(db,'players')),get(ref(db,'preAssignments'))]);
+
+  // Build name->profile map from signed-up players
   const pm={};
   if(ps.exists()) Object.values(ps.val()).forEach(p=>{
     if(!p) return;
@@ -805,39 +807,65 @@ window.syncTournamentHistory=async()=>{
     [p.preferredName,p.name,p.firstName,p.nickname,fullName]
       .filter(Boolean).forEach(n=>{
         const key=n.trim();
-        // Prefer the entry with more data; full name key is most reliable
         if(!pm[key]||(p.years||0)>(pm[key].years||0)) pm[key]=p;
       });
+    if(fullName) pm[fullName]=p; // always store full name
   });
-  if(prs.exists()) Object.values(prs.val()).forEach(p=>{
+
+  // Build preKey->profile map for ghost players (direct key lookup — no name matching)
+  const preByKey={};
+  // Also add preAssignments to name map as fallback
+  if(prs.exists()) Object.entries(prs.val()).forEach(([key,p])=>{
     if(!p) return;
+    preByKey[key]=p;
     const fullName=((p.firstName||'')+' '+(p.lastName||'')).trim();
     [p.preferredName,p.nickname,p.firstName,fullName]
-      .filter(Boolean).forEach(n=>{const key=n.trim(); if(key&&!pm[key]) pm[key]=p;});
+      .filter(Boolean).forEach(n=>{const k=n.trim(); if(k&&!pm[k]) pm[k]=p;});
+    if(fullName&&!pm[fullName]) pm[fullName]=p;
   });
+
+  // Ghost players map: preKey -> playerName
+  const ghostPlayers=S.ghostPlayers||{};
+
   const updates={};let synced=0,notFound=[];
-  players.forEach(name=>{
-    const prof=pm[name];
-    if(!prof){notFound.push(name);return;}
-    // Always overwrite — fixes stale/partial data
-    updates['history/'+name]={
-      years:prof.years||0, wins:prof.wins||0, podiums:prof.podiums||0,
-      lastPlaces:prof.lastPlaces||0, yearsAttended:prof.yearsAttended||[],
-      gameWins:prof.gameWins||{}, gameStats:prof.gameStats||{}
+
+  players.forEach(playerName=>{
+    // For ghost players: find their preKey and load directly
+    const preKey=Object.entries(ghostPlayers).find(([k,v])=>v===playerName)?.[0];
+    let prof = preKey ? preByKey[preKey] : null;
+
+    // Fall back to name-based lookup (for signed-up players)
+    if(!prof) prof=pm[playerName];
+
+    if(!prof){notFound.push(playerName);return;}
+
+    const h={
+      years:      prof.years||0,
+      wins:       prof.wins||0,
+      podiums:    prof.podiums||0,
+      lastPlaces: prof.lastPlaces||0,
+      yearsAttended: prof.yearsAttended||[],
+      gameWins:   prof.gameWins||{},
+      gameStats:  prof.gameStats||{}
     };
-    // Also update _globalProfiles cache immediately with full profile including gameStats
-    const profWithStats={...(_globalProfiles[name]||{}),...prof,gameStats:prof.gameStats||{}};
-    _globalProfiles[name]=profWithStats;
-    // Also index by all name variants
-    [prof.preferredName,prof.nickname,prof.firstName].filter(Boolean).forEach(n=>{
-      if(n.trim()) _globalProfiles[n.trim()]=profWithStats;
-    });
+    updates['history/'+playerName]=h;
+
+    // Update _globalProfiles cache
+    const profWithStats={...(_globalProfiles[playerName]||{}),...prof,...h};
+    _globalProfiles[playerName]=profWithStats;
+    [prof.preferredName,prof.nickname,prof.firstName]
+      .filter(Boolean)
+      .forEach(n=>{if(n.trim()) _globalProfiles[n.trim()]=profWithStats;});
+
     synced++;
   });
+
   if(!synced){alert('No matching profiles found. Import GG_Complete_History.xlsx first.');return;}
   await update(ref(db,'tournaments/'+currentTourneyId),updates);
   await loadGlobalProfilesForTournament();
-  alert('Synced '+synced+' player'+(synced!==1?'s':'')+'!'+(notFound.length?'\n\nNot found: '+notFound.join(', '):''));
+  alert('Synced '+synced+' player'+(synced!==1?'s':'')+'!'
+    +(notFound.length?'\n\nNot found in database: '+notFound.join(', ')
+      +'\n\nTip: import GG_Complete_History.xlsx first.':''));
 };
 
 // ── TOURNAMENT SUMMARY MODAL ──────────────────────────────
@@ -1734,10 +1762,10 @@ window.addPlayerFromPre=async(preKey,playerName)=>{
   const updates={players,ghostPlayers};
   if(preSnap.exists()){
     const p=preSnap.val();
-    if(p.years>0||p.wins>0||Object.keys(p.gameWins||{}).length>0)
-      updates['history/'+playerName]={years:p.years||0,wins:p.wins||0,podiums:p.podiums||0,
-        lastPlaces:p.lastPlaces||0,yearsAttended:p.yearsAttended||[],
-        gameWins:p.gameWins||{},gameStats:p.gameStats||{}};
+    // Always write history — even new players may have gameStats from spreadsheet import
+    updates['history/'+playerName]={years:p.years||0,wins:p.wins||0,podiums:p.podiums||0,
+      lastPlaces:p.lastPlaces||0,yearsAttended:p.yearsAttended||[],
+      gameWins:p.gameWins||{},gameStats:p.gameStats||{}};
   }
   await update(ref(db,'tournaments/'+currentTourneyId),updates);
   el('player-search-results').innerHTML='';
@@ -2575,20 +2603,39 @@ function getPlayerBadgesFromProfile(h,name=''){
 function renderBadges(badges){ if(!badges||!badges.length)return''; return badges.map(b=>`<span class="badge ${b.cls}">${b.icon} ${b.text}</span>`).join(''); }
 function renderHistoryList(){
   const e=el('admin-history'); if(!e) return;
-  let html='<div class="card"><div class="card-title">📜 Player history</div>';
+  const ghostPlayers=S.ghostPlayers||{};
+  const isGhost=name=>Object.values(ghostPlayers).includes(name);
+
+  // ── Player history + badge assignment ──
+  let html='<div class="card"><div class="card-title">📜 Player history &amp; badges</div>';
   (S.players||[]).forEach(p=>{
     const h=(S.history&&S.history[p])||{};
+    const ghost=isGhost(p);
+    const assigned=S.playerBadges&&S.playerBadges[p]||[];
+    // Build manual badge buttons
+    const manualBadges=BADGE_LIBRARY.filter(b=>!b.auto);
+    const badgeBtns=manualBadges.map(b=>{
+      const on=assigned.includes(b.id);
+      return '<button onclick="toggleManualBadge(this)" data-player="'+esc(p)+'" data-badge="'+b.id+'" '
+        +'style="margin:2px;padding:3px 7px;border-radius:12px;border:1px solid '+(on?'#534AB7':'#ddd')+';'
+        +'background:'+(on?'#EEEDFE':'#fff')+';cursor:pointer;font-size:11px">'
+        +b.icon+' '+b.name+'</button>';
+    }).join('');
     html+=`<div style="padding:10px 0;border-bottom:1px solid #f0ede6">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
-        <span style="font-size:13px;font-weight:600">${p}</span>
-        <button class="btn btn-sm" onclick="openEditHistory('${esc(p)}')" style="width:auto">Edit</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:13px;font-weight:600">${p}${ghost?' <span class="tag" style="font-size:9px;background:#FEF3E2;color:#7a4f00">⏳ ghost</span>':''}</span>
+        <button class="btn btn-sm" onclick="openEditHistory('${esc(p)}')" style="width:auto">Edit stats</button>
       </div>
-      <div style="font-size:11px;color:#888;margin-bottom:5px">${h.years||0}yrs · ${h.wins||0}W · ${h.podiums||0}P · ${h.lastPlaces||0}L</div>
-      <div class="badges-wrap">${renderBadges(getPlayerBadges(p))}</div>
+      <div style="font-size:11px;color:#888;margin-bottom:6px">${h.years||0}yrs · ${h.wins||0}W · ${h.podiums||0}P · ${h.lastPlaces||0}L</div>
+      <div class="badges-wrap" style="margin-bottom:6px">${renderBadges(getPlayerBadges(p))}</div>
+      <div style="font-size:10px;color:#aaa;margin-bottom:3px;font-weight:600">Assign badges:</div>
+      <div style="display:flex;flex-wrap:wrap;gap:2px">${badgeBtns}</div>
     </div>`;
   });
   html+='</div>';
-  html+=`<div class="card"><div class="card-title">⚙️ Custom badges</div>
+
+  // ── Custom badges ──
+  html+=`<div class="card"><div class="card-title">✨ Custom badges</div>
     <div class="sec-label">Badge name</div><input type="text" id="custom-badge-name" placeholder="e.g. Commissioner">
     <div class="sec-label">Assign to</div><select id="custom-badge-player"><option value="">— select —</option></select>
     <button class="btn btn-primary btn-sm" onclick="addCustomBadge()" style="width:auto">+ Add badge</button>
@@ -2597,6 +2644,16 @@ function renderHistoryList(){
   e.innerHTML=html;
   renderCustomBadges(); renderCustomBadgePlayerSelect();
 }
+
+window.toggleManualBadge = async (btn)=>{
+  const playerName=btn.dataset.player, badgeId=btn.dataset.badge;
+  const playerBadges=JSON.parse(JSON.stringify(S.playerBadges||{}));
+  if(!playerBadges[playerName]) playerBadges[playerName]=[];
+  const idx=playerBadges[playerName].indexOf(badgeId);
+  if(idx>=0) playerBadges[playerName].splice(idx,1);
+  else playerBadges[playerName].push(badgeId);
+  await update(ref(db,'tournaments/'+currentTourneyId),{playerBadges});
+};
 window.openEditHistory = (name)=>{
   const h=(S.history&&S.history[name])||{};
   el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
