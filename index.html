@@ -743,7 +743,7 @@ window.handleHistoryImport=async(event)=>{
         phone,email,preferredContact:phone?'phone':'email',years,wins,podiums,lastPlaces,
         yearsAttended,matchNames,gameStats,importedFrom:'GG_Complete_History',importedAt:Date.now()};
       try{
-        const eu=await findPlayerByMatchNames(matchNames,phone,email);
+        const eu=await findPlayerByMatchNames(matchNames,phone,email,fn2,ln2);
         if(eu){
           const es=await get(ref(db,'players/'+eu));
           const ex=es.exists()?es.val():{};
@@ -759,14 +759,34 @@ window.handleHistoryImport=async(event)=>{
     loadGlobalPlayers(); event.target.value='';
   }catch(err){statusEl.innerHTML='<div class="alert alert-warn">Error: '+err.message+'</div>';}
 };
-async function findPlayerByMatchNames(matchNames,phone,email){
+async function findPlayerByMatchNames(matchNames,phone,email,firstName='',lastName=''){
   const snap=await get(ref(db,'players'));
   if(!snap.exists()) return null;
-  for(const [uid2,p] of Object.entries(snap.val())){
+  const all=snap.val();
+  // Priority 1: phone
+  for(const [uid2,p] of Object.entries(all)){
     if(!p) continue;
     if(phone&&p.phone&&normalizePhone(phone)===normalizePhone(p.phone)) return uid2;
+  }
+  // Priority 2: email
+  for(const [uid2,p] of Object.entries(all)){
+    if(!p) continue;
     if(email&&p.email&&email.toLowerCase()===p.email.toLowerCase()) return uid2;
-    const pn=[p.nickname,p.firstName,p.preferredName,p.name,(p.firstName||'')+' '+(p.lastName||'')]
+  }
+  // Priority 3: first+last name (most reliable, avoids nickname collisions)
+  if(firstName&&lastName){
+    const fn=firstName.trim().toLowerCase(), ln=lastName.trim().toLowerCase();
+    for(const [uid2,p] of Object.entries(all)){
+      if(!p) continue;
+      const pFn=(p.firstName||'').trim().toLowerCase();
+      const pLn=(p.lastName||'').trim().toLowerCase();
+      if(pFn===fn&&pLn===ln) return uid2;
+    }
+  }
+  // Priority 4: matchNames array
+  for(const [uid2,p] of Object.entries(all)){
+    if(!p) continue;
+    const pn=[(p.firstName||'')+' '+(p.lastName||''),p.preferredName,p.nickname,p.name]
       .filter(Boolean).map(n=>n.trim().toLowerCase());
     if(matchNames.some(m=>pn.includes(m))) return uid2;
   }
@@ -779,8 +799,22 @@ window.syncTournamentHistory=async()=>{
   if(!players.length){alert('No players to sync.');return;}
   const [ps,prs]=await Promise.all([get(ref(db,'players')),get(ref(db,'preAssignments'))]);
   const pm={};
-  if(ps.exists()) Object.values(ps.val()).forEach(p=>{if(p)[p.preferredName,p.name,p.firstName,p.nickname].filter(Boolean).forEach(n=>{pm[n.trim()]=p;});});
-  if(prs.exists()) Object.values(prs.val()).forEach(p=>{if(p)[p.preferredName,p.nickname,p.firstName].filter(Boolean).forEach(n=>{if(!pm[n.trim()])pm[n.trim()]=p;});});
+  if(ps.exists()) Object.values(ps.val()).forEach(p=>{
+    if(!p) return;
+    const fullName=((p.firstName||'')+' '+(p.lastName||'')).trim();
+    [p.preferredName,p.name,p.firstName,p.nickname,fullName]
+      .filter(Boolean).forEach(n=>{
+        const key=n.trim();
+        // Prefer the entry with more data; full name key is most reliable
+        if(!pm[key]||(p.years||0)>(pm[key].years||0)) pm[key]=p;
+      });
+  });
+  if(prs.exists()) Object.values(prs.val()).forEach(p=>{
+    if(!p) return;
+    const fullName=((p.firstName||'')+' '+(p.lastName||'')).trim();
+    [p.preferredName,p.nickname,p.firstName,fullName]
+      .filter(Boolean).forEach(n=>{const key=n.trim(); if(key&&!pm[key]) pm[key]=p;});
+  });
   const updates={};let synced=0,notFound=[];
   players.forEach(name=>{
     const prof=pm[name];
@@ -1432,22 +1466,29 @@ async function loadGlobalProfilesForTournament(){
   _globalProfiles={};
   if(ps.exists()) Object.values(ps.val()).forEach(p=>{
     if(!p) return;
-    [p.preferredName,p.name,p.firstName,p.nickname,p.lastName,
-     ((p.firstName||'')+' '+(p.lastName||'')).trim()]
+    const fullName=((p.firstName||'')+' '+(p.lastName||'')).trim();
+    // Index by all variants; full name wins ties (most specific)
+    [p.preferredName,p.name,p.firstName,p.nickname,fullName]
       .filter(Boolean).forEach(n=>{
         const key=n.trim();
-        if(key&&(!_globalProfiles[key]||(p.years||0)>(_globalProfiles[key].years||0)))
+        if(!key) return;
+        const existing=_globalProfiles[key];
+        // Keep entry with most data, prefer full-name keyed entries
+        if(!existing||(p.years||0)>(existing.years||0))
           _globalProfiles[key]=p;
       });
+    // Always store under full name — guarantees collision-free lookup
+    if(fullName) _globalProfiles[fullName]=p;
   });
   if(prs.exists()) Object.values(prs.val()).forEach(p=>{
     if(!p) return;
-    [p.preferredName,p.nickname,p.firstName,p.lastName,
-     ((p.firstName||'')+' '+(p.lastName||'')).trim()]
+    const fullName=((p.firstName||'')+' '+(p.lastName||'')).trim();
+    [p.preferredName,p.nickname,p.firstName,fullName]
       .filter(Boolean).forEach(n=>{
         const key=n.trim();
         if(key&&!_globalProfiles[key]) _globalProfiles[key]=p;
       });
+    if(fullName&&!_globalProfiles[fullName]) _globalProfiles[fullName]=p;
   });
   // Also index tournament history directly — merge so gameStats from history wins
   if(S.history) Object.entries(S.history).forEach(([name,h])=>{
