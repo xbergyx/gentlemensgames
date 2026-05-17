@@ -294,6 +294,12 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
     <div class="card">
       <div class="card-title">👥 Global player database</div>
+      <div class="alert alert-info" style="font-size:11px;margin-bottom:8px">Upload GG_Complete_History.xlsx to auto-import all player history and badges.</div>
+      <label class="btn btn-success" style="cursor:pointer;margin-bottom:8px">
+        📥 Import from GG_Complete_History.xlsx
+        <input type="file" id="history-import-input" accept=".xlsx,.xls" style="display:none" onchange="handleHistoryImport(event)">
+      </label>
+      <div id="history-import-status" style="margin-bottom:8px"></div>
       <div class="search-box">
         <span class="search-icon">🔍</span>
         <input type="text" placeholder="Search players by name, phone or email..." oninput="searchGlobalPlayers(this.value)" style="padding-left:32px;margin:0">
@@ -695,6 +701,189 @@ function afterSignIn(){
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const isStandalone = window.navigator.standalone;
   if(isIOS&&!isStandalone) show('install-prompt');
+}
+
+// ── HISTORY IMPORT FROM SPREADSHEET ─────────────────────
+window.handleHistoryImport = async (event)=>{
+  const file = event.target.files[0]; if(!file) return;
+  const statusEl = el('history-import-status');
+  statusEl.innerHTML = '<div class="alert alert-info" style="font-size:11px">📂 Reading spreadsheet...</div>';
+
+  if(!window.XLSX){
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload=res; s.onerror=()=>rej(new Error('Failed to load SheetJS'));
+      document.head.appendChild(s);
+    });
+  }
+
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = window.XLSX.read(buf, {type:'array'});
+
+    if(!wb.SheetNames.includes('Player Roster')){
+      statusEl.innerHTML='<div class="alert alert-warn">Sheet "Player Roster" not found. Make sure you\'re uploading GG_Complete_History.xlsx</div>';
+      return;
+    }
+
+    const ws = wb.Sheets['Player Roster'];
+    const rows = window.XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+    // Find header row
+    let headerIdx = -1;
+    for(let i=0;i<rows.length;i++){
+      if(String(rows[i][0]||'').includes('Nickname')){ headerIdx=i; break; }
+    }
+    if(headerIdx<0){ statusEl.innerHTML='<div class="alert alert-warn">Could not find header row.</div>'; return; }
+
+    const headers = rows[headerIdx].map(h=>String(h||'').trim().toLowerCase());
+    const col = (name)=>headers.findIndex(h=>h.includes(name.toLowerCase()));
+
+    const cNick=col('nickname'), cFirst=col('first'), cLast=col('last'),
+          cPref=col('preferred'), cPhone=col('phone'), cEmail=col('email'),
+          cYrs=col('years'), cWins=col('wins'), cPods=col('podium'),
+          cLasts=col('last place'), cYlist=col('years list');
+
+    let imported=0, updated=0, skipped=0;
+    const errors=[];
+
+    for(let i=headerIdx+1;i<rows.length;i++){
+      const row=rows[i];
+      const nick=String(row[cNick]||'').trim();
+      if(!nick||nick.startsWith('📝')) continue;
+
+      const firstName=String(row[cFirst]||'').trim();
+      const lastName=String(row[cLast]||'').trim();
+      const preferred=String(row[cPref]||'').trim()||firstName||nick;
+      const phone=String(row[cPhone]||'').trim();
+      const email=String(row[cEmail]||'').trim();
+      const years=parseInt(row[cYrs])||0;
+      const wins=parseInt(row[cWins])||0;
+      const podiums=parseInt(row[cPods])||0;
+      const lastPlaces=parseInt(row[cLasts])||0;
+      const yearsStr=String(row[cYlist]||'');
+      const yearsAttended=yearsStr.split(',').map(y=>parseInt(y.trim())).filter(Boolean);
+
+      // Build matchable names list
+      const matchNames=[nick,firstName,preferred,firstName+' '+lastName,preferred+' '+lastName]
+        .filter(Boolean).map(n=>n.trim().toLowerCase());
+
+      // Look up game stats from Game Results sheet
+      const gameStats = extractGameStats(wb, nick);
+
+      const playerData = {
+        nickname:nick, firstName, lastName, preferredName:preferred, name:preferred,
+        phone, email, preferredContact:phone?'phone':'email',
+        years, wins, podiums, lastPlaces, yearsAttended,
+        matchNames, gameStats,
+        gameWins: Object.fromEntries(
+          Object.entries(gameStats).filter(([g,s])=>s.wins>0).map(([g,s])=>[g,s.wins])
+        ),
+        importedFrom:'GG_Complete_History', importedAt:Date.now()
+      };
+
+      // Check if player already exists in Firebase by matching names/phone/email
+      const existingUid = await findPlayerByMatchNames(matchNames, phone, email);
+
+      try {
+        if(existingUid){
+          // Update existing player — preserve their uid and auth info
+          const snap = await get(ref(db,'players/'+existingUid));
+          const existing = snap.exists() ? snap.val() : {};
+          await update(ref(db,'players/'+existingUid), {
+            ...playerData,
+            uid: existingUid,
+            phone: existing.phone||phone,
+            email: existing.email||email,
+          });
+          updated++;
+        } else {
+          // Create pre-assignment (will link when player signs up)
+          const preKey = 'import_'+nick.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+Date.now();
+          await set(ref(db,'preAssignments/'+preKey), playerData);
+          imported++;
+        }
+      } catch(e){
+        errors.push(nick+': '+e.message);
+        skipped++;
+      }
+    }
+
+    statusEl.innerHTML=`<div class="alert alert-success">
+      ✓ Import complete!<br>
+      <strong>${imported}</strong> new pre-assignments created<br>
+      <strong>${updated}</strong> existing players updated<br>
+      ${skipped?'<strong>'+skipped+'</strong> skipped (errors)':''}
+      ${errors.length?'<div style="font-size:10px;color:#c0392b;margin-top:4px">'+errors.slice(0,3).join('<br>')+'</div>':''}
+    </div>`;
+    loadGlobalPlayers();
+    event.target.value='';
+  } catch(err){
+    statusEl.innerHTML=`<div class="alert alert-warn">❌ ${err.message}</div>`;
+  }
+};
+
+function extractGameStats(wb, playerNick){
+  const stats={};
+  if(!wb.SheetNames.includes('Game Results by Year')) return stats;
+  const ws=wb.Sheets['Game Results by Year'];
+  const rows=window.XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  const gameIcons={'⛳':'Golf','🎳':'Bowling','🌽':'Cornhole','🥏':'Kan Jam',
+                   '🏐':'Spikeball','🎯':'Beer Darts','🎲':'Beer Die','🃏':'Cocaine','🪣':'Bucketball'};
+  let currentGame=null;
+  for(const row of rows){
+    const first=String(row[0]||'').trim();
+    // Game section header
+    for(const [icon,game] of Object.entries(gameIcons)){
+      if(first.startsWith(icon)){ currentGame=game; break; }
+    }
+    if(!currentGame) continue;
+    if(first==='Player'||first.startsWith('⛳')||first.startsWith('🎳')||
+       first.startsWith('🌽')||first.startsWith('🥏')||first.startsWith('🏐')||
+       first.startsWith('🎯')||first.startsWith('🎲')||first.startsWith('🃏')||
+       first.startsWith('🪣')) continue;
+    // Check if this row's player matches
+    const rowPlayerRaw=first;
+    const rowPlayer=rowPlayerRaw.replace(/[^a-zA-Z ]/g,'').trim().toLowerCase();
+    const nickLower=playerNick.toLowerCase();
+    if(!rowPlayer||!rowPlayer.includes(nickLower)&&!nickLower.includes(rowPlayer)) continue;
+    // Parse placements from columns 2-6 (years 2021-2025)
+    const placements=[];
+    for(let ci=1;ci<=5;ci++){
+      const cell=String(row[ci]||'').trim();
+      if(cell==='—'||!cell) continue;
+      const placeMatch=cell.match(/(\d+)\./);
+      if(placeMatch) placements.push(parseInt(placeMatch[1]));
+    }
+    if(placements.length){
+      stats[currentGame]={
+        years_played:placements.length,
+        avg_place:parseFloat((placements.reduce((a,b)=>a+b,0)/placements.length).toFixed(2)),
+        best_place:Math.min(...placements),
+        wins:placements.filter(p=>p===1).length,
+      };
+    }
+  }
+  return stats;
+}
+
+async function findPlayerByMatchNames(matchNames, phone, email){
+  const snap = await get(ref(db,'players'));
+  if(!snap.exists()) return null;
+  const all = snap.val();
+  for(const [uid2,p] of Object.entries(all)){
+    if(!p) continue;
+    // Match by phone or email first
+    if(phone&&p.phone&&normalizePhone(phone)===normalizePhone(p.phone)) return uid2;
+    if(email&&p.email&&email.toLowerCase()===p.email.toLowerCase()) return uid2;
+    // Match by name
+    const pNames=[p.nickname,p.firstName,p.preferredName,p.name,
+                  (p.firstName||'')+' '+(p.lastName||'')]
+      .filter(Boolean).map(n=>n.trim().toLowerCase());
+    if(matchNames.some(mn=>pNames.includes(mn))) return uid2;
+  }
+  return null;
 }
 
 window.signOut = async ()=>{
@@ -2289,10 +2478,15 @@ window.declareTournamentWinner = async ()=>{
   for(const [uid2,pData] of Object.entries(S.playerUids||{})){
     const name=pData;
     if(!history[name])continue;
+    // Get this player's finishing position
+    const finishPos=sorted.indexOf(name)+1;
+    const osUpdate={...(await get(ref(db,'players/'+uid2+'/overallStandings'))).val()||{}};
+    osUpdate[S.tourneyYear||new Date().getFullYear()]=finishPos;
     await update(ref(db,'players/'+uid2),{
       years:history[name].years,wins:history[name].wins,
       podiums:history[name].podiums,lastPlaces:history[name].lastPlaces,
-      yearsAttended:history[name].yearsAttended
+      yearsAttended:history[name].yearsAttended,
+      overallStandings:osUpdate
     });
   }
   await update(ref(db,'tournaments/'+currentTourneyId),{history,tournamentFinalized:true});
@@ -2589,24 +2783,83 @@ function renderPlayerRankings(myName){
   html+='</div>';
   e.innerHTML=html;
 }
-window.openGameRanking = (gameId,myName)=>{
+window.openGameRanking = async (gameId,myName)=>{
   const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
-  const others=(S.players||[]).filter(p=>p!==myName).sort((a,b)=>a.localeCompare(b));
+  const others=(S.players||[]).filter(p=>p!==myName);
   const gR=(S.gameRankings&&S.gameRankings[gameId])||{};
-  let ranked=gR[myName]?gR[myName].filter(p=>others.includes(p)):[...others];
-  others.forEach(p=>{if(!ranked.includes(p))ranked.push(p);});
+
+  // Get game stats for all players from global DB
+  const playerProfiles={};
+  const snap=await get(ref(db,'players'));
+  if(snap.exists()){
+    Object.values(snap.val()).forEach(p=>{
+      if(p&&p.name) playerProfiles[p.name]={...p};
+      if(p&&p.preferredName) playerProfiles[p.preferredName]={...p};
+    });
+  }
+
+  // Get previous year overall standings for tiebreaking
+  const thisYear=S.tourneyYear||new Date().getFullYear();
+  const prevYear=thisYear-1;
+
+  function getGameStats(playerName){
+    const profile=playerProfiles[playerName]||{};
+    const gs=(profile.gameStats||{})[game.name];
+    return gs||null;
+  }
+  function getPrevYearRank(playerName){
+    const profile=playerProfiles[playerName]||{};
+    const os=profile.overallStandings||{};
+    return os[prevYear]||99;
+  }
+
+  // Smart default order: sort by avg_place ASC, tiebreak by prev year overall result
+  let smartOrdered;
+  if(gR[myName]){
+    // Already ranked — use their existing order
+    smartOrdered=gR[myName].filter(p=>others.includes(p));
+    others.forEach(p=>{if(!smartOrdered.includes(p))smartOrdered.push(p);});
+  } else {
+    // First time — sort by game avg_place, tiebreak by prev year standing
+    smartOrdered=[...others].sort((a,b)=>{
+      const sa=getGameStats(a), sb=getGameStats(b);
+      const avgA=sa?sa.avg_place:99, avgB=sb?sb.avg_place:99;
+      if(avgA!==avgB) return avgA-avgB;
+      // Tiebreak: previous year overall result (lower = better)
+      return getPrevYearRank(a)-getPrevYearRank(b);
+    });
+  }
+
+  function playerCard(p,i){
+    const gs=getGameStats(p);
+    const statsStr=gs
+      ? `${gs.years_played} yr${gs.years_played!==1?'s':''} · avg ${gs.avg_place.toFixed(1)} · ${gs.wins>0?gs.wins+'x 🥇':''}`.trim()
+      : 'No history for this game';
+    const isNew=!gs;
+    return `<div class="rank-item" draggable="true" data-player="${esc(p)}"
+      ondragstart="dstart(event)" ondragover="dover(event,'game-rank-list')" ondrop="ddrop(event,'game-rank-list')" ondragleave="dleave(event)"
+      ontouchstart="tstart(event,'game-rank-list')" ontouchmove="tmove(event)" ontouchend="tend(event)">
+      <span style="color:#ccc;font-size:18px;flex-shrink:0">⠿</span>
+      <span class="rank-num" style="flex-shrink:0">${i+1}</span>
+      <div class="avatar" style="flex-shrink:0">${initials(p)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600">${p}</div>
+        <div style="font-size:10px;color:${isNew?'#aaa':'#534AB7'};margin-top:1px">${statsStr}</div>
+      </div>
+    </div>`;
+  }
+
   el('modal-area').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title"><span>Rank for: ${game.name}</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
-    <div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Hold and drag to reorder — 1 = best</div>
-    <div id="game-rank-list">${ranked.map((p,i)=>`<div class="rank-item" draggable="true" data-player="${esc(p)}"
-      ondragstart="dstart(event)" ondragover="dover(event,'game-rank-list')" ondrop="ddrop(event,'game-rank-list')" ondragleave="dleave(event)"
-      ontouchstart="tstart(event,'game-rank-list')" ontouchmove="tmove(event)" ontouchend="tend(event)">
-      <span style="color:#ccc;font-size:18px">⠿</span>
-      <span class="rank-num">${i+1}</span>
-      <div class="avatar">${initials(p)}</div>
-      <div style="flex:1"><div style="font-size:13px;font-weight:500">${p}</div><div class="badges-wrap" style="margin-top:2px">${renderBadges(getPlayerBadges(p))}</div></div>
-    </div>`).join('')}</div>
+    <div class="alert alert-info" style="font-size:11px;margin-bottom:6px">
+      <strong>1 = best player, drag to reorder.</strong><br>
+      Pre-sorted by historical avg placement. Tiebreaks use last year's overall result.
+    </div>
+    <div style="font-size:10px;color:#aaa;margin-bottom:10px">
+      Stats shown: years played this game · average place · wins
+    </div>
+    <div id="game-rank-list">${smartOrdered.map((p,i)=>playerCard(p,i)).join('')}</div>
     <div class="divider"></div>
     <button class="btn btn-primary" onclick="submitGameRanking('${gameId}','${esc(myName)}')">✓ Submit for ${game.name}</button>
     <div id="rank-submit-msg"></div>
