@@ -308,6 +308,11 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div class="divider"></div>
       <button class="btn btn-sm btn-primary" onclick="openAddGlobalPlayer()" style="width:auto">+ Add new player</button>
     </div>
+    <div class="card" id="pending-approvals-card">
+      <div class="card-title">⏳ Pending player approvals <span id="pending-count-badge"></span></div>
+      <div class="alert alert-info" style="font-size:11px;margin-bottom:8px">Players who signed up but couldn't be auto-matched to a historical record. Link them or approve as new.</div>
+      <div id="pending-approvals-list"><p class="empty">No pending approvals.</p></div>
+    </div>
     <div class="card">
       <div class="card-title">🎭 Act as player</div>
       <div class="alert alert-warn" style="font-size:11px">Temporarily act as any player to fix rankings or enter data on their behalf.</div>
@@ -645,14 +650,45 @@ async function findExistingPlayerByContact(user){
   return null;
 }
 
-async function findPreAssignment(user){
+async function findPreAssignment(user, firstNameHint='', lastNameHint=''){
   const snap = await get(ref(db,'preAssignments'));
   if(!snap.exists()) return null;
   const all = snap.val();
+
+  // Priority 1: exact phone match
   for(const [key,v] of Object.entries(all)){
-    const matchPhone = user.phoneNumber && v.phone && normalizePhone(user.phoneNumber)===normalizePhone(v.phone);
-    const matchEmail = user.email && v.email && user.email.toLowerCase()===v.email.toLowerCase();
-    if(matchPhone||matchEmail) return {...v, _preKey:key};
+    if(!v) continue;
+    if(user.phoneNumber && v.phone && normalizePhone(user.phoneNumber)===normalizePhone(v.phone))
+      return {...v, _preKey:key, _matchType:'phone'};
+  }
+  // Priority 2: exact email match
+  for(const [key,v] of Object.entries(all)){
+    if(!v) continue;
+    if(user.email && v.email && user.email.toLowerCase()===v.email.toLowerCase())
+      return {...v, _preKey:key, _matchType:'email'};
+  }
+  // Priority 3: first+last name match (from profile setup)
+  if(firstNameHint && lastNameHint){
+    const fn=firstNameHint.trim().toLowerCase(), ln=lastNameHint.trim().toLowerCase();
+    for(const [key,v] of Object.entries(all)){
+      if(!v) continue;
+      const vfn=(v.firstName||v.name||'').trim().toLowerCase();
+      const vln=(v.lastName||'').trim().toLowerCase();
+      // Match on first+last, or nickname+last
+      const nickLower=(v.nickname||'').trim().toLowerCase();
+      if((vfn===fn||nickLower===fn) && vln===ln)
+        return {...v, _preKey:key, _matchType:'name'};
+    }
+  }
+  // Priority 4: matchNames array (from spreadsheet import)
+  if(firstNameHint||lastNameHint){
+    const searchStr=`${firstNameHint} ${lastNameHint}`.trim().toLowerCase();
+    for(const [key,v] of Object.entries(all)){
+      if(!v) continue;
+      const matchNames=(v.matchNames||[]).map(n=>n.toLowerCase());
+      if(matchNames.includes(searchStr)||matchNames.includes(firstNameHint.toLowerCase()))
+        return {...v, _preKey:key, _matchType:'matchNames'};
+    }
   }
   return null;
 }
@@ -672,19 +708,46 @@ window.saveProfile = async ()=>{
   const pref  = el('profile-pref').value;
   const errEl = el('profile-error');
   if(!firstName){ showErr(errEl,'Enter your first name.'); return; }
+  // Try to find a pre-assignment by name before creating fresh profile
+  const nameMatch = await findPreAssignment(currentUser, firstName, lastName);
+  if(nameMatch){
+    userProfile = {
+      ...nameMatch,
+      uid: currentUser.uid,
+      firstName, lastName, preferredName: preferred, name: preferred,
+      phone: phone||currentUser.phoneNumber||nameMatch.phone||'',
+      email: email||currentUser.email||nameMatch.email||'',
+      preferredContact: pref,
+      linkedAt: Date.now(), matchType: nameMatch._matchType||'name'
+    };
+    try {
+      await set(ref(db,'players/'+currentUser.uid), userProfile);
+      if(nameMatch._preKey) await set(ref(db,'preAssignments/'+nameMatch._preKey), null);
+      afterSignIn();
+      return;
+    } catch(err) { /* fall through to pending */ }
+  }
+
+  // No match — save profile and add to pending approvals for admin review
   userProfile = {
     uid: currentUser.uid,
-    firstName, lastName, preferredName: preferred,
-    name: preferred,
-    phone: phone || currentUser.phoneNumber || '',
-    email: email || currentUser.email || '',
+    firstName, lastName, preferredName: preferred, name: preferred,
+    phone: phone||currentUser.phoneNumber||'',
+    email: email||currentUser.email||'',
     preferredContact: pref,
     years:0, wins:0, podiums:0, lastPlaces:0,
     yearsAttended:[], gameWins:{}, customBadges:[],
-    createdAt: Date.now()
+    createdAt: Date.now(), pendingAdminReview: true
   };
   try {
     await set(ref(db,'players/'+currentUser.uid), userProfile);
+    // Also add to pendingApprovals so admin can review
+    await set(ref(db,'pendingApprovals/'+currentUser.uid), {
+      uid: currentUser.uid, firstName, lastName, preferredName: preferred,
+      phone: phone||currentUser.phoneNumber||'',
+      email: email||currentUser.email||'',
+      signedUpAt: Date.now(), status: 'pending'
+    });
     afterSignIn();
   } catch(err) {
     showErr(errEl, 'Could not save profile: '+err.message+'. Check your internet connection.');
@@ -694,7 +757,15 @@ window.saveProfile = async ()=>{
 function afterSignIn(){
   const displayName = actingAsName || userProfile?.preferredName || userProfile?.name || currentUser.email || currentUser.phoneNumber || 'Player';
   el('home-user-label').textContent = isAdmin ? '🛡 Admin · '+displayName : displayName;
-  if(isAdmin) { el('btn-admin-panel').style.display=''; }
+  if(isAdmin){
+    el('btn-admin-panel').style.display='';
+    // Listen for pending approvals count in real time
+    onValue(ref(db,'pendingApprovals'), snap=>{
+      const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+      const btn = el('btn-admin-panel');
+      if(btn) btn.textContent = count > 0 ? `🛡 Admin (${count})` : '🛡 Admin';
+    });
+  }
   loadTournamentList();
   showView('home');
   // Show install prompt on iOS manually
@@ -1060,6 +1131,107 @@ function renderTourneyList(elId, list, isPast, showAll=false){
     </div>`).join('');
 }
 
+// ── PENDING APPROVALS ────────────────────────────────────
+async function loadPendingApprovals(){
+  const snap = await get(ref(db,'pendingApprovals'));
+  const listEl = el('pending-approvals-list');
+  const badgeEl = el('pending-count-badge');
+  if(!listEl) return;
+
+  if(!snap.exists()||!Object.keys(snap.val()).length){
+    listEl.innerHTML='<p class="empty">No pending approvals. ✓</p>';
+    if(badgeEl) badgeEl.innerHTML='';
+    return;
+  }
+
+  const pending = snap.val();
+  const count = Object.keys(pending).length;
+  if(badgeEl) badgeEl.innerHTML=`<span class="tag tag-red" style="font-size:10px">${count}</span>`;
+
+  // Also load preAssignments for the link dropdown
+  const preSnap = await get(ref(db,'preAssignments'));
+  const preAssignments = preSnap.exists() ? preSnap.val() : {};
+
+  let html = Object.entries(pending).map(([uid2,p])=>{
+    const preOptions = Object.entries(preAssignments)
+      .map(([key,v])=>`<option value="${key}">${v.preferredName||v.firstName||v.nickname||'?'} ${v.lastName||''} ${v.years?'('+v.years+'yrs)':''}</option>`)
+      .join('');
+    return `<div style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:10px;padding:10px;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px">
+        ${p.firstName||''} ${p.lastName||''}
+        <span style="font-size:10px;color:#888;font-weight:400">(${p.email||p.phone||'no contact'})</span>
+      </div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px">Signed up ${p.signedUpAt?new Date(p.signedUpAt).toLocaleDateString():''} — no historical record found</div>
+      <div style="font-size:11px;font-weight:600;margin-bottom:4px">Link to existing player:</div>
+      <select id="link-select-${uid2}" style="font-size:12px;margin-bottom:6px">
+        <option value="">— select historical record —</option>
+        ${preOptions}
+      </select>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" style="flex:1" onclick="linkPendingPlayer('${uid2}')">🔗 Link & merge</button>
+        <button class="btn btn-success btn-sm" style="flex:1" onclick="approvePendingAsNew('${uid2}')">✓ Approve as new</button>
+        <button class="btn btn-sm btn-danger" style="flex:1" onclick="rejectPending('${uid2}')">✕ Reject</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  listEl.innerHTML = html;
+}
+
+window.linkPendingPlayer = async (uid2)=>{
+  const preKey = el(`link-select-${uid2}`)?.value;
+  if(!preKey){ alert('Select a historical record to link to.'); return; }
+
+  const [playerSnap, preSnap] = await Promise.all([
+    get(ref(db,'players/'+uid2)),
+    get(ref(db,'preAssignments/'+preKey))
+  ]);
+
+  if(!playerSnap.exists()||!preSnap.exists()){ alert('Record not found.'); return; }
+
+  const player = playerSnap.val();
+  const pre = preSnap.val();
+
+  // Merge: historical data wins for stats, player's auth info is preserved
+  const merged = {
+    ...pre,
+    uid: uid2,
+    firstName: player.firstName||pre.firstName,
+    lastName: player.lastName||pre.lastName,
+    preferredName: player.preferredName||pre.preferredName||pre.nickname,
+    name: player.preferredName||pre.preferredName||pre.nickname,
+    phone: player.phone||pre.phone||'',
+    email: player.email||pre.email||'',
+    preferredContact: player.preferredContact||pre.preferredContact||'email',
+    linkedAt: Date.now(), pendingAdminReview: false, matchType: 'admin'
+  };
+
+  await set(ref(db,'players/'+uid2), merged);
+  await set(ref(db,'preAssignments/'+preKey), null);
+  await set(ref(db,'pendingApprovals/'+uid2), null);
+
+  alert(`✓ Linked! ${merged.firstName} ${merged.lastName} now has their full history and badges.`);
+  loadPendingApprovals();
+  loadGlobalPlayers();
+};
+
+window.approvePendingAsNew = async (uid2)=>{
+  // Just clear the pending flag — they stay as a new player
+  await update(ref(db,'players/'+uid2), { pendingAdminReview: false, approvedAt: Date.now() });
+  await set(ref(db,'pendingApprovals/'+uid2), null);
+  alert('✓ Approved as new player.');
+  loadPendingApprovals();
+  loadGlobalPlayers();
+};
+
+window.rejectPending = async (uid2)=>{
+  if(!confirm('Reject this signup? This will delete their account from the system.')) return;
+  await set(ref(db,'players/'+uid2), null);
+  await set(ref(db,'pendingApprovals/'+uid2), null);
+  alert('Signup rejected and removed.');
+  loadPendingApprovals();
+};
+
 window.deleteTournament = async (tid, name)=>{
   if(!isAdmin){ alert('Only the universal admin can delete tournaments.'); return; }
   if(!confirm(`Delete "${name}"? This permanently removes all players, rankings, scores and history. This cannot be undone.`)) return;
@@ -1116,7 +1288,8 @@ window.openAdminPanel = ()=>{
   showView('admin-panel');
   renderSMSPanel();
   loadTournamentList();
-  loadGlobalPlayers(''); // load all players immediately
+  loadGlobalPlayers('');
+  loadPendingApprovals();
 };
 window.closeAdminPanel = ()=>{ showView('home'); };
 
