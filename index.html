@@ -53,9 +53,9 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .badge-everyyear{background:#FFF7ED;color:#7c2d12;border-color:#fb923c}
 .badge-firsttimer{background:#F0F9FF;color:#0c4a6e;border-color:#7dd3fc}
 .badge-admin{background:#EEEDFE;color:#3C3489;border-color:#AFA9EC}
-.phase-tabs{display:flex;gap:5px;margin-bottom:1rem;overflow-x:auto;overflow-y:hidden;padding:2px 0 8px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-.phase-tabs::-webkit-scrollbar{display:none}
-.phase-tab{flex-shrink:0;padding:8px 12px;font-size:11px;font-weight:600;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;white-space:nowrap;touch-action:manipulation}
+.phase-tabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:1rem;padding:2px 0 4px}
+
+.phase-tab{padding:7px 10px;font-size:11px;font-weight:600;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;white-space:nowrap;touch-action:manipulation}
 .phase-tab.active{background:#EEEDFE;color:#3C3489;border-color:#AFA9EC}
 .ptab{display:flex;gap:5px;margin-bottom:1rem}
 .ptab-btn{flex:1;padding:8px 4px;font-size:11px;font-weight:600;text-align:center;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;touch-action:manipulation}
@@ -260,6 +260,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div id="global-players-list"></div>
       <div class="divider"></div>
       <button class="btn btn-sm btn-primary" onclick="openAddGlobalPlayer()" style="width:auto">+ Add new player</button>
+      <button class="btn btn-sm" onclick="deduplicateGlobalPlayers()" style="width:auto;margin-left:6px;border-color:#f0a0a0;color:#c0392b">🧹 Remove duplicates</button>
     </div>
     <div class="card" id="pending-approvals-card">
       <div class="card-title">Pending player approvals <span id="pending-count-badge"></span></div>
@@ -776,9 +777,14 @@ window.syncTournamentHistory=async()=>{
   players.forEach(name=>{
     const prof=pm[name];
     if(!prof){notFound.push(name);return;}
-    updates['history/'+name]={years:prof.years||0,wins:prof.wins||0,podiums:prof.podiums||0,
-      lastPlaces:prof.lastPlaces||0,yearsAttended:prof.yearsAttended||[],
-      gameWins:prof.gameWins||{},gameStats:prof.gameStats||{}};
+    // Always overwrite — fixes stale/partial data
+    updates['history/'+name]={
+      years:prof.years||0, wins:prof.wins||0, podiums:prof.podiums||0,
+      lastPlaces:prof.lastPlaces||0, yearsAttended:prof.yearsAttended||[],
+      gameWins:prof.gameWins||{}, gameStats:prof.gameStats||{}
+    };
+    // Also update _globalProfiles cache immediately
+    if(_globalProfiles[name]) _globalProfiles[name]={..._globalProfiles[name],...prof};
     synced++;
   });
   if(!synced){alert('No matching profiles found. Import GG_Complete_History.xlsx first.');return;}
@@ -1062,6 +1068,48 @@ window.openAdminPanel=()=>{
 };
 window.closeAdminPanel = ()=>{ showView('home'); };
 
+window.deduplicateGlobalPlayers = async ()=>{
+  const snap=await get(ref(db,'players'));
+  if(!snap.exists()) return;
+  const all=snap.val();
+  // Group by normalized name
+  const byName={};
+  Object.entries(all).forEach(([uid2,p])=>{
+    if(!p) return;
+    const name=(p.preferredName||p.name||p.firstName||'').trim().toLowerCase();
+    if(!byName[name]) byName[name]=[];
+    byName[name].push({uid:uid2,p});
+  });
+  // Find duplicates
+  const dupes=Object.entries(byName).filter(([n,arr])=>arr.length>1);
+  if(!dupes.length){ alert('No duplicates found!'); return; }
+  
+  let msg='Found duplicates:\n';
+  dupes.forEach(([name,arr])=>{
+    msg+=name+': '+arr.length+' entries\n';
+  });
+  msg+='\nKeep the entry with most data and delete the rest?';
+  if(!confirm(msg)) return;
+
+  const deletes=[];
+  for(const [name,arr] of dupes){
+    // Sort: keep the one with most data (most fields filled)
+    arr.sort((a,b)=>{
+      const scoreA=(a.p.years||0)*10+(a.p.phone?5:0)+(a.p.email?5:0);
+      const scoreB=(b.p.years||0)*10+(b.p.phone?5:0)+(b.p.email?5:0);
+      return scoreB-scoreA;
+    });
+    // Delete all but first
+    for(let i=1;i<arr.length;i++) deletes.push(arr[i].uid);
+  }
+  
+  for(const uid2 of deletes){
+    await set(ref(db,'players/'+uid2),null);
+  }
+  alert('Removed '+deletes.length+' duplicate entries.');
+  loadGlobalPlayers();
+};
+
 function loadGlobalPlayers(searchTerm=''){
   get(ref(db,'players')).then(snap=>{
     const all = snap.exists() ? snap.val() : {};
@@ -1259,6 +1307,18 @@ window.openTournament = (tid)=>{
     if(!S.tourneyAdmins) S.tourneyAdmins={};
     if(!S.playerUids) S.playerUids={};
     if(!S.ghostPlayers) S.ghostPlayers={};
+    // Deduplicate playerUids — remove entries where same name appears multiple times
+    if(S.playerUids){
+      const seen={};
+      const cleaned={};
+      Object.entries(S.playerUids).forEach(([uid2,name])=>{
+        if(!seen[name]){ seen[name]=true; cleaned[uid2]=name; }
+      });
+      if(Object.keys(cleaned).length!==Object.keys(S.playerUids).length){
+        S.playerUids=cleaned;
+        update(ref(db,'tournaments/'+currentTourneyId),{playerUids:cleaned}).catch(()=>{});
+      }
+    }
     const myUid = actingAsUid||currentUser?.uid;
     const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
     isTourneyAdmin=isAdmin||!!(S.tourneyAdmins&&S.tourneyAdmins[myUid]);
@@ -1273,7 +1333,7 @@ function buildTournamentShell(){
   return`<div style="display:flex;align-items:center;gap:6px;margin-bottom:.75rem;padding-top:.5rem;flex-wrap:wrap">
     <button class="btn btn-sm" onclick="leaveTournament()" style="width:auto">← Back</button>
     <div style="font-size:13px;font-weight:600;flex:1;color:#534AB7;min-width:80px" id="tourney-header-label"></div>
-    <button class="btn btn-sm hidden" id="btn-player-view" onclick="switchToPlayerView()" style="width:auto;background:#EAF3DE;border-color:#97C459;color:#27500A">👤 My Rankings</button>
+    <button class="btn btn-sm hidden" id="btn-player-view" onclick="switchToPlayerView()" style="width:auto;background:#EAF3DE;border-color:#97C459;color:#27500A">👤 Player View</button>
     <button class="btn btn-sm hidden" id="btn-admin-view" onclick="switchToAdminView()" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin View</button>
     <button class="btn btn-sm hidden" id="btn-manage-admins" onclick="manageTourneyAdmins()" style="width:auto;border-color:#e0ddd6;color:#888">👥 Admins</button>
   </div>
@@ -1368,6 +1428,19 @@ window.switchToPlayerView=()=>{
   el('btn-admin-view')?.classList.remove('hidden');
   el('btn-manage-admins')?.classList.add('hidden');
   renderPlayerView(myName);
+  // Show floating role pill so admin can get back easily
+  let pill=el('admin-role-pill');
+  if(!pill){
+    pill=document.createElement('div');
+    pill.id='admin-role-pill';
+    pill.style.cssText='position:fixed;bottom:20px;right:16px;z-index:9999;'
+      +'background:#534AB7;color:#fff;border-radius:20px;padding:10px 16px;'
+      +'font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(83,74,183,.4);'
+      +'display:flex;align-items:center;gap:6px';
+    pill.innerHTML='🛡 Back to Admin';
+    pill.onclick=()=>{ pill.remove(); switchToAdminView(); };
+    document.body.appendChild(pill);
+  }
 };
 window.switchToAdminView=()=>{
   show('admin-area'); hide('player-area');
@@ -1375,6 +1448,7 @@ window.switchToAdminView=()=>{
   el('btn-manage-admins')?.classList.remove('hidden');
   const myName=actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
   el('btn-player-view')?.classList.toggle('hidden',!(S.players||[]).includes(myName));
+  el('admin-role-pill')?.remove();
   showAdminPhase(_phase||'setup');
 };
 
