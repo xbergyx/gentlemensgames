@@ -1833,9 +1833,36 @@ window.addPlayerFromPre = async (preKey, playerName)=>{
 };
 
 window.removePlayer = async (name)=>{
-  if(S.tournamentStarted){ alert('Tournament started — players locked.'); return; }
+  const ghostPlayers=S.ghostPlayers||{};
+  const isGhost=Object.values(ghostPlayers).includes(name);
+
+  // Allow removing ghost players even after tournament started (they never ranked)
+  if(S.tournamentStarted && !isGhost){
+    alert('Tournament started — players locked.');
+    return;
+  }
+
+  if(!confirm(`Remove ${name} from this tournament?`)) return;
+
   const players=(S.players||[]).filter(p=>p!==name);
-  await update(ref(db,'tournaments/'+currentTourneyId),{players});
+
+  // Also remove from ghostPlayers if they were a ghost slot
+  const newGhostPlayers={...ghostPlayers};
+  Object.entries(newGhostPlayers).forEach(([key,val])=>{
+    if(val===name) delete newGhostPlayers[key];
+  });
+
+  // Also remove from playerUids if they had signed up
+  const playerUids={...(S.playerUids||{})};
+  Object.entries(playerUids).forEach(([uid2,val])=>{
+    if(val===name) delete playerUids[uid2];
+  });
+
+  await update(ref(db,'tournaments/'+currentTourneyId),{
+    players,
+    ghostPlayers: newGhostPlayers,
+    playerUids
+  });
 };
 
 function renderPlayerList(){
