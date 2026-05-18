@@ -754,28 +754,45 @@ window.linkPendingPlayer=async(btn)=>{
   await set(ref(db,'preAssignments/'+preKey),null);
   await set(ref(db,'pendingApprovals/'+uid2),null);
 
-  // Fix all tournaments — move ghost slot to real playerUid
+  // Fix all tournaments — move ghost slot to real playerUid, update name if needed
   const tourneysSnap=await get(ref(db,'tournaments'));
   if(tourneysSnap.exists()){
-    const playerName=merged.preferredName||merged.name||'';
+    const realName=merged.preferredName||merged.name||'';
     const updates={};
     Object.entries(tourneysSnap.val()).forEach(([tid,t])=>{
       if(!t) return;
       const ghosts=t.ghostPlayers||{};
-      // Find any ghost slot pointing to this player by name OR by preKey
-      Object.entries(ghosts).forEach(([gk,gn])=>{
-        if(gn===playerName||gk===preKey){
+      const tPlayers=[...(t.players||[])];
+      let playersChanged=false;
+
+      Object.entries(ghosts).forEach(([gk,ghostName])=>{
+        if(ghostName===realName||gk===preKey){
+          // Remove ghost entry
           updates['tournaments/'+tid+'/ghostPlayers/'+gk]=null;
-          updates['tournaments/'+tid+'/playerUids/'+uid2]=playerName;
+          // Add real playerUid
+          updates['tournaments/'+tid+'/playerUids/'+uid2]=realName;
+          // If the ghost name differs from realName, update the players array
+          if(ghostName!==realName){
+            const idx=tPlayers.indexOf(ghostName);
+            if(idx>=0){ tPlayers[idx]=realName; playersChanged=true; }
+          }
+          // Update history key if name changed
+          if(ghostName!==realName&&t.history&&t.history[ghostName]){
+            updates['tournaments/'+tid+'/history/'+realName]=t.history[ghostName];
+            updates['tournaments/'+tid+'/history/'+ghostName]=null;
+          }
         }
       });
-      // Also check playerUids — remove any old entries for this name
+
+      // Remove stale playerUids for same name with different uid
       Object.entries(t.playerUids||{}).forEach(([oldUid,name])=>{
-        if(name===playerName&&oldUid!==uid2){
+        if((name===realName)&&oldUid!==uid2){
           updates['tournaments/'+tid+'/playerUids/'+oldUid]=null;
-          updates['tournaments/'+tid+'/playerUids/'+uid2]=playerName;
+          updates['tournaments/'+tid+'/playerUids/'+uid2]=realName;
         }
       });
+
+      if(playersChanged) updates['tournaments/'+tid+'/players']=tPlayers;
     });
     if(Object.keys(updates).length>0) await update(ref(db,'/'),updates);
   }
@@ -2873,6 +2890,24 @@ function renderPlayerView(myName){
   const exactMatch=players.find(p=>p===myName);
   const normMatch=players.find(p=>p.trim().toLowerCase()===(myName||'').trim().toLowerCase());
   if(!exactMatch&&normMatch) myName=normMatch; // use the exact casing from tournament
+  // If admin is viewing as player, show the back-to-admin controls
+  if(isTourneyAdmin){
+    el('btn-player-view')?.classList.add('hidden');
+    el('btn-admin-view')?.classList.remove('hidden');
+    el('btn-manage-admins')?.classList.add('hidden');
+    // Show floating pill if not already there
+    if(!el('admin-role-pill')){
+      const pill=document.createElement('div');
+      pill.id='admin-role-pill';
+      pill.style.cssText='position:fixed;bottom:20px;right:16px;z-index:9999;'
+        +'background:#534AB7;color:#fff;border-radius:20px;padding:10px 16px;'
+        +'font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(83,74,183,.4);'
+        +'display:flex;align-items:center;gap:6px';
+      pill.innerHTML='🛡 Back to Admin';
+      pill.onclick=()=>{ pill.remove(); switchToAdminView(); };
+      document.body.appendChild(pill);
+    }
+  }
   const hcard=el('player-header-card');
   if(hcard){
     const badges=getPlayerBadges(myName);
