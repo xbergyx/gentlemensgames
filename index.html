@@ -2848,6 +2848,11 @@ function renderPlayerView(myName){
   const header=el('tourney-header-label');
   if(header)header.textContent=S.tourneyName+' '+S.tourneyYear;
   hide('admin-area'); show('player-area');
+  // Resolve myName to actual tournament player name (handles case/trim differences)
+  const players=S.players||[];
+  const exactMatch=players.find(p=>p===myName);
+  const normMatch=players.find(p=>p.trim().toLowerCase()===(myName||'').trim().toLowerCase());
+  if(!exactMatch&&normMatch) myName=normMatch; // use the exact casing from tournament
   const hcard=el('player-header-card');
   if(hcard){
     const badges=getPlayerBadges(myName);
@@ -2893,7 +2898,8 @@ function renderPlayerRankings(myName){
 }
 window.openGameRanking=(gameId,myName)=>{
   const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
-  const others=(S.players||[]).filter(p=>p!==myName);
+  const myNameNorm=(myName||'').trim().toLowerCase();
+  const others=(S.players||[]).filter(p=>p.trim().toLowerCase()!==myNameNorm);
   const gR=(S.gameRankings&&S.gameRankings[gameId])||{};
   const prevYear=(S.tourneyYear||new Date().getFullYear())-1;
   function gs(name){
