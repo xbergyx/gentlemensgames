@@ -3152,18 +3152,56 @@ function renderPlayerRankings(myName){
     if(isLocked){
       html+=`<div style="background:#EAF3DE;border:1px solid #b2d88a;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">✅</div><div><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#27500A">Teams locked</div></div></div>`;
     } else if(myRank){
-      html+=(S.tournamentStarted
-    ? `<div style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">✅</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e">${rc}/${total} submitted — locked</div></div><div style="font-size:20px;color:#b8d9f8">🔒</div></div>`
+      const isFinalized=S.rankingsFinalized&&S.rankingsFinalized[myName];
+      html+=(isFinalized
+    ? `<div style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">✅</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e">${rc}/${total} submitted — locked 🔒</div></div></div>`
     : `<div onclick="openGameRanking('${g.id}','${esc(myName)}')" style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.05)"><div style="font-size:22px;pointer-events:none">👍</div><div style="flex:1;pointer-events:none"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e">${rc}/${total} submitted — tap to edit</div></div><div style="font-size:20px;color:#1a5f9e;pointer-events:none">›</div></div>`);
     } else {
       html+=`<div onclick="openGameRanking('${g.id}','${esc(myName)}')" style="background:#FFFBEB;border:1px solid #fcd34d;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.05)"><div style="font-size:22px;pointer-events:none">🎯</div><div style="flex:1;pointer-events:none"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#7a4f00">${rc}/${total} done — tap to rank</div></div><div style="font-size:20px;color:#534AB7;pointer-events:none">›</div></div>`;
     }
   });
   html+='</div>';
+
+  // Show Submit Final Rankings button if tournament started and not yet finalized
+  const myRankingsFinalized = S.rankingsFinalized && S.rankingsFinalized[myName];
+  const allGamesRanked = games.every(g=>(S.gameRankings&&S.gameRankings[g.id]&&S.gameRankings[g.id][myName]));
+
+  if(S.tournamentStarted && !myRankingsFinalized){
+    if(allGamesRanked){
+      html+='<div class="card" style="border-color:#27500A;border-width:2px">'
+        +'<div class="card-title" style="color:#27500A">All games ranked!</div>'
+        +'<div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Once you submit final rankings you cannot make any changes.</div>'
+        +'<button class="btn btn-primary" onclick="submitFinalRankings(this)" data-name="'+esc(myName)+'" style="background:#27500A;border-color:#27500A">🔒 Submit Final Rankings</button>'
+        +'</div>';
+    } else {
+      html+='<div class="card"><div style="font-size:11px;color:#aaa;text-align:center;padding:8px">Rank all '+games.length+' games to unlock final submission.</div></div>';
+    }
+  } else if(myRankingsFinalized){
+    html+='<div class="card"><div style="display:flex;align-items:center;gap:10px;padding:4px 0">'
+      +'<div style="font-size:24px">🔒</div>'
+      +'<div><div style="font-size:13px;font-weight:600;color:#27500A">Rankings submitted!</div>'
+      +'<div style="font-size:11px;color:#888">Your rankings are locked in.</div></div>'
+      +'</div></div>';
+  }
+
   e.innerHTML=html;
 }
+
+window.submitFinalRankings = async (btn)=>{
+  const myName = btn.dataset.name;
+  if(!confirm('Lock in all your rankings? This cannot be undone.')) return;
+  const rankingsFinalized={...(S.rankingsFinalized||{})};
+  rankingsFinalized[myName]=true;
+  await update(ref(db,'tournaments/'+currentTourneyId),{rankingsFinalized});
+  alert('Rankings locked! ✓');
+};
+
 window.openGameRanking=(gameId,myName)=>{
   const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
+  // Block if this player has finalized their rankings
+  if(S.rankingsFinalized&&S.rankingsFinalized[myName]){
+    alert('Your rankings are locked in. No changes allowed.');return;
+  }
   const myNameNorm=(myName||'').trim().toLowerCase();
   const others=(S.players||[]).filter(p=>p.trim().toLowerCase()!==myNameNorm);
   const gR=(S.gameRankings&&S.gameRankings[gameId])||{};
