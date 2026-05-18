@@ -339,6 +339,31 @@ let currentTourneyId = null;
 let S              = null;  // current tournament data
 Object.defineProperty(window,'_S',{get:()=>S});
 Object.defineProperty(window,'_GP',{get:()=>_globalProfiles});
+
+// Admin utility: fix a ghost player who has signed up
+window.fixGhost = async (playerName)=>{
+  // Find their UID from global players DB
+  const snap = await get(ref(db,'players'));
+  if(!snap.exists()){console.error('No players');return;}
+  let foundUid=null;
+  Object.entries(snap.val()).forEach(([uid2,p])=>{
+    if(!p) return;
+    if((p.preferredName||p.name||p.firstName||'').toLowerCase()===playerName.toLowerCase())
+      foundUid=uid2;
+  });
+  if(!foundUid){console.error('Player not found in DB:',playerName);return;}
+  // Find their ghost key in current tournament
+  const ghosts=S.ghostPlayers||{};
+  const ghostKey=Object.entries(ghosts).find(([k,v])=>v===playerName)?.[0];
+  if(!ghostKey){console.log('No ghost entry found for',playerName,'- may already be fixed');return;}
+  // Fix it
+  const updates={};
+  updates['ghostPlayers/'+ghostKey]=null;
+  updates['playerUids/'+foundUid]=playerName;
+  await update(ref(db,'tournaments/'+currentTourneyId),updates);
+  console.log('✓ Fixed!',playerName,'is now linked with uid',foundUid);
+  alert('Fixed! '+playerName+' is now a real player in the tournament.');
+};
 let _phase         = 'setup';
 let _tab           = 'rank';
 let _pwaPrompt     = null;
