@@ -1844,11 +1844,13 @@ function buildTournamentShell(){
     <div class="ptab">
       <div class="ptab-btn active" id="ptab-rank" data-tab="rank">Rankings</div>
       <div class="ptab-btn" id="ptab-teams" data-tab="teams">My teams</div>
-      <div class="ptab-btn" id="ptab-games" data-tab="games">Games</div>
+      <div class="ptab-btn" id="ptab-active" data-tab="active">Active game</div>
+      <div class="ptab-btn" id="ptab-games" data-tab="games">Results</div>
       <div class="ptab-btn" id="ptab-lb" data-tab="lb">Leaderboard</div>
     </div>
     <div id="pview-rank"></div>
     <div id="pview-teams" class="hidden"></div>
+    <div id="pview-active" class="hidden"></div>
     <div id="pview-games" class="hidden"></div>
     <div id="pview-lb" class="hidden"></div>
   </div>
@@ -3366,13 +3368,14 @@ function renderPlayerView(myName){
 function showPlayerTab(tab,myName){
   _tab=tab;
   myName=myName||actingAsName||(userProfile?.name)||'';
-  ['rank','teams','games','lb'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
+  ['rank','teams','active','games','lb'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
   const tv=el('pview-'+tab);if(tv)tv.classList.remove('hidden');
   const tb=el('ptab-'+tab);if(tb)tb.classList.add('active');
-  if(tab==='rank')  renderPlayerRankings(myName);
-  if(tab==='teams') renderMyTeams(myName);
-  if(tab==='games') renderPlayerGames(myName);
-  if(tab==='lb')    { renderPlayerLB(myName); renderAllPlayerBadges(); }
+  if(tab==='rank')   renderPlayerRankings(myName);
+  if(tab==='teams')  renderMyTeams(myName);
+  if(tab==='active') renderActiveGameTab(myName);
+  if(tab==='games')  renderPlayerGames(myName);
+  if(tab==='lb')     { renderPlayerLB(myName); renderAllPlayerBadges(); }
 }
 function renderPlayerGames(myName){
   const e=el('pview-games'); if(!e) return;
@@ -3676,106 +3679,229 @@ window.submitGameRanking = async (btnOrId, myNameOrUndef)=>{
   el('rank-submit-msg').innerHTML='<div class="alert alert-success" style="margin-top:8px">✓ Submitted!</div>';
   setTimeout(()=>closeModal(),700);
 };
-function renderMyTeams(myName){
-  const e=el('pview-teams');if(!e)return;
-  const locked=(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring');
-  if(!locked.length){e.innerHTML='<div class="card"><p class="empty">Teams appear once rankings are locked.</p></div>';return;}
+function renderActiveGameTab(myName){
+  const e=el('pview-active');if(!e)return;
+  const fmtL={'h2h-points':'H2H points','h2h-wins':'H2H wins','score-low':'Low score','score-high':'High score','multi-round-high':'Multi-round high','multi-round-low':'Multi-round low','round-robin':'Round robin','single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools','pool-playoff':'Pool + knockout'};
 
-  // Active game matchup display
-  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
-  let html='';
-  if(activeGame){
-    const teams=(S.teams&&S.teams[activeGame.id])||[];
-    const myTeam=teams.find(t=>t.p1===myName||t.p2===myName);
-    const b=S.bs&&S.bs[activeGame.id];
-    html+=`<div class="card" style="border-color:#7F77DD;border-width:2px">
-      <div class="card-title" style="color:#534AB7">▶ Now playing: ${activeGame.name}</div>`;
-    if(myTeam){
-      const partner=myTeam.p1===myName?myTeam.p2:myTeam.p1;
-      html+=`<div style="background:#EEEDFE;border-radius:10px;padding:12px;margin-bottom:10px">
-        <div style="font-size:11px;color:#888;margin-bottom:4px">Your team</div>
-        <div style="font-size:16px;font-weight:700">${myName} ${partner?'& '+partner:''}</div>
-      </div>`;
-      // Find my opponent
-      if(b){
-        const myMatch=findMyActiveMatch(b,myTeam,activeGame.format);
-        if(myMatch){
-          const oppTeam=myMatch.t1.id===myTeam.id?myMatch.t2:myMatch.t1;
-          const pending=S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][myMatch.id];
-          const myTeamSide=myMatch.t1.id===myTeam.id?'t1':'t2';
-          const mySubmitted=pending&&pending[myTeamSide];
-          html+=`<div style="font-size:11px;color:#888;margin-bottom:6px">vs</div>
-            <div style="background:#f8f7f4;border-radius:10px;padding:12px;margin-bottom:10px">
-              <div style="font-size:11px;color:#888;margin-bottom:4px">Opponents</div>
-              <div style="font-size:16px;font-weight:700">${teamLabel(oppTeam)}</div>
-            </div>`;
-          if(!myMatch.winner){
-            if(mySubmitted){
-              html+=`<div class="alert alert-info" style="font-size:11px">✓ You submitted ${mySubmitted.s1}–${mySubmitted.s2}. Waiting for opponents to confirm.</div>`;
-            } else {
-              html+=`<div style="font-size:13px;font-weight:600;margin-bottom:8px">Enter your score:</div>
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                  <div style="flex:1;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:4px">Your team</div>
-                    <input type="number" id="ps-${myMatch.id}-${myTeamSide==='t1'?1:2}" placeholder="0" style="width:70px;padding:8px;border:2px solid #7F77DD;border-radius:10px;font-size:20px;text-align:center;font-weight:700;margin:0"></div>
-                  <div style="font-size:18px;color:#aaa">–</div>
-                  <div style="flex:1;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:4px">Opponents</div>
-                    <input type="number" id="ps-${myMatch.id}-${myTeamSide==='t1'?2:1}" placeholder="0" style="width:70px;padding:8px;border:1px solid #ddd;border-radius:10px;font-size:20px;text-align:center;font-weight:700;margin:0"></div>
-                </div>
-                <button class="btn btn-primary" onclick="playerSubmitScore('${activeGame.id}','${myMatch.id}','${myTeamSide}')">✓ Submit score</button>`;
-            }
-          } else {
-            html+=`<div class="alert alert-success">✓ Result: ${teamLabel(myMatch.winner)} won ${myMatch.score1}–${myMatch.score2}</div>`;
-          }
-          html+=`<div id="ps-${myMatch.id}-status"></div>`;
-        }
-      }
-    } else {
-      html+=`<div class="alert alert-info" style="font-size:11px">You don't have a match in this game.</div>`;
-    }
-    // All matchups for active game
-    html+=`<div class="divider"></div><div style="font-size:12px;font-weight:600;color:#888;margin-bottom:8px">All matchups</div>`;
-    const allTeams=(S.teams&&S.teams[activeGame.id])||[];
-    for(let i=0;i<allTeams.length;i+=2){
-      if(i+1<allTeams.length){
-        const t1=allTeams[i],t2=allTeams[i+1];
-        const isMe=(t1.p1===myName||t1.p2===myName||t2.p1===myName||t2.p2===myName);
-        html+=`<div style="background:${isMe?'#EEEDFE':'#f8f7f4'};border-radius:9px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
-          <div style="flex:1;font-size:12px;font-weight:${isMe?'700':'500'}">${teamLabel(t1)}</div>
-          <div style="font-size:11px;color:#aaa">vs</div>
-          <div style="flex:1;font-size:12px;font-weight:${isMe?'700':'500'};text-align:right">${teamLabel(t2)}</div>
-        </div>`;
-      }
-    }
-    html+='</div>';
+  // Find the currently active game
+  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id)
+    || (S.games||[]).find(g=>g.status==='locked'||g.status==='scoring');
+
+  if(!activeGame){
+    e.innerHTML='<div class="card"><p class="empty">No active game right now. Check back soon!</p></div>';
+    return;
   }
 
-  html+='<div class="card"><div class="card-title">👥 All my teams</div>';
+  const teams=(S.teams&&S.teams[activeGame.id])||[];
+  const b=S.bs&&S.bs[activeGame.id];
+  const myTeam=teams.find(t=>t.p1===myName||t.p2===myName||t.p3===myName);
+
+  function tLabel(t){
+    if(!t) return '?';
+    return [t.p1,t.p2,t.p3].filter(Boolean).map(p=>nameSpan(p)).join(' & ');
+  }
+
+  let html='<div class="card" style="border-color:#7F77DD;border-width:2px">';
+  html+='<div class="card-title" style="color:#534AB7">▶ '+activeGame.name+'</div>';
+
+  // ── MY MATCH ──────────────────────────────────────────
+  if(myTeam && b){
+    const partners=[myTeam.p1,myTeam.p2,myTeam.p3].filter(p=>p&&p!==myName);
+    html+='<div style="background:#EEEDFE;border-radius:10px;padding:10px;margin-bottom:10px">';
+    html+='<div style="font-size:11px;color:#534AB7;font-weight:700;margin-bottom:4px">YOUR TEAM</div>';
+    html+='<div style="font-size:16px;font-weight:700">'+nameSpan(myName)+(partners.length?' & '+partners.map(p=>nameSpan(p)).join(' & '):'')+'</div>';
+    html+='</div>';
+
+    const myMatch=findMyActiveMatch(b,myTeam,activeGame.format);
+    // Check if I have any remaining matches at all
+    const allMyMatches=getAllMatchesFromBracket(b,activeGame.format)
+      .filter(m=>m&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id));
+    const myDoneMatches=allMyMatches.filter(m=>m.winner);
+    const myTotalMatches=allMyMatches.length;
+    if(myTotalMatches>0){
+      html+='<div style="font-size:11px;color:#888;margin-bottom:8px">Match '+(myDoneMatches.length+1)+' of '+myTotalMatches+'</div>';
+    }
+    if(myMatch){
+      const oppTeam=myMatch.t1.id===myTeam.id?myMatch.t2:myMatch.t1;
+      const myTeamSide=myMatch.t1.id===myTeam.id?'t1':'t2';
+      const pending=S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][myMatch.id];
+      const mySubmitted=pending&&pending[myTeamSide];
+
+      html+='<div style="font-size:12px;color:#888;margin-bottom:6px;text-align:center">vs</div>';
+      html+='<div style="background:#f8f7f4;border-radius:10px;padding:10px;margin-bottom:10px">';
+      html+='<div style="font-size:11px;color:#888;font-weight:700;margin-bottom:4px">OPPONENTS</div>';
+      html+='<div style="font-size:16px;font-weight:700">'+tLabel(oppTeam)+'</div>';
+      html+='</div>';
+
+      if(myMatch.winner){
+        const won=myMatch.winner.id===myTeam.id;
+        html+='<div class="alert '+(won?'alert-success':'alert-warn')+'" style="text-align:center;font-size:14px;font-weight:700">';
+        html+=(won?'🎉 You won! ':'😔 You lost ');
+        html+=myMatch.score1+'–'+myMatch.score2+'</div>';
+      } else if(mySubmitted){
+        html+='<div class="alert alert-info" style="font-size:12px">✓ You submitted '+mySubmitted.s1+'–'+mySubmitted.s2+'. Waiting for opponents to confirm.</div>';
+      } else {
+        html+='<div style="font-size:13px;font-weight:600;margin-bottom:10px">Enter your score:</div>';
+        html+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">';
+        html+='<div style="flex:1;text-align:center">';
+        html+='<div style="font-size:10px;color:#888;margin-bottom:4px">YOUR TEAM</div>';
+        html+='<input type="number" id="ps-'+myMatch.id+'-'+(myTeamSide==='t1'?1:2)+'" placeholder="0" min="0" style="width:80px;padding:10px;border:2px solid #7F77DD;border-radius:12px;font-size:24px;text-align:center;font-weight:700;margin:0">';
+        html+='</div>';
+        html+='<div style="font-size:24px;color:#aaa;font-weight:300">–</div>';
+        html+='<div style="flex:1;text-align:center">';
+        html+='<div style="font-size:10px;color:#888;margin-bottom:4px">OPPONENTS</div>';
+        html+='<input type="number" id="ps-'+myMatch.id+'-'+(myTeamSide==='t1'?2:1)+'" placeholder="0" min="0" style="width:80px;padding:10px;border:1px solid #ddd;border-radius:12px;font-size:24px;text-align:center;font-weight:700;margin:0">';
+        html+='</div></div>';
+        html+='<button class="btn btn-primary" onclick="playerSubmitScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" style="font-size:14px;padding:12px">✓ Submit score</button>';
+        html+='<div id="ps-'+myMatch.id+'-status"></div>';
+      }
+    } else {
+      const allDone=getAllMatchesFromBracket(b,activeGame.format)
+        .filter(m=>m&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id))
+        .every(m=>m.winner);
+      if(allDone){
+        html+='<div class="alert alert-success" style="text-align:center">🎉 All your matches in this game are done!</div>';
+      } else {
+        html+='<div class="alert alert-info" style="font-size:11px">No active match right now — waiting for other matches to complete.</div>';
+      }
+    }
+  } else if(!myTeam){
+    html+='<div class="alert alert-info" style="font-size:11px">You don\'t have a team in this game.</div>';
+  }
+
+  html+='</div>'; // close my match card
+
+  // ── ALL OTHER MATCHES ─────────────────────────────────
+  html+='<div class="card"><div class="card-title" style="color:#888;font-size:13px">All matches — '+activeGame.name+'</div>';
+
+  if(b){
+    const allMatches=[];
+    const fmt=activeGame.format;
+    if(fmt==='round-robin'&&b.matches) allMatches.push(...b.matches);
+    else if(fmt==='two-pool'){ if(b.poolAM)allMatches.push(...b.poolAM); if(b.poolBM)allMatches.push(...b.poolBM); if(b.crossover)allMatches.push(...b.crossover); }
+    else if(fmt==='single-elim'&&b.rounds) b.rounds.forEach(r=>allMatches.push(...r));
+    else if(fmt==='double-elim'){ if(b.winners)b.winners.forEach(r=>allMatches.push(...r)); if(b.losers)b.losers.forEach(r=>allMatches.push(...r)); }
+    else if(fmt==='pool-playoff'&&b.pools){ b.pools.forEach(p=>allMatches.push(...p.matches)); if(b.knockout)allMatches.push(...b.knockout); }
+
+    const pending2=allMatches.filter(m=>!m.winner&&m.t1&&m.t2);
+    const done2=allMatches.filter(m=>m.winner&&m.score1!==null);
+
+    if(pending2.length){
+      html+='<div style="font-size:10px;font-weight:700;color:#888;margin-bottom:8px">NOW PLAYING — '+pending2.length+' match'+(pending2.length!==1?'es':'')+' in progress</div>';
+      pending2.forEach((m,mi)=>{
+        const isMyMatch=myTeam&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id);
+        const ps=S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][m.id];
+        const t1sub=ps&&ps.t1?'✓':'';
+        const t2sub=ps&&ps.t2?'✓':'';
+        html+='<div style="border:2px solid '+(isMyMatch?'#7F77DD':'#e8e6df')+';border-radius:12px;padding:10px;margin-bottom:8px;background:'+(isMyMatch?'#FAFAFE':'#fff')+'">';
+        // Match number + YOU badge
+        html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+        html+='<span style="font-size:10px;color:#aaa;font-weight:600">Match '+(mi+1)+'</span>';
+        if(isMyMatch) html+='<span style="font-size:9px;font-weight:700;color:#fff;background:#7F77DD;padding:2px 7px;border-radius:10px">YOUR MATCH</span>';
+        html+='</div>';
+        // Teams row
+        html+='<div style="display:flex;align-items:center;gap:6px">';
+        // Team 1
+        html+='<div style="flex:1;text-align:center">';
+        html+='<div style="font-size:13px;font-weight:700;margin-bottom:2px">'+tLabel(m.t1)+'</div>';
+        if(t1sub) html+='<div style="font-size:10px;color:#27500A;font-weight:700">✓ submitted</div>';
+        html+='</div>';
+        // VS
+        html+='<div style="font-size:12px;color:#aaa;font-weight:600;flex-shrink:0">VS</div>';
+        // Team 2
+        html+='<div style="flex:1;text-align:center">';
+        html+='<div style="font-size:13px;font-weight:700;margin-bottom:2px">'+tLabel(m.t2)+'</div>';
+        if(t2sub) html+='<div style="font-size:10px;color:#27500A;font-weight:700">✓ submitted</div>';
+        html+='</div>';
+        html+='</div>'; // teams row
+        html+='</div>'; // match card
+      });
+    }
+
+    if(done2.length){
+      html+='<div style="font-size:10px;font-weight:700;color:#888;margin:'+(pending2.length?'10':'0')+'px 0 6px">COMPLETED</div>';
+      done2.forEach(m=>{
+        const isMyMatch=myTeam&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id);
+        const wScore=m.score1>m.score2?m.score1:m.score2;
+        const lScore=m.score1>m.score2?m.score2:m.score1;
+        html+='<div style="padding:7px 10px;font-size:11px;color:#444;border-bottom:1px solid #f0ede6;'+(isMyMatch?'background:#EAF3DE;border-radius:6px;margin-bottom:3px':'')+'">';
+        html+='<span style="font-weight:600;color:#27500A">✓ '+tLabel(m.winner)+'</span> '+wScore+'–'+lScore+' def. '+tLabel(m.t1.id===m.winner.id?m.t2:m.t1);
+        html+='</div>';
+      });
+    }
+
+    if(!pending2.length&&!done2.length){
+      html+='<p class="empty">No matches yet.</p>';
+    }
+  }
+
+  html+='</div>';
+  e.innerHTML=html;
+}
+
+function renderMyTeams(myName){
+  const e=el('pview-teams');if(!e)return;
+  const locked=(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring'||g.status==='done'||g.status==='skipped');
+  if(!locked.length){e.innerHTML='<div class="card"><p class="empty">Teams appear once rankings are locked.</p></div>';return;}
+  const fmtL={'h2h-points':'H2H points','h2h-wins':'H2H wins','score-low':'Low score','score-high':'High score','multi-round-high':'Multi-round high','multi-round-low':'Multi-round low','round-robin':'Round robin','single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools','pool-playoff':'Pool + knockout'};
+  let html='<div class="card"><div class="card-title">👥 All my teams</div>';
+  let found=false;
   locked.forEach(g=>{
-    const teams=(S.teams&&S.teams[g.id])||[],myTeam=teams.find(t=>t.p1===myName||t.p2===myName);
+    const teams=(S.teams&&S.teams[g.id])||[];
+    const myTeam=teams.find(t=>t.p1===myName||t.p2===myName||t.p3===myName);
     if(!myTeam)return;
-    const partner=myTeam.p1===myName?myTeam.p2:myTeam.p1,pts=S.points&&S.points[g.id]&&S.points[g.id][myName];
-    const isActive2=g.active||S.activeGameId===g.id;
-    html+=`<div class="player-row" style="${isActive2?'background:#FAFAFE':''}">
-      <div class="avatar" style="background:${isActive2?'#7F77DD':'#E1F5EE'};color:${isActive2?'#fff':'#085041'}">${isActive2?'▶':'🛡'}</div>
-      <div style="flex:1"><div style="font-size:13px;font-weight:600">${g.name}${isActive2?' <span class="tag" style="background:#7F77DD;color:#fff;font-size:9px">ACTIVE</span>':''}</div>
-      <div style="font-size:11px;color:#888">${partner?'With '+partner:'Solo'} · ${fmtL[g.format]||g.format}</div></div>
-      ${pts!==undefined?`<span class="tag tag-purple">${pts}pts</span>`:''}</div>`;
+    found=true;
+    const partners=[myTeam.p1,myTeam.p2,myTeam.p3].filter(p=>p&&p!==myName);
+    const pts=S.points&&S.points[g.id]&&S.points[g.id][myName];
+    const isActive=g.active||S.activeGameId===g.id;
+    const isDone=(S.scores&&S.scores[g.id]&&S.scores[g.id]._fin)||g.status==='done';
+    html+=`<div class="player-row" style="${isActive?'background:#FAFAFE':''}">
+      <div class="avatar" style="background:${isActive?'#7F77DD':isDone?'#EAF3DE':'#E1F5EE'};color:${isActive?'#fff':isDone?'#27500A':'#085041'}">${isActive?'▶':isDone?'✅':'🛡'}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">${g.name}${isActive?' <span class="tag" style="background:#7F77DD;color:#fff;font-size:9px">NOW</span>':''}</div>
+        <div style="font-size:11px;color:#888">${partners.length?'With '+partners.join(' & '):'Solo'} · ${fmtL[g.format]||g.format}</div>
+      </div>
+      ${pts!==undefined?`<span class="tag tag-purple">${pts}pts</span>`:''}
+    </div>`;
   });
-  html+='</div>'; e.innerHTML=html;
+  if(!found) html+='<p class="empty">No teams assigned yet.</p>';
+  html+='</div>';
+  e.innerHTML=html;
+}
+
+function getAllMatchesFromBracket(b,fmt){
+  const all=[];
+  if(fmt==='round-robin'&&b.matches) all.push(...b.matches);
+  else if(fmt==='two-pool'){
+    if(b.poolAM) all.push(...b.poolAM);
+    if(b.poolBM) all.push(...b.poolBM);
+    if(b.crossover) all.push(...b.crossover);
+  }
+  else if(fmt==='single-elim'&&b.rounds) b.rounds.forEach(r=>all.push(...r));
+  else if(fmt==='double-elim'){
+    if(b.winners) b.winners.forEach(r=>all.push(...r));
+    if(b.losers)  b.losers.forEach(r=>all.push(...r));
+    if(b.grandFinal) all.push(b.grandFinal);
+  }
+  else if(fmt==='pool-playoff'&&b.pools){
+    b.pools.forEach(p=>all.push(...p.matches));
+    if(b.knockout) all.push(...b.knockout);
+  }
+  return all;
 }
 
 function findMyActiveMatch(b,myTeam,fmt){
-  const allMatches=[];
-  if(fmt==='round-robin'&&b.matches) allMatches.push(...b.matches);
-  else if(fmt==='two-pool'){ if(b.poolAM)allMatches.push(...b.poolAM); if(b.poolBM)allMatches.push(...b.poolBM); if(b.crossover)allMatches.push(...b.crossover); }
-  else if(fmt==='single-elim'&&b.rounds) b.rounds.forEach(r=>allMatches.push(...r));
-  else if(fmt==='double-elim'){ if(b.winners)b.winners.forEach(r=>allMatches.push(...r)); if(b.losers)b.losers.forEach(r=>allMatches.push(...r)); if(b.grandFinal)allMatches.push(b.grandFinal); }
-  else if(fmt==='pool-playoff'&&b.pools){ b.pools.forEach(p=>allMatches.push(...p.matches)); if(b.knockout)allMatches.push(...b.knockout); }
-  return allMatches.find(m=>m&&!m.winner&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id))||null;
+  const all=getAllMatchesFromBracket(b,fmt);
+  // Find next unplayed match for my team (skip ones already won/lost)
+  return all.find(m=>m&&!m.winner&&m.t1&&m.t2
+    &&(m.t1.id===myTeam.id||m.t2.id===myTeam.id))||null;
 }
 
-window.playerSubmitScore = async (gameId,matchId,teamSide)=>{
-  const inp1=el(`ps-${matchId}-1`),inp2=el(`ps-${matchId}-2`);
+window.playerSubmitScore = async (btnOrObj,matchIdArg,sideArg)=>{
+  const gameId=typeof btnOrObj==='string'?btnOrObj:btnOrObj.dataset.gid;
+  const matchId=typeof btnOrObj==='string'?matchIdArg:btnOrObj.dataset.mid;
+  const teamSide=typeof btnOrObj==='string'?sideArg:btnOrObj.dataset.side;
+  const inp1=el('ps-'+matchId+'-1'),inp2=el('ps-'+matchId+'-2');
   const rawS1=parseFloat(inp1?.value),rawS2=parseFloat(inp2?.value);
   if(isNaN(rawS1)||isNaN(rawS2)){alert('Enter scores for both teams.');return;}
   if(rawS1===rawS2){alert('No draws allowed.');return;}
@@ -3793,10 +3919,14 @@ window.playerSubmitScore = async (gameId,matchId,teamSide)=>{
     const b=S.bs&&S.bs[gameId];
     const {type,poolKey,ri}=findMatchMeta(b,matchId,gameId);
     await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
-    if(statusEl)statusEl.innerHTML='<div class="alert alert-success">✓ Score confirmed!</div>';
+    if(statusEl) statusEl.innerHTML='<div class="alert alert-success">✓ Score confirmed!</div>';
+    // Refresh active game tab after a short delay to show next match
+    setTimeout(()=>{ if(el('pview-active')&&!el('pview-active').classList.contains('hidden')) renderActiveGameTab(myName); }, 800);
   } else {
     await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:newPending});
-    if(statusEl)statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">✓ Score submitted — waiting for opponents to confirm.</div>';
+    if(statusEl) statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">✓ Score submitted — waiting for opponents to confirm.</div>';
+    // Refresh to show pending state
+    setTimeout(()=>{ if(el('pview-active')&&!el('pview-active').classList.contains('hidden')) renderActiveGameTab(myName); }, 800);
   }
 };
 
