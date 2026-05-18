@@ -2998,41 +2998,60 @@ window.saveScoreGame = async (gid)=>{
     i=j;
   }
 
-  if(tiedGroups.length&&game.tiebreak==='host-score'){
-    // Prompt admin to enter tiebreak score for each tied group
+  // Tiebreaker — for any tie, show a modal to pick the order
+  if(tiedGroups.length&&(game.tiebreak==='host-score'||game.tiebreak==='host-pick')){
     for(const tiedIds of tiedGroups){
       const tiedTeams=tiedIds.map(id=>teams.find(t=>t.id===id)).filter(Boolean);
-      const score=entries.find(e=>e[0]===tiedIds[0])[1];
-      const labels=tiedTeams.map(t=>[t.p1,t.p2,t.p3].filter(Boolean).join(' & ')).join(' vs. ');
-      const msg='TIE at score '+score+'! '+labels+' - Enter tiebreak score for each (comma-separated)';
-      const input=prompt(msg);
-      if(input){
-        const tbScores=input.split(',').map(s=>parseFloat(s.trim()));
-        tiedIds.forEach((id,i)=>{
-          const tbScore=tbScores[i]||0;
-          const adjustedPlace=pl[id];
-          // Re-rank within tied group by tiebreak score
-          tiedIds.forEach((id2,i2)=>{
-            const ts2=tbScores[i2]||0;
-            const betterCount=tbScores.filter((s2,i3)=>i3!==i&&(lowWins?s2<tbScore:s2>tbScore)).length;
-            pl[id2]=Math.min(...tiedIds.map(tid=>pl[tid]))+betterCount;
-          });
-        });
-      }
-    }
-  } else if(tiedGroups.length&&game.tiebreak==='host-pick'){
-    for(const tiedIds of tiedGroups){
-      const tiedTeams=tiedIds.map(id=>teams.find(t=>t.id===id)).filter(Boolean);
-      const score=entries.find(e=>e[0]===tiedIds[0])[1];
-      const labels=tiedTeams.map((t,i)=>(i+1)+'. '+[t.p1,t.p2,t.p3].filter(Boolean).join(' & ')).join(' | ');
-      const msg='TIE at score '+score+'! Pick winner: '+labels+' - Enter number 1-'+tiedTeams.length;
-      const pick=parseInt(prompt(msg)||'0')-1;
-      if(pick>=0&&pick<tiedTeams.length){
-        const winnerId=tiedIds[pick];
-        const startPlace=Math.min(...tiedIds.map(id=>pl[id]));
-        pl[winnerId]=startPlace;
-        tiedIds.filter(id=>id!==winnerId).forEach((id,i)=>{ pl[id]=startPlace+i+1; });
-      }
+      const tiedScore=entries.find(e=>e[0]===tiedIds[0])[1];
+      const startPlace=Math.min(...tiedIds.map(id=>pl[id]));
+      // Build a modal letting admin pick the order by clicking teams in rank order
+      const picked=await new Promise(resolve=>{
+        let order=[];
+        function renderModal(){
+          const remaining=tiedTeams.filter(t=>!order.find(o=>o.id===t.id));
+          let html='<div class="modal-bg"><div class="modal">'
+            +'<div class="modal-handle"></div>'
+            +'<div class="modal-title"><span>🏆 Tiebreaker — tied at '+tiedScore+'</span></div>'
+            +'<div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Tap teams in order from 1st to last to break the tie.</div>';
+          if(order.length){
+            html+='<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">Selected order:</div>';
+            order.forEach((t,i)=>{
+              const name=[t.p1,t.p2,t.p3].filter(Boolean).join(' & ');
+              html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#EAF3DE;border-radius:8px;margin-bottom:3px">'
+                +'<span style="font-size:16px">'+(['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣'][i]||''+(i+1)+'.')+'</span>'
+                +'<span style="flex:1;font-size:13px;font-weight:600">'+name+'</span>'
+                +'<button onclick="tbUndo()" style="font-size:10px;color:#c0392b;background:none;border:none;cursor:pointer">↩ undo</button>'
+                +'</div>';
+            });
+            html+='<div class="divider"></div>';
+          }
+          if(remaining.length){
+            html+='<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">Pick '+(order.length===0?'1st place':'next place')+':</div>';
+            remaining.forEach((t,i)=>{
+              const name=[t.p1,t.p2,t.p3].filter(Boolean).join(' & ');
+              html+='<div onclick="tbPick('+i+')" style="padding:10px 12px;background:#f8f7f4;border-radius:10px;margin-bottom:6px;cursor:pointer;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px">'
+                +'<div class="avatar" style="width:32px;height:32px;font-size:12px">'+name.split(' ')[0].charAt(0)+'</div>'
+                +name+'</div>';
+            });
+          }
+          if(order.length===tiedTeams.length){
+            html+='<button onclick="tbConfirm()" class="btn btn-primary" style="margin-top:8px">✓ Confirm order</button>';
+          }
+          html+='</div></div>';
+          el('modal-area').innerHTML=html;
+          // Expose helpers on window for onclick
+          window.tbPick=idx2=>{
+            const remaining2=tiedTeams.filter(t=>!order.find(o=>o.id===t.id));
+            order.push(remaining2[idx2]);
+            renderModal();
+          };
+          window.tbUndo=()=>{ order.pop(); renderModal(); };
+          window.tbConfirm=()=>{ closeModal(); resolve(order); };
+        }
+        renderModal();
+      });
+      // Apply the picked order — 1st picked = startPlace, 2nd = startPlace+1, etc
+      picked.forEach((t,i)=>{ pl[t.id]=startPlace+i; });
     }
   }
 
