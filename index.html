@@ -1844,10 +1844,12 @@ function buildTournamentShell(){
     <div class="ptab">
       <div class="ptab-btn active" id="ptab-rank" data-tab="rank">Rankings</div>
       <div class="ptab-btn" id="ptab-teams" data-tab="teams">My teams</div>
+      <div class="ptab-btn" id="ptab-games" data-tab="games">Games</div>
       <div class="ptab-btn" id="ptab-lb" data-tab="lb">Leaderboard</div>
     </div>
     <div id="pview-rank"></div>
     <div id="pview-teams" class="hidden"></div>
+    <div id="pview-games" class="hidden"></div>
     <div id="pview-lb" class="hidden"></div>
   </div>
   <div id="modal-area"></div>`;
@@ -2946,8 +2948,59 @@ window.saveScoreGame = async (gid)=>{
   const entries=Object.entries(totals).sort((a,b)=>lowWins?a[1]-b[1]:b[1]-a[1]);
   const pl={};let place=1;
   for(let i=0;i<entries.length;){let j=i;while(j<entries.length&&entries[j][1]===entries[i][1])j++;entries.slice(i,j).forEach((x,k)=>{pl[x[0]]=place+k;});place+=j-i;i=j;}
+  // Check for ties — if host-score tiebreak, prompt for each tied group
+  const tiedGroups=[];
+  for(let i=0;i<entries.length;){
+    let j=i;
+    while(j<entries.length&&entries[j][1]===entries[i][1]) j++;
+    if(j-i>1) tiedGroups.push(entries.slice(i,j).map(x=>x[0]));
+    i=j;
+  }
+
+  if(tiedGroups.length&&game.tiebreak==='host-score'){
+    // Prompt admin to enter tiebreak score for each tied group
+    for(const tiedIds of tiedGroups){
+      const tiedTeams=tiedIds.map(id=>teams.find(t=>t.id===id)).filter(Boolean);
+      const score=entries.find(e=>e[0]===tiedIds[0])[1];
+      const labels=tiedTeams.map(t=>[t.p1,t.p2,t.p3].filter(Boolean).join(' & ')).join(' vs. ');
+      const msg='TIE at score '+score+'! '+labels+' - Enter tiebreak score for each (comma-separated)';
+      const input=prompt(msg);
+      if(input){
+        const tbScores=input.split(',').map(s=>parseFloat(s.trim()));
+        tiedIds.forEach((id,i)=>{
+          const tbScore=tbScores[i]||0;
+          const adjustedPlace=pl[id];
+          // Re-rank within tied group by tiebreak score
+          tiedIds.forEach((id2,i2)=>{
+            const ts2=tbScores[i2]||0;
+            const betterCount=tbScores.filter((s2,i3)=>i3!==i&&(lowWins?s2<tbScore:s2>tbScore)).length;
+            pl[id2]=Math.min(...tiedIds.map(tid=>pl[tid]))+betterCount;
+          });
+        });
+      }
+    }
+  } else if(tiedGroups.length&&game.tiebreak==='host-pick'){
+    for(const tiedIds of tiedGroups){
+      const tiedTeams=tiedIds.map(id=>teams.find(t=>t.id===id)).filter(Boolean);
+      const score=entries.find(e=>e[0]===tiedIds[0])[1];
+      const labels=tiedTeams.map((t,i)=>(i+1)+'. '+[t.p1,t.p2,t.p3].filter(Boolean).join(' & ')).join(' | ');
+      const msg='TIE at score '+score+'! Pick winner: '+labels+' - Enter number 1-'+tiedTeams.length;
+      const pick=parseInt(prompt(msg)||'0')-1;
+      if(pick>=0&&pick<tiedTeams.length){
+        const winnerId=tiedIds[pick];
+        const startPlace=Math.min(...tiedIds.map(id=>pl[id]));
+        pl[winnerId]=startPlace;
+        tiedIds.filter(id=>id!==winnerId).forEach((id,i)=>{ pl[id]=startPlace+i+1; });
+      }
+    }
+  }
+
   const newPts={};
-  teams.forEach(team=>{const p2=pl[team.id]||teams.length,pts=Math.max(1,teams.length-p2+1);[team.p1,team.p2].filter(Boolean).forEach(p=>{newPts[p]=pts;});});
+  teams.forEach(team=>{
+    const p2=pl[team.id]||teams.length;
+    const pts=Math.max(1,teams.length-p2+1);
+    [team.p1,team.p2,team.p3].filter(Boolean).forEach(p=>{newPts[p]=pts;});
+  });
   await update(ref(db,'tournaments/'+currentTourneyId),{['scores/'+gid]:newScores,['points/'+gid]:newPts});
 };
 
@@ -3313,13 +3366,192 @@ function renderPlayerView(myName){
 function showPlayerTab(tab,myName){
   _tab=tab;
   myName=myName||actingAsName||(userProfile?.name)||'';
-  ['rank','teams','lb'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
+  ['rank','teams','games','lb'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
   const tv=el('pview-'+tab);if(tv)tv.classList.remove('hidden');
   const tb=el('ptab-'+tab);if(tb)tb.classList.add('active');
   if(tab==='rank')  renderPlayerRankings(myName);
   if(tab==='teams') renderMyTeams(myName);
+  if(tab==='games') renderPlayerGames(myName);
   if(tab==='lb')    { renderPlayerLB(myName); renderAllPlayerBadges(); }
 }
+function renderPlayerGames(myName){
+  const e=el('pview-games'); if(!e) return;
+  const games=(S.games||[]).filter(g=>g.status!=='pending');
+  if(!games.length){
+    e.innerHTML='<div class="card"><p class="empty">No games in progress yet.</p></div>';
+    return;
+  }
+
+  let html='';
+  games.forEach(g=>{
+    const teams=(S.teams&&S.teams[g.id])||[];
+    const b=(S.bs&&S.bs[g.id])||null;
+    const scores=(S.scores&&S.scores[g.id])||{};
+    const pts=(S.points&&S.points[g.id])||{};
+    const isScore=g.format==='score-low'||g.format==='score-high'||g.format==='multi-round-high'||g.format==='multi-round-low';
+    const isDone=scores._fin;
+
+    function teamLabel(t){
+      if(!t) return '?';
+      const p1=nameSpan(t.p1||'');
+      const p2=t.p2?nameSpan(t.p2):'';
+      const p3=t.p3?nameSpan(t.p3):'';
+      return [p1,p2,p3].filter(Boolean).join(' & ');
+    }
+    function myTeam(){ return teams.find(t=>t.p1===myName||t.p2===myName||t.p3===myName); }
+    const mt=myTeam();
+
+    html+='<div class="card">';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    html+='<div style="font-size:15px;font-weight:700">'+g.name+'</div>';
+    html+='<span class="tag" style="background:'+(isDone?'#EAF3DE':'#FEF3E2')+';color:'+(isDone?'#27500A':'#7a4f00')+'">'+(isDone?'✅ Done':'▶ In progress')+'</span>';
+    html+='</div>';
+
+    if(mt){
+      html+='<div style="background:#EEEDFE;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px">';
+      html+='<span style="color:#534AB7;font-weight:600">Your team: </span>'+teamLabel(mt);
+      html+='</div>';
+    }
+
+    // ── Score-type games ────────────────────────────────
+    if(isScore){
+      if(isDone){
+        // Show final standings with explanation
+        const sorted=[...teams].sort((a,b)=>{
+          const pa=pts[a.p1]||0, pb=pts[b.p1]||0;
+          return pb-pa;
+        });
+        html+='<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">FINAL STANDINGS</div>';
+        sorted.forEach((t,i)=>{
+          const score=isScore?scores[t.id]||0:0;
+          const place=i+1;
+          const icon=['🥇','🥈','🥉'][i]||'';
+          const bg=i===0?'#FFF3CD':i===1?'#EBF4FF':i===2?'#EAF3DE':'#f8f7f4';
+          html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:'+bg+';border-radius:8px;margin-bottom:3px">'
+            +'<span style="font-size:16px;width:24px">'+(icon||place+'.')+'</span>'
+            +'<span style="flex:1;font-size:13px;font-weight:'+(i<3?'600':'400')+'">'+teamLabel(t)+'</span>'
+            +'<span style="font-size:12px;color:#888">'+score+(g.format.includes('low')?' (low wins)':'')+' pts</span>'
+            +'</div>';
+        });
+      } else {
+        // Show current scores if any entered
+        html+='<div style="font-size:11px;color:#aaa">Scores will appear when admin enters them.</div>';
+      }
+    }
+
+    // ── H2H / Bracket games ─────────────────────────────
+    else if(b){
+      const matchList=b.matches||[];
+      const played=matchList.filter(m=>m.score1!==null&&m.score2!==null);
+      const pending=matchList.filter(m=>m.score1===null||m.score2===null);
+
+      if(!isDone && pending.length){
+        html+='<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">CURRENT MATCHES</div>';
+        pending.slice(0,4).forEach(m=>{
+          const isMine=mt&&(m.t1.id===mt.id||m.t2.id===mt.id);
+          html+='<div style="padding:7px 10px;background:'+(isMine?'#EEEDFE':'#f8f7f4')+';border-radius:8px;margin-bottom:4px;font-size:12px">'
+            +(isMine?'<span style="font-size:10px;color:#534AB7;font-weight:700;margin-right:4px">YOUR MATCH</span>':'')
+            +'<span style="font-weight:600">'+teamLabel(m.t1)+'</span>'
+            +' <span style="color:#aaa">vs</span> '
+            +'<span style="font-weight:600">'+teamLabel(m.t2)+'</span>'
+            +'</div>';
+        });
+      }
+
+      if(played.length){
+        html+='<div style="font-size:11px;font-weight:700;color:#888;margin:'+(pending.length?'8':'0')+'px 0 6px">RESULTS SO FAR</div>';
+        played.forEach(m=>{
+          const w=m.score1>m.score2?m.t1:m.t2;
+          const wScore=m.score1>m.score2?m.score1:m.score2;
+          const lScore=m.score1>m.score2?m.score2:m.score1;
+          const l=m.score1>m.score2?m.t2:m.t1;
+          const isMine=mt&&(m.t1.id===mt.id||m.t2.id===mt.id);
+          html+='<div style="padding:5px 8px;font-size:11px;color:#444;border-bottom:1px solid #f0ede6;'+(isMine?'background:#EAF3DE;border-radius:6px;margin-bottom:2px':'')+'">'
+            +'<span style="font-weight:600;color:#27500A">✓ '+teamLabel(w)+'</span>'
+            +' '+wScore+'–'+lScore+' def. '+teamLabel(l)
+            +'</div>';
+        });
+      }
+
+      // Final standings with tiebreak explanation
+      if(isDone && b.standings){
+        const sorted2=sortBySt(teams,b.standings,b.matches);
+        html+='<div style="font-size:11px;font-weight:700;color:#888;margin:10px 0 6px">FINAL STANDINGS</div>';
+        sorted2.forEach((t,i)=>{
+          const s=b.standings[t.id]||{w:0,l:0,pf:0,pa:0};
+          const diff=s.pf-s.pa;
+          const icon=['🥇','🥈','🥉'][i]||'';
+          const bg=i===0?'#FFF3CD':i===1?'#EBF4FF':i===2?'#EAF3DE':'#f8f7f4';
+          html+='<div style="padding:7px 10px;background:'+bg+';border-radius:8px;margin-bottom:3px">'
+            +'<div style="display:flex;align-items:center;gap:6px">'
+            +'<span style="font-size:16px;width:20px">'+(icon||(i+1)+'.')+'</span>'
+            +'<span style="flex:1;font-size:13px;font-weight:600">'+teamLabel(t)+'</span>'
+            +'<span style="font-size:11px;color:#888">'+s.w+'W–'+s.l+'L</span>'
+            +'</div>'
+            +'<div style="font-size:10px;color:#aaa;margin-left:26px">PF:'+s.pf+' PA:'+s.pa+' Diff:'+(diff>=0?'+':'')+diff+'</div>'
+            +'</div>';
+        });
+
+        // Tiebreak explanation
+        const tieGroups={};
+        sorted2.forEach((t,i)=>{
+          const s=b.standings[t.id]||{w:0,l:0};
+          const key=s.w+'-'+s.l;
+          if(!tieGroups[key]) tieGroups[key]=[];
+          tieGroups[key].push({t,i});
+        });
+        const explanations=[];
+        Object.values(tieGroups).forEach(group=>{
+          if(group.length<2) return;
+          const names=group.map(x=>teamLabel(x.t)).join(', ');
+          const places=group.map(x=>['1st','2nd','3rd','4th','5th'][x.i]||(x.i+1)+'th');
+          const firstS=b.standings[group[0].t.id]||{};
+          const allSameWins=group.every(x=>(b.standings[x.t.id]||{w:0}).w===firstS.w);
+          if(allSameWins){
+            // Check if H2H resolved it
+            const h2hWins=group.map(x=>{
+              let w=0;
+              (b.matches||[]).forEach(m=>{
+                const inGroup=group.some(y=>y.t.id===m.t1.id)&&group.some(y=>y.t.id===m.t2.id);
+                if(!inGroup) return;
+                if(m.score1===null) return;
+                if(m.t1.id===x.t.id&&m.score1>m.score2) w++;
+                if(m.t2.id===x.t.id&&m.score2>m.score1) w++;
+              });
+              return w;
+            });
+            const allSameH2H=h2hWins.every(w=>w===h2hWins[0]);
+            if(!allSameH2H){
+              explanations.push(names+' were tied ('+firstS.w+'W–'+firstS.l+'L) → resolved by head-to-head record');
+            } else {
+              // Point diff resolved it
+              const diffs=group.map(x=>{const s2=b.standings[x.t.id]||{pf:0,pa:0};return s2.pf-s2.pa;});
+              const allSameDiff=diffs.every(d=>d===diffs[0]);
+              if(!allSameDiff){
+                explanations.push(names+' were tied ('+firstS.w+'W–'+firstS.l+'L) → resolved by point differential: '+group.map((x,xi)=>{const s2=b.standings[x.t.id]||{pf:0,pa:0};const d=s2.pf-s2.pa;return teamLabel(x.t)+' ('+(d>=0?'+':'')+d+')';}).join(' vs '));
+              } else {
+                explanations.push(names+' were tied → resolved by points scored');
+              }
+            }
+          }
+        });
+        if(explanations.length){
+          html+='<div style="margin-top:8px;padding:8px;background:#FFFBEB;border-radius:8px;border:1px solid #fcd34d">';
+          html+='<div style="font-size:10px;font-weight:700;color:#7a4f00;margin-bottom:4px">🔍 Tiebreaker explanation</div>';
+          explanations.forEach(ex=>{
+            html+='<div style="font-size:10px;color:#7a4f00;margin-bottom:2px">• '+ex+'</div>';
+          });
+          html+='</div>';
+        }
+      }
+    }
+
+    html+='</div>'; // close card
+  });
+
+  e.innerHTML=html||'<div class="card"><p class="empty">No games yet.</p></div>';
+}
+
 function renderPlayerRankings(myName){
   const e=el('pview-rank'); if(!e) return;
   const games=S.games||[], others=(S.players||[]).filter(p=>p!==myName);
