@@ -333,6 +333,7 @@ let currentUser      = null;  // Firebase auth user
 let userProfile      = null;  // /players/{uid}
 let isAdmin          = false; // universal super admin
 let isTourneyAdmin   = false; // admin of current tournament
+let _viewingAsPlayer = false; // admin has switched to player view
 let actingAsUid      = null;  // when admin acts as another player
 let actingAsName     = null;
 let currentTourneyId = null;
@@ -1583,7 +1584,7 @@ window.openTournament = (tid)=>{
     const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
     isTourneyAdmin=isAdmin||!!(S.tourneyAdmins&&S.tourneyAdmins[myUid]);
     loadGlobalProfilesForTournament().then(()=>{
-      if(isTourneyAdmin) renderAdminView();
+      if(isTourneyAdmin&&!_viewingAsPlayer) renderAdminView();
       else renderPlayerView(myName);
     });
   });
@@ -1630,7 +1631,7 @@ function buildTournamentShell(){
 }
 
 window.leaveTournament = ()=>{
-  currentTourneyId=null; S=null; _globalProfiles={};
+  currentTourneyId=null; S=null; _globalProfiles={}; _viewingAsPlayer=false;
   showView('home');
 };
 
@@ -1709,6 +1710,7 @@ function renderAdminView(){
   showAdminPhase(_phase||'setup');
 }
 window.switchToPlayerView=()=>{
+  _viewingAsPlayer=true;
   const myName=actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
   hide('admin-area');
   el('btn-player-view')?.classList.add('hidden');
@@ -1730,6 +1732,7 @@ window.switchToPlayerView=()=>{
   }
 };
 window.switchToAdminView=()=>{
+  _viewingAsPlayer=false;
   show('admin-area'); hide('player-area');
   el('btn-admin-view')?.classList.add('hidden');
   el('btn-manage-admins')?.classList.remove('hidden');
