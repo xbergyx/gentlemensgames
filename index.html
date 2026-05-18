@@ -1504,6 +1504,7 @@ window.openAdminPanel=()=>{
   loadTournamentList();
   loadGlobalPlayers('');
   loadPendingApprovals();
+  if(userProfile?.email===SUPER_ADMIN_EMAIL) renderTestPlayersList();
 };
 window.closeAdminPanel = ()=>{ showView('home'); };
 
@@ -1921,6 +1922,8 @@ async function loadGlobalProfilesForTournament(){
     }
   });
   if(dirty&&currentTourneyId) update(ref(db,'tournaments/'+currentTourneyId),updates).catch(()=>{});
+  // Refresh test players list if admin panel visible
+  if(el('test-players-list')) renderTestPlayersList();
 }
 
 // ── ADMIN VIEW ────────────────────────────────────────────
@@ -2019,6 +2022,14 @@ function renderAdminSetup(){
       <div style="font-size:11px;color:#aaa;margin-bottom:6px;font-weight:600">🧪 TESTING</div>
       <button class="btn btn-sm" onclick="resetTournament()" style="width:auto;border-color:#f0a0a0;color:#c0392b;font-size:11px;margin-bottom:5px">🔄 Reset (keep players &amp; games)</button>
       <button class="btn btn-sm" onclick="fillTestRankings()" style="width:auto;border-color:#ccc;color:#888;font-size:11px;margin-bottom:8px">⚡ Fill random rankings</button>
+      <div style="font-size:11px;color:#aaa;margin-bottom:4px;margin-top:4px;font-weight:600">🤖 Test Players</div>
+      <div style="font-size:10px;color:#aaa;margin-bottom:6px">Add fake ghost players to test the player experience. Super admin only.</div>
+      <div style="display:flex;gap:4px;margin-bottom:4px">
+        <input type="text" id="test-player-name" placeholder="Player name (e.g. Test User)" style="margin:0;font-size:12px">
+        <button class="btn btn-sm btn-primary" onclick="addTestPlayer()" style="flex-shrink:0;white-space:nowrap">+ Add</button>
+      </div>
+      <div id="test-players-list" style="margin-bottom:8px"></div>
+      <button class="btn btn-sm" onclick="removeAllTestPlayers()" style="width:auto;border-color:#f0a0a0;color:#c0392b;font-size:11px">🗑 Remove all test players</button>
       <div style="font-size:11px;color:#888;margin-bottom:5px">📊 Upload full Excel ranking sheet</div>
       <label class="btn btn-sm" style="width:auto;cursor:pointer;background:#EAF3DE;border-color:#97C459;color:#27500A">
         📂 Choose Excel (.xlsx)
@@ -2962,15 +2973,19 @@ window.finalizeGame = async (gameId)=>{
 };
 window.adminApproveScoreSubmission = async (btn)=>{
   const gameId=btn.dataset.gid, teamId=btn.dataset.tid, score=parseFloat(btn.dataset.score);
-  // Mark approved and pre-fill the score input
+  // Mark approved in Firebase
   await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+teamId+'/_approved']:true});
-  // Pre-fill the admin input
+  // Pre-fill the input if it exists
   const inp=el('sc-'+gameId+'-'+teamId);
-  if(inp) inp.value=score;
-  btn.parentElement.style.background='#EAF3DE';
+  if(inp){ inp.value=score; inp.style.background='#EAF3DE'; }
+  // Update the button row to show approved state
   btn.textContent='✓ Approved';
   btn.disabled=true;
-};
+  btn.style.background='#EAF3DE';
+  // Also update the reject button
+  const row=btn.parentElement;
+  if(row) row.style.background='#EAF3DE';
+};;
 window.adminRejectScoreSubmission = async (btn)=>{
   const gameId=btn.dataset.gid, teamId=btn.dataset.tid;
   await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+teamId]:null});
@@ -2982,9 +2997,25 @@ window.saveScoreGame = async (gid)=>{
   const isMulti=game.format==='multi-round-high'||game.format==='multi-round-low';
   const lowWins=game.format==='score-low'||game.format==='multi-round-low';
   const newScores={_fin:true},totals={};
+  const pendingApproved=(S.pendingScores&&S.pendingScores[gid])||{};
   teams.forEach(t=>{
-    if(isMulti){let total=0;for(let r=1;r<=game.rounds;r++){const key=t.id+'_r'+r,v=parseFloat(el('sc-'+gid+'-'+key)?.value)||0;newScores[key]=v;total+=v;}totals[t.id]=total;}
-    else{const v=parseFloat(el('sc-'+gid+'-'+t.id)?.value);if(!isNaN(v)){newScores[t.id]=v;totals[t.id]=v;}}
+    if(isMulti){
+      let total=0;
+      for(let r=1;r<=game.rounds;r++){
+        const key=t.id+'_r'+r;
+        // Check input first, then fall back to approved pending submission
+        let v=parseFloat(el('sc-'+gid+'-'+key)?.value);
+        if(isNaN(v)&&pendingApproved[t.id]&&pendingApproved[t.id].roundScores) v=pendingApproved[t.id].roundScores['r'+r]||0;
+        v=v||0;
+        newScores[key]=v;total+=v;
+      }
+      totals[t.id]=total;
+    } else {
+      let v=parseFloat(el('sc-'+gid+'-'+t.id)?.value);
+      // Fall back to approved pending submission if input is empty
+      if(isNaN(v)&&pendingApproved[t.id]&&pendingApproved[t.id]._approved) v=pendingApproved[t.id].score;
+      if(!isNaN(v)){newScores[t.id]=v;totals[t.id]=v;}
+    }
   });
   const entries=Object.entries(totals).sort((a,b)=>lowWins?a[1]-b[1]:b[1]-a[1]);
   const pl={};let place=1;
@@ -4359,6 +4390,111 @@ window.handleXlsxUpload = async (event)=>{
 };
 
 // ── TEST HELPERS ──────────────────────────────────────────
+// ── TEST PLAYER UTILITIES (super admin only) ──────────────
+window.addTestPlayer = async ()=>{
+  if(userProfile?.email!==SUPER_ADMIN_EMAIL){alert('Super admin only.');return;}
+  const nameEl=el('test-player-name');
+  const name=(nameEl?.value||'').trim();
+  if(!name){alert('Enter a name.');return;}
+
+  // Create a preAssignment for this test player
+  const preKey='test_'+name.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+Date.now();
+  const testProfile={
+    nickname:name, firstName:name, lastName:'(Test)',
+    preferredName:name, name,
+    phone:'', email:'',
+    years:0, wins:0, podiums:0, lastPlaces:0,
+    yearsAttended:[], gameWins:{}, gameStats:{},
+    matchNames:[name.toLowerCase()],
+    isTestPlayer:true,
+    importedFrom:'test', importedAt:Date.now()
+  };
+  await set(ref(db,'preAssignments/'+preKey), testProfile);
+
+  // Add to current tournament if open
+  if(currentTourneyId&&S){
+    const players=[...(S.players||[])];
+    const ghostPlayers={...(S.ghostPlayers||{})};
+    if(!players.includes(name)){
+      players.push(name);
+      ghostPlayers[preKey]=name;
+      await update(ref(db,'tournaments/'+currentTourneyId),{players,ghostPlayers});
+    }
+  }
+
+  if(nameEl) nameEl.value='';
+  renderTestPlayersList();
+  alert('✓ Added test player "'+name+'"');
+};
+
+function renderTestPlayersList(){
+  const e=el('test-players-list'); if(!e) return;
+  if(!S){e.innerHTML='<p class="empty" style="font-size:10px">Open a tournament first.</p>';return;}
+  const ghosts=S.ghostPlayers||{};
+  const testPlayers=Object.entries(ghosts).filter(([k])=>k.startsWith('test_'));
+  if(!testPlayers.length){e.innerHTML='<p class="empty" style="font-size:10px">No test players yet.</p>';return;}
+  e.innerHTML=testPlayers.map(([preKey,name])=>
+    '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #f0ede6">'
+    +'<span style="flex:1;font-size:12px">'+name+'</span>'
+    +'<button class="btn btn-sm" onclick="actAsTestPlayer(this)" data-key="'+preKey+'" data-name="'+name+'" style="background:#EEEDFE;border-color:#AFA9EC;color:#3C3489;font-size:10px">🎭 Act as</button>'
+    +'<button class="btn btn-sm" onclick="removeTestPlayer(this)" data-key="'+preKey+'" data-name="'+name+'" style="color:#c0392b;border-color:#f0a0a0;font-size:10px">✕</button>'
+    +'</div>'
+  ).join('');
+}
+
+window.actAsTestPlayer = async (btn)=>{
+  const preKey=btn.dataset.key, playerName=btn.dataset.name;
+  if(userProfile?.email!==SUPER_ADMIN_EMAIL){alert('Super admin only.');return;}
+  // Set acting as this test player
+  actingAsName=playerName;
+  actingAsUid=null;
+  show('acting-as-banner');
+  el('acting-as-name').textContent=playerName+' (test)';
+  el('home-user-label').textContent='🛡 Admin · Acting as: '+playerName+' (test)';
+  // If in a tournament, switch to player view
+  if(currentTourneyId&&S){
+    _viewingAsPlayer=true;
+    showView('tournament');
+    renderPlayerView(playerName);
+  } else {
+    showView('home');
+  }
+};
+
+window.removeTestPlayer = async (btn)=>{
+  const preKey=btn.dataset.key, playerName=btn.dataset.name;
+  if(userProfile?.email!==SUPER_ADMIN_EMAIL){alert('Super admin only.');return;}
+  if(!confirm('Remove test player "'+playerName+'"?')) return;
+  await set(ref(db,'preAssignments/'+preKey),null);
+  if(currentTourneyId&&S){
+    const players=(S.players||[]).filter(p=>p!==playerName);
+    const ghosts={...(S.ghostPlayers||{})};
+    delete ghosts[preKey];
+    await update(ref(db,'tournaments/'+currentTourneyId),{players,ghostPlayers:ghosts});
+  }
+  renderTestPlayersList();
+};
+
+window.removeAllTestPlayers = async ()=>{
+  if(userProfile?.email!==SUPER_ADMIN_EMAIL){alert('Super admin only.');return;}
+  if(!confirm('Remove ALL test players?')) return;
+  const ghosts=S.ghostPlayers||{};
+  const testKeys=Object.keys(ghosts).filter(k=>k.startsWith('test_'));
+  if(!testKeys.length){alert('No test players found.');return;}
+  const updates={};
+  const players=(S.players||[]).filter(p=>!testKeys.some(k=>ghosts[k]===p));
+  const newGhosts={...ghosts};
+  testKeys.forEach(k=>{
+    delete newGhosts[k];
+    updates['preAssignments/'+k]=null;
+  });
+  updates['tournaments/'+currentTourneyId+'/players']=players;
+  updates['tournaments/'+currentTourneyId+'/ghostPlayers']=newGhosts;
+  await update(ref(db,'/'),updates);
+  renderTestPlayersList();
+  alert('✓ Removed '+testKeys.length+' test player(s)');
+};
+
 window.resetTournament = async ()=>{
   if(!confirm('Reset? Clears rankings, teams, scores. Keeps players & games.'))return;
   const games=(S.games||[]).map(g=>({...g,status:'pending'}));
