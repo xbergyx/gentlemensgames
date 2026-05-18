@@ -769,13 +769,23 @@ async function syncPlayerNameAcrossTournaments(uid2, profile){
       allUpdates[`tournaments/${tid}/history/${currentName}`] = null;
     }
 
-    // Move gameRankings
+    // Move gameRankings — also update name inside other players' lists
     if(t.gameRankings){
       Object.entries(t.gameRankings).forEach(([gid,ranks])=>{
-        if(ranks?.[currentName]!==undefined){
+        if(!ranks) return;
+        // Move this player's own ranking entry
+        if(ranks[currentName]!==undefined){
           allUpdates[`tournaments/${tid}/gameRankings/${gid}/${preferredName}`] = ranks[currentName];
           allUpdates[`tournaments/${tid}/gameRankings/${gid}/${currentName}`] = null;
         }
+        // Update currentName inside every other player's ranked list
+        Object.entries(ranks).forEach(([rankerName, rankedList])=>{
+          if(!Array.isArray(rankedList)) return;
+          if(rankedList.includes(currentName)){
+            const updated = rankedList.map(n => n===currentName ? preferredName : n);
+            allUpdates[`tournaments/${tid}/gameRankings/${gid}/${rankerName}`] = updated;
+          }
+        });
       });
     }
 
@@ -3142,7 +3152,9 @@ function renderPlayerRankings(myName){
     if(isLocked){
       html+=`<div style="background:#EAF3DE;border:1px solid #b2d88a;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">✅</div><div><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#27500A">Teams locked</div></div></div>`;
     } else if(myRank){
-      html+=`<div onclick="openGameRanking('${g.id}','${esc(myName)}')" style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.05)"><div style="font-size:22px;pointer-events:none">👍</div><div style="flex:1;pointer-events:none"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e">${rc}/${total} submitted — tap to edit</div></div><div style="font-size:20px;color:#1a5f9e;pointer-events:none">›</div></div>`;
+      html+=(S.tournamentStarted
+    ? `<div style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><div style="font-size:22px">✅</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e">${rc}/${total} submitted — locked</div></div><div style="font-size:20px;color:#b8d9f8">🔒</div></div>`
+    : `<div onclick="openGameRanking('${g.id}','${esc(myName)}')" style="background:#EBF4FF;border:1px solid #b8d9f8;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.05)"><div style="font-size:22px;pointer-events:none">👍</div><div style="flex:1;pointer-events:none"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#1a5f9e">${rc}/${total} submitted — tap to edit</div></div><div style="font-size:20px;color:#1a5f9e;pointer-events:none">›</div></div>`);
     } else {
       html+=`<div onclick="openGameRanking('${g.id}','${esc(myName)}')" style="background:#FFFBEB;border:1px solid #fcd34d;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.05)"><div style="font-size:22px;pointer-events:none">🎯</div><div style="flex:1;pointer-events:none"><div style="font-size:14px;font-weight:600">${g.name}</div><div style="font-size:11px;color:#7a4f00">${rc}/${total} done — tap to rank</div></div><div style="font-size:20px;color:#534AB7;pointer-events:none">›</div></div>`;
     }
