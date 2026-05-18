@@ -2445,35 +2445,58 @@ window.openManualTeams = (gameId)=>{
   const numTeams=Math.floor(players.length/teamSize);
   const existing=(S.teams&&S.teams[gameId])||[];
 
-  // Build team slots
-  let html='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
-    +'<div class="modal-handle"></div>'
-    +'<div class="modal-title"><span>👥 '+game.name+' Teams</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
-    +'<div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Assign players to teams ('+teamSize+' per team)</div>';
+  function buildModal(){
+    // Collect all currently selected values across all selects
+    const allSelects=Array.from(document.querySelectorAll('.manual-team-slot'));
+    const taken=new Set(allSelects.map(s=>s.value).filter(Boolean));
 
-  for(let t=0;t<numTeams;t++){
-    const ex=existing[t]||{};
-    html+='<div style="background:#f8f7f4;border-radius:10px;padding:10px;margin-bottom:8px">'
-      +'<div style="font-size:11px;font-weight:700;color:#534AB7;margin-bottom:6px">Team '+(t+1)+'</div>';
-    for(let p=1;p<=teamSize;p++){
-      const val=ex['p'+p]||'';
-      html+='<select class="manual-team-slot" data-team="'+t+'" data-pos="p'+p+'" style="margin-bottom:4px;font-size:12px">'
-        +'<option value="">— select player —</option>'
-        +players.map(pl=>'<option value="'+esc(pl)+'"'+(pl===val?' selected':'')+'>'+pl+'</option>').join('')
-        +'</select>';
+    let html='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
+      +'<div class="modal-handle"></div>'
+      +'<div class="modal-title"><span>👥 '+game.name+' Teams</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
+      +'<div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Assign players to teams ('+teamSize+' per team) — selected players are removed from other dropdowns</div>';
+
+    for(let t=0;t<numTeams;t++){
+      const ex=existing[t]||{};
+      html+='<div style="background:#f8f7f4;border-radius:10px;padding:10px;margin-bottom:8px">'
+        +'<div style="font-size:11px;font-weight:700;color:#534AB7;margin-bottom:6px">Team '+(t+1)+'</div>';
+      for(let p=1;p<=teamSize;p++){
+        // Get current value from existing DOM select if available, else from existing data
+        const slotSel=document.querySelector('.manual-team-slot[data-team="'+t+'"][data-pos="p'+p+'"]');
+        const val=slotSel?slotSel.value:(ex['p'+p]||'');
+        // Show this slot's own value + any unselected players
+        const opts=players.filter(pl=>pl===val||!taken.has(pl));
+        html+='<select class="manual-team-slot" data-team="'+t+'" data-pos="p'+p+'" onchange="refreshManualDropdowns()" style="margin-bottom:4px;font-size:12px">'
+          +'<option value="">— select player —</option>'
+          +opts.map(pl=>'<option value="'+esc(pl)+'"'+(pl===val?' selected':'')+'>'+pl+'</option>').join('')
+          +'</select>';
+      }
+      html+='</div>';
     }
-    html+='</div>';
+
+    const remainder=players.length%teamSize;
+    if(remainder>0){
+      html+='<div style="font-size:11px;color:#aaa;margin-bottom:8px">'+remainder+' player(s) will be assigned to existing teams</div>';
+    }
+
+    html+='<button class="btn btn-primary" onclick="saveManualTeams(this)" data-gid="'+gameId+'" style="width:100%;margin-top:8px">💾 Save teams</button>'
+      +'</div></div>';
+    return html;
   }
 
-  // Remainder players (odd numbers)
-  const remainder=players.length%teamSize;
-  if(remainder>0){
-    html+='<div style="font-size:11px;color:#aaa;margin-bottom:8px">'+remainder+' player(s) will be assigned to existing teams</div>';
-  }
+  el('modal-area').innerHTML=buildModal();
 
-  html+='<button class="btn btn-primary" onclick="saveManualTeams(this)" data-gid="'+gameId+'" style="width:100%;margin-top:8px">Save teams</button>'
-    +'</div></div>';
-  el('modal-area').innerHTML=html;
+  // Re-render dropdowns on change to remove selected players from others
+  window.refreshManualDropdowns=()=>{
+    const allSelects=Array.from(document.querySelectorAll('.manual-team-slot'));
+    const taken=new Set(allSelects.map(s=>s.value).filter(Boolean));
+    allSelects.forEach(sel=>{
+      const currentVal=sel.value;
+      // Rebuild options: show current value + unselected players
+      const opts=players.filter(pl=>pl===currentVal||!taken.has(pl));
+      sel.innerHTML='<option value="">— select player —</option>'
+        +opts.map(pl=>'<option value="'+esc(pl)+'"'+(pl===currentVal?' selected':'')+'>'+pl+'</option>').join('');
+    });
+  };
 };
 
 window.saveManualTeams = async (btn)=>{
@@ -2864,7 +2887,8 @@ function renderScoreInputHTML(game,teams,scores){
   let html=`<div class="card"><div class="card-title">✏️ ${game.name}</div>`;
   // Show pending player submissions for approval
   const pendingScores=(S.pendingScores&&S.pendingScores[game.id])||{};
-  const pendingTeams=Object.entries(pendingScores).filter(([k,v])=>v&&!v._fin&&!v._approved&&!v.s1&&v.score!==undefined);
+  const pendingTeams=Object.entries(pendingScores).filter(([k,v])=>v&&!v._fin&&!v.s1&&v.score!==undefined&&!v._approved);
+  const approvedTeams=Object.entries(pendingScores).filter(([k,v])=>v&&v._approved&&v.score!==undefined);
   if(pendingTeams.length){
     html+='<div style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:10px;padding:10px;margin-bottom:10px">';
     html+='<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:8px">⏳ Pending player submissions</div>';
@@ -2880,14 +2904,41 @@ function renderScoreInputHTML(game,teams,scores){
     });
     html+='</div>';
   }
+  // Show already-approved submissions (green)
+  if(approvedTeams.length){
+    html+='<div style="background:#EAF3DE;border:1px solid #b2d88a;border-radius:10px;padding:10px;margin-bottom:10px">';
+    html+='<div style="font-size:11px;font-weight:700;color:#27500A;margin-bottom:8px">✅ Approved submissions</div>';
+    approvedTeams.forEach(([tid,sub])=>{
+      const t=teams.find(t2=>t2.id===tid);
+      if(!t) return;
+      html+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0">';
+      html+='<span style="flex:1;font-size:12px;font-weight:600">'+teamLabel(t)+'</span>';
+      html+='<span style="font-size:14px;font-weight:700;color:#27500A">'+sub.score+'</span>';
+      html+='<span style="font-size:10px;color:#27500A">✓ pre-filled</span>';
+      html+='</div>';
+    });
+    html+='</div>';
+  }
 
   teams.forEach(t=>{
     html+=`<div style="margin-bottom:10px"><div class="sec-label">${teamLabel(t)}</div>`;
-    // Pre-fill with approved player submission if exists
+    // Use approved player submission as pre-fill if admin hasn't entered a score yet
     const pSub=pendingScores[t.id];
-    if(pSub&&pSub._approved&&!scores[t.id]) el('sc-'+game.id+'-'+t.id)?.setAttribute('value',pSub.score);
-    if(isMulti){for(let r=1;r<=game.rounds;r++){const key=t.id+'_r'+r;html+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:#888;width:65px">Round ${r}</span><input type="number" id="sc-${game.id}-${key}" value="${scores[key]!==undefined?scores[key]:''}" placeholder="Score" style="width:120px;margin:0"></div>`;}}
-    else html+=`<input type="number" id="sc-${game.id}-${t.id}" value="${scores[t.id]!==undefined?scores[t.id]:''}" placeholder="Score">`;
+    const approvedScore=(pSub&&pSub._approved)?pSub.score:undefined;
+    if(isMulti){
+      for(let r=1;r<=game.rounds;r++){
+        const key=t.id+'_r'+r;
+        // Check approved roundScores as fallback
+        const approvedRound=(pSub&&pSub._approved&&pSub.roundScores)?pSub.roundScores['r'+r]:undefined;
+        const val=scores[key]!==undefined?scores[key]:(approvedRound!==undefined?approvedRound:'');
+        const highlight=approvedRound!==undefined&&scores[key]===undefined?'border-color:#97C459;background:#EAF3DE;':'';
+        html+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:#888;width:65px">Round ${r}</span><input type="number" id="sc-${game.id}-${key}" value="${val}" placeholder="Score" style="width:120px;margin:0;${highlight}"></div>`;
+      }
+    } else {
+      const val=scores[t.id]!==undefined?scores[t.id]:(approvedScore!==undefined?approvedScore:'');
+      const highlight=approvedScore!==undefined&&scores[t.id]===undefined?'border-color:#97C459;background:#EAF3DE;':'';
+      html+=`<input type="number" id="sc-${game.id}-${t.id}" value="${val}" placeholder="Score" style="${highlight}">`;
+    }
     html+='</div>';
   });
   html+=`<button class="btn btn-primary" onclick="saveScoreGame('${game.id}')">💾 Save & award points</button>`;
@@ -3026,16 +3077,8 @@ window.adminApproveScoreSubmission = async (btn)=>{
   const gameId=btn.dataset.gid, teamId=btn.dataset.tid, score=parseFloat(btn.dataset.score);
   // Mark approved in Firebase
   await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+teamId+'/_approved']:true});
-  // Pre-fill the input if it exists
-  const inp=el('sc-'+gameId+'-'+teamId);
-  if(inp){ inp.value=score; inp.style.background='#EAF3DE'; }
-  // Update the button row to show approved state
-  btn.textContent='✓ Approved';
-  btn.disabled=true;
-  btn.style.background='#EAF3DE';
-  // Also update the reject button
-  const row=btn.parentElement;
-  if(row) row.style.background='#EAF3DE';
+  // Re-render the scores tab so the input shows green with pre-filled score
+  renderMatchFeed();
 };;
 window.adminRejectScoreSubmission = async (btn)=>{
   const gameId=btn.dataset.gid, teamId=btn.dataset.tid;
@@ -3144,6 +3187,7 @@ window.saveScoreGame = async (gid)=>{
     [team.p1,team.p2,team.p3].filter(Boolean).forEach(p=>{newPts[p]=pts;});
   });
   await update(ref(db,'tournaments/'+currentTourneyId),{['scores/'+gid]:newScores,['points/'+gid]:newPts});
+  renderMatchFeed();
 };
 
 // ── LEADERBOARD ───────────────────────────────────────────
@@ -3503,7 +3547,58 @@ function renderPlayerView(myName){
       <div><div style="font-size:15px;font-weight:700">${myName}</div><div class="badges-wrap">${renderBadges(badges)}</div></div>
     </div>`;
   }
-  showPlayerTab(_tab||'active',myName);
+  // Smart default tab: active game if they have something to do, otherwise leaderboard
+  const defaultTab = getSmartDefaultTab(myName);
+  showPlayerTab(_tab||defaultTab,myName);
+}
+
+function getSmartDefaultTab(myName){
+  if(!S) return 'lb';
+  // Find active game
+  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id)
+    ||(S.games||[]).find(g=>g.status==='locked'||g.status==='scoring');
+  if(!activeGame) return 'lb';
+
+  const isScoreGame=['score-low','score-high','multi-round-high','multi-round-low'].includes(activeGame.format);
+  const teams=(S.teams&&S.teams[activeGame.id])||[];
+  const myTeam=teams.find(t=>t.p1===myName||t.p2===myName||t.p3===myName);
+  if(!myTeam) return 'lb';
+
+  if(isScoreGame){
+    // Score game: go to active if they haven't submitted yet
+    const scores=(S.scores&&S.scores[activeGame.id])||{};
+    if(scores._fin) return 'lb'; // game done
+    const pendScores=(S.pendingScores&&S.pendingScores[activeGame.id])||{};
+    const myPending=pendScores[myTeam.id];
+    if(!myPending||(!myPending._approved&&myPending.score===undefined)) return 'active'; // needs to submit
+    if(myPending&&!myPending._approved) return 'active'; // submitted, waiting approval — show active
+    return 'lb';
+  } else {
+    // Bracket/H2H game: go to active if they have a pending match or pending approval
+    const b=S.bs&&S.bs[activeGame.id];
+    if(!b) return 'lb';
+    const allMatches=[];
+    const fmt=activeGame.format;
+    if(fmt==='round-robin'&&b.matches) allMatches.push(...b.matches);
+    else if(fmt==='two-pool'){ if(b.poolAM)allMatches.push(...b.poolAM); if(b.poolBM)allMatches.push(...b.poolBM); if(b.crossover)allMatches.push(...b.crossover); }
+    else if(fmt==='single-elim'&&b.rounds) b.rounds.forEach(r=>allMatches.push(...r));
+    else if(fmt==='double-elim'){ if(b.winners)b.winners.forEach(r=>allMatches.push(...r)); if(b.losers)b.losers.forEach(r=>allMatches.push(...r)); }
+    else if(fmt==='pool-playoff'&&b.pools){ b.pools.forEach(p=>allMatches.push(...p.matches)); if(b.knockout)allMatches.push(...b.knockout); }
+
+    // Check if any unplayed match or pending score needs their action
+    const hasActiveMatch=allMatches.some(m=>!m.winner&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id));
+    const pendingScores=S.pendingScores&&S.pendingScores[activeGame.id]||{};
+    const hasOpponentSubmission=allMatches.some(m=>{
+      if(m.winner) return false;
+      if(!(m.t1.id===myTeam.id||m.t2.id===myTeam.id)) return false;
+      const ps=pendingScores[m.id];
+      const mySide=m.t1.id===myTeam.id?'t1':'t2';
+      const otherSide=mySide==='t1'?'t2':'t1';
+      return ps&&ps[otherSide]&&!ps[mySide]; // they submitted, I haven't approved
+    });
+    if(hasActiveMatch||hasOpponentSubmission) return 'active';
+    return 'lb';
+  }
 }
 function showPlayerTab(tab,myName){
   _tab=tab;
