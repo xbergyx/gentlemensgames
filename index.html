@@ -1842,17 +1842,17 @@ function buildTournamentShell(){
   <div id="player-area" class="hidden">
     <div class="card" id="player-header-card"></div>
     <div class="ptab">
-      <div class="ptab-btn active" id="ptab-rank" data-tab="rank">Rankings</div>
-      <div class="ptab-btn" id="ptab-teams" data-tab="teams">My teams</div>
-      <div class="ptab-btn" id="ptab-active" data-tab="active">Active game</div>
-      <div class="ptab-btn" id="ptab-games" data-tab="games">Results</div>
-      <div class="ptab-btn" id="ptab-lb" data-tab="lb">Leaderboard</div>
+      <div class="ptab-btn active" id="ptab-active" data-tab="active">🎯 Now Playing</div>
+      <div class="ptab-btn" id="ptab-lb" data-tab="lb">🏅 Standings</div>
+      <div class="ptab-btn" id="ptab-games" data-tab="games">📊 Results</div>
+      <div class="ptab-btn" id="ptab-teams" data-tab="teams">👥 My Teams</div>
+      <div class="ptab-btn" id="ptab-rank" data-tab="rank">🎯 Rankings</div>
     </div>
-    <div id="pview-rank"></div>
-    <div id="pview-teams" class="hidden"></div>
-    <div id="pview-active" class="hidden"></div>
-    <div id="pview-games" class="hidden"></div>
+    <div id="pview-active"></div>
     <div id="pview-lb" class="hidden"></div>
+    <div id="pview-games" class="hidden"></div>
+    <div id="pview-teams" class="hidden"></div>
+    <div id="pview-rank" class="hidden"></div>
   </div>
   <div id="modal-area"></div>`;
 }
@@ -2812,8 +2812,30 @@ function matchRowDone(game,m,num,label){
 function renderScoreInputHTML(game,teams,scores){
   const isMulti=game.format==='multi-round-high'||game.format==='multi-round-low';
   let html=`<div class="card"><div class="card-title">✏️ ${game.name}</div>`;
+  // Show pending player submissions for approval
+  const pendingScores=(S.pendingScores&&S.pendingScores[game.id])||{};
+  const pendingTeams=Object.entries(pendingScores).filter(([k,v])=>v&&!v._fin&&!v._approved&&!v.s1&&v.score!==undefined);
+  if(pendingTeams.length){
+    html+='<div style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:10px;padding:10px;margin-bottom:10px">';
+    html+='<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:8px">⏳ Pending player submissions</div>';
+    pendingTeams.forEach(([tid,sub])=>{
+      const t=teams.find(t2=>t2.id===tid);
+      if(!t) return;
+      html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #fde68a">';
+      html+='<span style="flex:1;font-size:12px;font-weight:600">'+teamLabel(t)+'</span>';
+      html+='<span style="font-size:14px;font-weight:700;color:#1a1a1a">'+sub.score+'</span>';
+      html+='<button class="btn btn-sm" onclick="adminApproveScoreSubmission(this)" data-gid="'+game.id+'" data-tid="'+tid+'" data-score="'+sub.score+'" style="background:#EAF3DE;border-color:#97C459;color:#27500A;width:auto">✓ Approve</button>';
+      html+='<button class="btn btn-sm" onclick="adminRejectScoreSubmission(this)" data-gid="'+game.id+'" data-tid="'+tid+'" style="background:#FEE2E2;border-color:#f87171;color:#991b1b;width:auto">✗ Reject</button>';
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+
   teams.forEach(t=>{
     html+=`<div style="margin-bottom:10px"><div class="sec-label">${teamLabel(t)}</div>`;
+    // Pre-fill with approved player submission if exists
+    const pSub=pendingScores[t.id];
+    if(pSub&&pSub._approved&&!scores[t.id]) el('sc-'+game.id+'-'+t.id)?.setAttribute('value',pSub.score);
     if(isMulti){for(let r=1;r<=game.rounds;r++){const key=t.id+'_r'+r;html+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:#888;width:65px">Round ${r}</span><input type="number" id="sc-${game.id}-${key}" value="${scores[key]!==undefined?scores[key]:''}" placeholder="Score" style="width:120px;margin:0"></div>`;}}
     else html+=`<input type="number" id="sc-${game.id}-${t.id}" value="${scores[t.id]!==undefined?scores[t.id]:''}" placeholder="Score">`;
     html+='</div>';
@@ -2938,6 +2960,23 @@ window.finalizeGame = async (gameId)=>{
   teams.forEach(team=>{const place=pl[team.id]||n,pts=Math.max(1,n-place+1);[team.p1,team.p2].filter(Boolean).forEach(p=>{newPts[p]=pts;});});
   await update(ref(db,'tournaments/'+currentTourneyId),{['scores/'+gameId]:{_fin:true},['points/'+gameId]:newPts});
 };
+window.adminApproveScoreSubmission = async (btn)=>{
+  const gameId=btn.dataset.gid, teamId=btn.dataset.tid, score=parseFloat(btn.dataset.score);
+  // Mark approved and pre-fill the score input
+  await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+teamId+'/_approved']:true});
+  // Pre-fill the admin input
+  const inp=el('sc-'+gameId+'-'+teamId);
+  if(inp) inp.value=score;
+  btn.parentElement.style.background='#EAF3DE';
+  btn.textContent='✓ Approved';
+  btn.disabled=true;
+};
+window.adminRejectScoreSubmission = async (btn)=>{
+  const gameId=btn.dataset.gid, teamId=btn.dataset.tid;
+  await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+teamId]:null});
+  btn.parentElement.remove();
+};
+
 window.saveScoreGame = async (gid)=>{
   const game=(S.games||[]).find(g=>g.id===gid),teams=(S.teams&&S.teams[gid])||[];
   const isMulti=game.format==='multi-round-high'||game.format==='multi-round-low';
@@ -3013,7 +3052,7 @@ function getBreakdown(p){ const skip=getSkippedIds(); return (S.games||[]).filte
 function renderLeaderboard(){
   const e=el('admin-board'); if(!e) return;
   const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
-  let html='<div class="card"><div class="card-title">🏅 Leaderboard</div>';
+  let html='<div class="card"><div class="card-title">🏅 Overall Standings</div>';
   if(!sorted.length){html+='<p class="empty">No players yet.</p>';} else {
     html+=sorted.map((p,i)=>`<div class="lb-row"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div><div style="flex:1"><div class="lb-name">${nameSpan(p)}</div><div class="lb-breakdown">${getBreakdown(p)}</div></div><div class="lb-pts">${getTotalPts(p)}</div></div>`).join('');
   }
@@ -3363,12 +3402,12 @@ function renderPlayerView(myName){
       <div><div style="font-size:15px;font-weight:700">${myName}</div><div class="badges-wrap">${renderBadges(badges)}</div></div>
     </div>`;
   }
-  showPlayerTab(_tab||'rank',myName);
+  showPlayerTab(_tab||'active',myName);
 }
 function showPlayerTab(tab,myName){
   _tab=tab;
   myName=myName||actingAsName||(userProfile?.name)||'';
-  ['rank','teams','active','games','lb'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
+  ['active','lb','games','teams','rank'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
   const tv=el('pview-'+tab);if(tv)tv.classList.remove('hidden');
   const tb=el('ptab-'+tab);if(tb)tb.classList.add('active');
   if(tab==='rank')   renderPlayerRankings(myName);
@@ -3562,7 +3601,7 @@ function renderPlayerRankings(myName){
     e.innerHTML=`<div class="card"><div style="text-align:center;padding:20px"><div style="font-size:40px;margin-bottom:10px">⏳</div><div style="font-size:14px;font-weight:600">Waiting for host to start</div><div style="font-size:12px;color:#888;margin-top:6px">The host will start the tournament once everyone has joined.</div></div></div>`;return;
   }
   if(!games.length){e.innerHTML='<div class="card"><p class="empty">No games added yet. Check back soon!</p></div>';return;}
-  let html='<div class="card"><div class="card-title">🎯 Game rankings</div><div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Each game needs its own ranking. Tap a game to rank players.</div>';
+  let html='<div class="card"><div class="card-title">🎯 Pre-tournament rankings</div><div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Rank other players for each game — best to worst. Used to create balanced teams.</div>';
   games.forEach(g=>{
     const gR=(S.gameRankings&&S.gameRankings[g.id])||{};
     const myRank=gR[myName],rc=Object.keys(gR).length,total=(S.players||[]).length;
@@ -3688,7 +3727,7 @@ async function renderActiveGameTab(myName){
     || (S.games||[]).find(g=>g.status==='locked'||g.status==='scoring');
 
   if(!activeGame){
-    e.innerHTML='<div class="card"><p class="empty">No active game right now. Check back soon!</p></div>';
+    e.innerHTML='<div class="card" style="text-align:center;padding:20px"><div style="font-size:36px;margin-bottom:8px">⏳</div><div style="font-size:14px;font-weight:600">No active game yet</div><div style="font-size:12px;color:#888;margin-top:4px">The host will start a game soon.</div></div>';
     return;
   }
 
@@ -3802,6 +3841,46 @@ async function renderActiveGameTab(myName){
     html+='<div class="alert alert-info" style="font-size:11px">You don\'t have a team in this game.</div>';
   }
 
+  // ── SCORE GAMES (golf/bowling) ───────────────────────
+  const isScoreGame=['score-low','score-high','multi-round-high','multi-round-low'].includes(activeGame.format);
+  if(isScoreGame && myTeam){
+    const scores=(S.scores&&S.scores[activeGame.id])||{};
+    const isDone=scores._fin;
+    const isMulti=activeGame.format==='multi-round-high'||activeGame.format==='multi-round-low';
+    const lowWins=activeGame.format==='score-low'||activeGame.format==='multi-round-low';
+    // Check if I already submitted
+    const pendScores=(S.pendingScores&&S.pendingScores[activeGame.id])||{};
+    const myPending=pendScores[myTeam.id];
+
+    html+='<div class="card">';
+    if(isDone){
+      // Final scores already saved
+      const myScore=scores[myTeam.id];
+      html+='<div class="alert alert-success">✅ Final score recorded: <strong>'+myScore+'</strong></div>';
+    } else if(myPending&&myPending._approved){
+      html+='<div class="alert alert-success">✅ Score approved: <strong>'+myPending.score+'</strong></div>';
+    } else if(myPending){
+      html+='<div class="alert alert-info" style="font-size:12px">✓ Score submitted: <strong>'+myPending.score+'</strong><br>Waiting for admin approval.</div>';
+      html+='<button class="btn btn-sm" onclick="withdrawScoreSubmission(this)" data-gid="'+activeGame.id+'" data-tid="'+myTeam.id+'" style="margin-top:6px;color:#c0392b;border-color:#f0a0a0">✕ Withdraw &amp; re-enter</button>';
+    } else {
+      // Show entry form
+      html+='<div style="font-size:13px;font-weight:600;margin-bottom:10px">Enter your '+(isMulti?'round':'total')+' score'+(lowWins?' (lower is better)':' (higher is better)')+':</div>';
+      if(isMulti){
+        for(let r=1;r<=activeGame.rounds;r++){
+          html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">';
+          html+='<span style="font-size:12px;color:#888;width:60px">Round '+r+'</span>';
+          html+='<input type="number" id="psc-'+activeGame.id+'-'+myTeam.id+'-r'+r+'" placeholder="0" min="0" style="width:100px;margin:0">';
+          html+='</div>';
+        }
+      } else {
+        html+='<input type="number" id="psc-'+activeGame.id+'-'+myTeam.id+'" placeholder="0" min="0" style="font-size:24px;text-align:center;font-weight:700;max-width:150px">';
+      }
+      html+='<button class="btn btn-primary" onclick="playerSubmitScoreGame(this)" data-gid="'+activeGame.id+'" data-tid="'+myTeam.id+'" data-multi="'+(isMulti?'1':'0')+'" data-rounds="'+(activeGame.rounds||1)+'" style="margin-top:10px">Submit for approval</button>';
+      html+='<div id="psc-'+activeGame.id+'-status"></div>';
+    }
+    html+='</div>';
+  }
+
   html+='</div>'; // close my match card
 
   // ── ALL OTHER MATCHES ─────────────────────────────────
@@ -3877,7 +3956,7 @@ function renderMyTeams(myName){
   const locked=(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring'||g.status==='done'||g.status==='skipped');
   if(!locked.length){e.innerHTML='<div class="card"><p class="empty">Teams appear once rankings are locked.</p></div>';return;}
   const fmtL={'h2h-points':'H2H points','h2h-wins':'H2H wins','score-low':'Low score','score-high':'High score','multi-round-high':'Multi-round high','multi-round-low':'Multi-round low','round-robin':'Round robin','single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools','pool-playoff':'Pool + knockout'};
-  let html='<div class="card"><div class="card-title">👥 All my teams</div>';
+  let html='<div class="card"><div class="card-title">👥 My Teams</div>';
   let found=false;
   locked.forEach(g=>{
     const teams=(S.teams&&S.teams[g.id])||[];
@@ -3976,6 +4055,37 @@ window.playerSubmitScore = async (btnOrObj,matchIdArg,sideArg)=>{
 };
 
 
+window.playerSubmitScoreGame = async (btn)=>{
+  const gameId=btn.dataset.gid, teamId=btn.dataset.tid;
+  const isMulti=btn.dataset.multi==='1', rounds=parseInt(btn.dataset.rounds)||1;
+  const myName=actingAsName||(userProfile?.name)||'';
+  const statusEl=el('psc-'+gameId+'-status');
+  let score, roundScores={};
+  if(isMulti){
+    let total=0;
+    for(let r=1;r<=rounds;r++){
+      const v=parseFloat(el('psc-'+gameId+'-'+teamId+'-r'+r)?.value);
+      if(isNaN(v)){alert('Enter all round scores.');return;}
+      roundScores['r'+r]=v; total+=v;
+    }
+    score=total;
+  } else {
+    score=parseFloat(el('psc-'+gameId+'-'+teamId)?.value);
+    if(isNaN(score)){alert('Enter your score.');return;}
+  }
+  const pending={score,roundScores,submittedBy:myName,at:Date.now(),_approved:false};
+  await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+teamId]:pending});
+  if(statusEl) statusEl.innerHTML='<div class="alert alert-success" style="font-size:11px">✓ Submitted '+score+' — waiting for admin approval.</div>';
+  setTimeout(()=>renderActiveGameTab(myName),600);
+};
+
+window.withdrawScoreSubmission = async (btn)=>{
+  const gameId=btn.dataset.gid, teamId=btn.dataset.tid;
+  const myName=actingAsName||(userProfile?.name)||'';
+  await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+teamId]:null});
+  renderActiveGameTab(myName);
+};
+
 window.approveScore = async (btn)=>{
   const gameId=btn.dataset.gid, matchId=btn.dataset.mid, teamSide=btn.dataset.side;
   const s1=parseFloat(btn.dataset.s1), s2=parseFloat(btn.dataset.s2);
@@ -4042,7 +4152,7 @@ function findMatchMeta(b,matchId,gameId){
 function renderPlayerLB(myName){
   const e=el('pview-lb');if(!e)return;
   const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
-  let html='<div class="card"><div class="card-title">🏅 Leaderboard</div>';
+  let html='<div class="card"><div class="card-title">🏅 Overall Standings</div>';
   if(!sorted.length)html+='<p class="empty">No data yet.</p>';
   else html+=sorted.map((p,i)=>`<div class="lb-row"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div><div class="lb-name">${nameSpan(p)}${p===myName?' <span style="font-size:10px;color:#534AB7">(you)</span>':''}</div><div class="lb-pts">${getTotalPts(p)}</div></div>`).join('');
   html+='</div>';
