@@ -3679,7 +3679,7 @@ window.submitGameRanking = async (btnOrId, myNameOrUndef)=>{
   el('rank-submit-msg').innerHTML='<div class="alert alert-success" style="margin-top:8px">✓ Submitted!</div>';
   setTimeout(()=>closeModal(),700);
 };
-function renderActiveGameTab(myName){
+async function renderActiveGameTab(myName){
   const e=el('pview-active');if(!e)return;
   const fmtL={'h2h-points':'H2H points','h2h-wins':'H2H wins','score-low':'Low score','score-high':'High score','multi-round-high':'Multi-round high','multi-round-low':'Multi-round low','round-robin':'Round robin','single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools','pool-playoff':'Pool + knockout'};
 
@@ -3724,23 +3724,57 @@ function renderActiveGameTab(myName){
     if(myMatch){
       const oppTeam=myMatch.t1.id===myTeam.id?myMatch.t2:myMatch.t1;
       const myTeamSide=myMatch.t1.id===myTeam.id?'t1':'t2';
-      const pending=S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][myMatch.id];
-      const mySubmitted=pending&&pending[myTeamSide];
+      const otherSide=myTeamSide==='t1'?'t2':'t1';
+
+      // Always read fresh pending scores from Firebase
+      const freshPath='tournaments/'+currentTourneyId+'/pendingScores/'+activeGame.id+'/'+myMatch.id;
+      const freshSnap=await get(ref(db,freshPath));
+      const pending=freshSnap.exists()?freshSnap.val():null;
+      const mySubmission=pending&&pending[myTeamSide];
+      const theirSubmission=pending&&pending[otherSide];
 
       html+='<div style="font-size:12px;color:#888;margin-bottom:6px;text-align:center">vs</div>';
-      html+='<div style="background:#f8f7f4;border-radius:10px;padding:10px;margin-bottom:10px">';
+      html+='<div style="background:#f8f7f4;border-radius:10px;padding:10px;margin-bottom:12px">';
       html+='<div style="font-size:11px;color:#888;font-weight:700;margin-bottom:4px">OPPONENTS</div>';
       html+='<div style="font-size:16px;font-weight:700">'+tLabel(oppTeam)+'</div>';
       html+='</div>';
 
       if(myMatch.winner){
+        // Match done
         const won=myMatch.winner.id===myTeam.id;
         html+='<div class="alert '+(won?'alert-success':'alert-warn')+'" style="text-align:center;font-size:14px;font-weight:700">';
         html+=(won?'🎉 You won! ':'😔 You lost ');
         html+=myMatch.score1+'–'+myMatch.score2+'</div>';
-      } else if(mySubmitted){
-        html+='<div class="alert alert-info" style="font-size:12px">✓ You submitted '+mySubmitted.s1+'–'+mySubmitted.s2+'. Waiting for opponents to confirm.</div>';
+
+      } else if(theirSubmission && !mySubmission){
+        // Opponents already submitted — show approve/dispute
+        const theirS1=theirSubmission.s1, theirS2=theirSubmission.s2;
+        const theirTeamScore=myTeamSide==='t1'?theirS2:theirS1;
+        const myTeamScore=myTeamSide==='t1'?theirS1:theirS2;
+        html+='<div style="background:#FEF3E2;border:2px solid #f5cc80;border-radius:12px;padding:14px;margin-bottom:12px;text-align:center">';
+        html+='<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:8px">OPPONENTS SUBMITTED A SCORE</div>';
+        html+='<div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px">';
+        html+='<div style="text-align:center"><div style="font-size:11px;color:#888">Your team</div><div style="font-size:32px;font-weight:800;color:#1a1a1a">'+myTeamScore+'</div></div>';
+        html+='<div style="font-size:20px;color:#aaa">–</div>';
+        html+='<div style="text-align:center"><div style="font-size:11px;color:#888">Opponents</div><div style="font-size:32px;font-weight:800;color:#1a1a1a">'+theirTeamScore+'</div></div>';
+        html+='</div>';
+        html+='<div style="display:flex;gap:8px">';
+        html+='<button class="btn btn-primary" onclick="approveScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" data-s1="'+theirS1+'" data-s2="'+theirS2+'" style="flex:1;background:#27500A;border-color:#27500A">✓ Approve</button>';
+        html+='<button class="btn" onclick="disputeScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" data-s1="'+theirS1+'" data-s2="'+theirS2+'" style="flex:1;background:#FEE2E2;border-color:#f87171;color:#991b1b">✗ Dispute</button>';
+        html+='</div></div>';
+        html+='<div id="ps-'+myMatch.id+'-status"></div>';
+
+      } else if(mySubmission && !theirSubmission){
+        // I submitted, waiting for them
+        html+='<div class="alert alert-info" style="font-size:12px;text-align:center">✓ You submitted <strong>'+( myTeamSide==='t1'?mySubmission.s1:mySubmission.s2)+'–'+(myTeamSide==='t1'?mySubmission.s2:mySubmission.s1)+'</strong><br>Waiting for opponents to confirm.</div>';
+        html+='<div id="ps-'+myMatch.id+'-status"></div>';
+
+      } else if(mySubmission && theirSubmission){
+        // Both submitted but didn't match — show dispute state
+        html+='<div class="alert alert-warn" style="font-size:12px">⚠️ Score dispute pending — waiting for admin to resolve.</div>';
+
       } else {
+        // No submissions yet — show score entry
         html+='<div style="font-size:13px;font-weight:600;margin-bottom:10px">Enter your score:</div>';
         html+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">';
         html+='<div style="flex:1;text-align:center">';
@@ -3752,14 +3786,13 @@ function renderActiveGameTab(myName){
         html+='<div style="font-size:10px;color:#888;margin-bottom:4px">OPPONENTS</div>';
         html+='<input type="number" id="ps-'+myMatch.id+'-'+(myTeamSide==='t1'?2:1)+'" placeholder="0" min="0" style="width:80px;padding:10px;border:1px solid #ddd;border-radius:12px;font-size:24px;text-align:center;font-weight:700;margin:0">';
         html+='</div></div>';
-        html+='<button class="btn btn-primary" onclick="playerSubmitScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" style="font-size:14px;padding:12px">✓ Submit score</button>';
+        html+='<button class="btn btn-primary" onclick="playerSubmitScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" style="font-size:14px;padding:12px">Submit score</button>';
         html+='<div id="ps-'+myMatch.id+'-status"></div>';
       }
-    } else {
-      const allDone=getAllMatchesFromBracket(b,activeGame.format)
+    const allDone2=getAllMatchesFromBracket(b,activeGame.format)
         .filter(m=>m&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id))
         .every(m=>m.winner);
-      if(allDone){
+      if(allDone2){
         html+='<div class="alert alert-success" style="text-align:center">🎉 All your matches in this game are done!</div>';
       } else {
         html+='<div class="alert alert-info" style="font-size:11px">No active match right now — waiting for other matches to complete.</div>';
@@ -3942,6 +3975,46 @@ window.playerSubmitScore = async (btnOrObj,matchIdArg,sideArg)=>{
   }
 };
 
+
+window.approveScore = async (btn)=>{
+  const gameId=btn.dataset.gid, matchId=btn.dataset.mid, teamSide=btn.dataset.side;
+  const s1=parseFloat(btn.dataset.s1), s2=parseFloat(btn.dataset.s2);
+  const myName=actingAsName||(userProfile?.name)||'';
+  // Scores agreed — confirm
+  await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:null});
+  const b=S.bs&&S.bs[gameId];
+  const {type,poolKey,ri}=findMatchMeta(b,matchId,gameId);
+  await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
+  setTimeout(()=>{ if(el('pview-active')&&!el('pview-active').classList.contains('hidden')) renderActiveGameTab(myName); },500);
+};
+
+window.disputeScore = async (btn)=>{
+  const gameId=btn.dataset.gid, matchId=btn.dataset.mid, teamSide=btn.dataset.side;
+  const theirS1=parseFloat(btn.dataset.s1), theirS2=parseFloat(btn.dataset.s2);
+  const myName=actingAsName||(userProfile?.name)||'';
+  const otherSide=teamSide==='t1'?'t2':'t1';
+
+  // Ask them to enter their score
+  const myScore=prompt('Enter your score (your team score first, e.g. "15 21"):');
+  if(!myScore) return;
+  const parts=myScore.trim().split(/[\s\-,]+/);
+  if(parts.length<2){alert('Enter two numbers e.g. "15 21"');return;}
+  const myTeamRaw=parseFloat(parts[0]), oppRaw=parseFloat(parts[1]);
+  if(isNaN(myTeamRaw)||isNaN(oppRaw)){alert('Invalid scores');return;}
+  const s1=teamSide==='t1'?myTeamRaw:oppRaw, s2=teamSide==='t1'?oppRaw:myTeamRaw;
+
+  // Save both submissions — flagged as disputed — for admin to resolve
+  const freshSnap=await get(ref(db,'tournaments/'+currentTourneyId+'/pendingScores/'+gameId+'/'+matchId));
+  const existing=freshSnap.exists()?freshSnap.val():{};
+  const updated={...existing,
+    [teamSide]:{s1,s2,submittedBy:myName,at:Date.now()},
+    _disputed:true,
+    _disputedAt:Date.now()
+  };
+  await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:updated});
+  alert('Dispute recorded. Admin will resolve.');
+  setTimeout(()=>{ if(el('pview-active')&&!el('pview-active').classList.contains('hidden')) renderActiveGameTab(myName); },500);
+};
 
 function findMatchMeta(b,matchId,gameId){
   const game=(S.games||[]).find(g=>g.id===gameId);
