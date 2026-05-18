@@ -377,6 +377,23 @@ function displayName(p){
   if(typeof p === 'object' && p !== null) return p.preferredName||p.name||p.firstName||'?';
   return String(p||'');
 }
+
+// Get full name for a player (for tooltip/hover)
+function fullName(playerName){
+  const prof=_globalProfiles[playerName]||_globalProfiles[(playerName||'').trim()]||
+    (S.history&&S.history[playerName])||{};
+  const fn=(prof.firstName||'').trim();
+  const ln=(prof.lastName||'').trim();
+  if(fn&&ln&&(fn+' '+ln)!==playerName) return fn+' '+ln;
+  return '';
+}
+
+// Span with full name tooltip on hover
+function nameSpan(playerName,extraStyle=''){
+  const full=fullName(playerName);
+  if(full) return '<span title="'+esc(full)+'" style="border-bottom:1px dotted #ccc;cursor:default'+( extraStyle?';'+extraStyle:'')+'">'+ esc(playerName)+'</span>';
+  return '<span'+(extraStyle?' style="'+extraStyle+'"':'')+'>'+esc(playerName)+'</span>';
+}
 function fullNameOf(p){
   if(typeof p === 'object' && p !== null){
     const fn=p.firstName||'', ln=p.lastName||'';
@@ -1932,7 +1949,7 @@ function renderPlayerList(){
     return`<div class="player-row" style="${isGhost?'opacity:.8':''}">
       <div class="avatar" style="${isGhost?'background:#FEF3E2;color:#7a4f00':''}">${isGhost?'⏳':initials(p)}</div>
       <div style="flex:1">
-        <div style="font-size:13px;font-weight:600">${p}${isGhost?' <span class="tag" style="font-size:9px;background:#FEF3E2;color:#7a4f00">awaiting signup</span>':''}</div>
+        <div style="font-size:13px;font-weight:600">${nameSpan(p)}${isGhost?' <span class="tag" style="font-size:9px;background:#FEF3E2;color:#7a4f00">awaiting signup</span>':''}</div>
         <div class="badges-wrap" style="margin-top:3px">${renderBadges(badges)}</div>
       </div>
       ${ranked}
@@ -2531,7 +2548,7 @@ function renderLeaderboard(){
   const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
   let html='<div class="card"><div class="card-title">🏅 Leaderboard</div>';
   if(!sorted.length){html+='<p class="empty">No players yet.</p>';} else {
-    html+=sorted.map((p,i)=>`<div class="lb-row"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div><div style="flex:1"><div class="lb-name">${p}</div><div class="lb-breakdown">${getBreakdown(p)}</div></div><div class="lb-pts">${getTotalPts(p)}</div></div>`).join('');
+    html+=sorted.map((p,i)=>`<div class="lb-row"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div><div style="flex:1"><div class="lb-name">${nameSpan(p)}</div><div class="lb-breakdown">${getBreakdown(p)}</div></div><div class="lb-pts">${getTotalPts(p)}</div></div>`).join('');
   }
   html+='</div>';
   html+=`<div class="card"><div class="two-col"><div class="stat-card"><div class="stat-val" id="stat-games">0</div><div class="stat-label">Games done</div></div><div class="stat-card"><div class="stat-val" id="stat-players">0</div><div class="stat-label">Players</div></div></div></div>`;
@@ -2697,7 +2714,7 @@ function renderPowerRankings(){
   const n=players.length;
   sorted.forEach((p,i)=>{
     const avgs=games.map(g=>avgForGame(g.id,p)),oa=overallAvg(p),bg=i%2===0?'#fff':'#f8f7f4';
-    html+=`<tr style="background:${bg}"><td style="padding:6px 4px;font-weight:600;font-size:12px;position:sticky;left:0;background:${bg};white-space:nowrap"><div style="display:flex;align-items:center;gap:5px"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}" style="width:20px;height:20px;font-size:10px">${i+1}</div>${p}</div></td>${avgs.map(avg=>avg!==null?`<td style="padding:6px 4px;text-align:center;color:${avg<=3?'#27500A':avg>=n-1?'#c0392b':'#534AB7'};font-weight:${avg<=3||avg>=n-1?'700':'400'}">${avg.toFixed(2)}</td>`:`<td style="padding:6px 4px;text-align:center;color:#ccc">—</td>`).join('')}<td style="padding:6px 4px;text-align:center;font-weight:700">${oa!==null?oa.toFixed(2):'—'}</td></tr>`;
+    html+=`<tr style="background:${bg}"><td style="padding:6px 4px;font-weight:600;font-size:12px;position:sticky;left:0;background:${bg};white-space:nowrap"><div style="display:flex;align-items:center;gap:5px"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}" style="width:20px;height:20px;font-size:10px">${i+1}</div>${nameSpan(p)}</div></td>${avgs.map(avg=>avg!==null?`<td style="padding:6px 4px;text-align:center;color:${avg<=3?'#27500A':avg>=n-1?'#c0392b':'#534AB7'};font-weight:${avg<=3||avg>=n-1?'700':'400'}">${avg.toFixed(2)}</td>`:`<td style="padding:6px 4px;text-align:center;color:#ccc">—</td>`).join('')}<td style="padding:6px 4px;text-align:center;font-weight:700">${oa!==null?oa.toFixed(2):'—'}</td></tr>`;
   });
   html+='</tbody></table></div></div>';
   e.innerHTML=html;
@@ -3109,14 +3126,14 @@ function renderPlayerLB(myName){
   const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
   let html='<div class="card"><div class="card-title">🏅 Leaderboard</div>';
   if(!sorted.length)html+='<p class="empty">No data yet.</p>';
-  else html+=sorted.map((p,i)=>`<div class="lb-row"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div><div class="lb-name">${p}${p===myName?' <span style="font-size:10px;color:#534AB7">(you)</span>':''}</div><div class="lb-pts">${getTotalPts(p)}</div></div>`).join('');
+  else html+=sorted.map((p,i)=>`<div class="lb-row"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div><div class="lb-name">${nameSpan(p)}${p===myName?' <span style="font-size:10px;color:#534AB7">(you)</span>':''}</div><div class="lb-pts">${getTotalPts(p)}</div></div>`).join('');
   html+='</div>';
   html+='<div class="card"><div class="card-title">🎖 Badges</div><div id="all-player-badges"></div></div>';
   e.innerHTML=html; renderAllPlayerBadges();
 }
 function renderAllPlayerBadges(){
   const e=el('all-player-badges');if(!e)return;
-  e.innerHTML=(S.players||[]).map(p=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede6"><div style="font-size:13px;font-weight:600;margin-bottom:4px">${p}</div><div class="badges-wrap">${renderBadges(getPlayerBadges(p))}</div></div>`).join('');
+  e.innerHTML=(S.players||[]).map(p=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede6"><div style="font-size:13px;font-weight:600;margin-bottom:4px">${nameSpan(p)}</div><div class="badges-wrap">${renderBadges(getPlayerBadges(p))}</div></div>`).join('');
 }
 
 // ── DRAG & DROP ───────────────────────────────────────────
