@@ -3905,30 +3905,43 @@ window.playerSubmitScore = async (btnOrObj,matchIdArg,sideArg)=>{
   const rawS1=parseFloat(inp1?.value),rawS2=parseFloat(inp2?.value);
   if(isNaN(rawS1)||isNaN(rawS2)){alert('Enter scores for both teams.');return;}
   if(rawS1===rawS2){alert('No draws allowed.');return;}
-  // s1 is always team1 score, s2 is team2 score
+  // Normalize: s1=team1 score, s2=team2 score regardless of who submits
   const s1=teamSide==='t1'?rawS1:rawS2, s2=teamSide==='t1'?rawS2:rawS1;
   const myName=actingAsName||(userProfile?.name)||'';
-  const existing=(S.pendingScores&&S.pendingScores[gameId]&&S.pendingScores[gameId][matchId])||{};
-  const newPending={...existing,[teamSide]:{s1,s2,submittedBy:myName,at:Date.now()}};
   const otherSide=teamSide==='t1'?'t2':'t1';
-  const statusEl=el(`ps-${matchId}-status`);
-  if(existing[otherSide]&&existing[otherSide].s1===s1&&existing[otherSide].s2===s2){
-    // Both agree
-    await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:null});
-    // Find match type for saveMFMatch
-    const b=S.bs&&S.bs[gameId];
-    const {type,poolKey,ri}=findMatchMeta(b,matchId,gameId);
-    await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
-    if(statusEl) statusEl.innerHTML='<div class="alert alert-success">✓ Score confirmed!</div>';
-    // Refresh active game tab after a short delay to show next match
-    setTimeout(()=>{ if(el('pview-active')&&!el('pview-active').classList.contains('hidden')) renderActiveGameTab(myName); }, 800);
+  const statusEl=el('ps-'+matchId+'-status');
+
+  // Read fresh from Firebase — avoid stale local cache
+  const freshSnap=await get(ref(db,'tournaments/'+currentTourneyId+'/pendingScores/'+gameId+'/'+matchId));
+  const existing=freshSnap.exists()?freshSnap.val():{};
+  const newPending={...existing,[teamSide]:{s1,s2,submittedBy:myName,at:Date.now()}};
+
+  if(existing[otherSide]){
+    const other=existing[otherSide];
+    if(other.s1===s1&&other.s2===s2){
+      // Both agree — confirm and save match result
+      await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:null});
+      const b=S.bs&&S.bs[gameId];
+      const {type,poolKey,ri}=findMatchMeta(b,matchId,gameId);
+      await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
+      if(statusEl) statusEl.innerHTML='<div class="alert alert-success">✓ Score confirmed! '+s1+'–'+s2+'</div>';
+      setTimeout(()=>{ if(el('pview-active')&&!el('pview-active').classList.contains('hidden')) renderActiveGameTab(myName); },800);
+    } else {
+      // Mismatch — save mine, show warning with both scores
+      await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:newPending});
+      if(statusEl) statusEl.innerHTML='<div class="alert alert-warn" style="font-size:11px">⚠️ Score mismatch!'
+        +' You entered <strong>'+s1+'–'+s2+'</strong>'
+        +' but opponents entered <strong>'+other.s1+'–'+other.s2+'</strong>.'
+        +' Check with your opponents — re-submit when agreed.</div>';
+    }
   } else {
-    await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:newPending});
-    if(statusEl) statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">✓ Score submitted — waiting for opponents to confirm.</div>';
-    // Refresh to show pending state
-    setTimeout(()=>{ if(el('pview-active')&&!el('pview-active').classList.contains('hidden')) renderActiveGameTab(myName); }, 800);
+    // First submission — save and wait
+    await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:newPending});
+    if(statusEl) statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">✓ Submitted '+s1+'–'+s2+' — waiting for opponents to confirm.</div>';
+    setTimeout(()=>{ if(el('pview-active')&&!el('pview-active').classList.contains('hidden')) renderActiveGameTab(myName); },800);
   }
 };
+
 
 function findMatchMeta(b,matchId,gameId){
   const game=(S.games||[]).find(g=>g.id===gameId);
