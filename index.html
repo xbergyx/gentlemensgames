@@ -2741,13 +2741,52 @@ function renderMatchFeed(){
       return;
     }
     const pct=totalMatches?Math.round(doneMatches/totalMatches*100):0;
+    // Count player score submissions for this game
+    const pendScores=(S.pendingScores&&S.pendingScores[game.id])||{};
+    const isScoreGame=['score-low','score-high','multi-round-high','multi-round-low'].includes(fmt);
+    let submittedCount=0,approvedCount=0,totalTeams=teams.length;
+    if(isScoreGame){
+      teams.forEach(t=>{
+        const ps=pendScores[t.id];
+        if(ps&&ps.score!==undefined){ submittedCount++; if(ps._approved) approvedCount++; }
+        if(scores[t.id]!==undefined) approvedCount++; // already saved
+      });
+    }
+    const isLocked=game.scoresLocked;
     html+=`<div class="card">
-      <div class="card-title">🎯 ${game.name} <span class="fbadge">${fmtL[fmt]||fmt}</span><span style="margin-left:auto;font-size:11px;color:#888">${doneMatches}/${totalMatches}</span></div>
-      <div style="height:4px;background:#f0ede6;border-radius:4px;margin-bottom:10px"><div style="height:4px;background:#7F77DD;border-radius:4px;width:${pct}%"></div></div>
-      ${fin?'<div class="alert alert-success" style="margin-bottom:8px">✓ Points awarded!</div>':''}
+      <div class="card-title">🎯 ${game.name} <span class="fbadge">${fmtL[fmt]||fmt}</span>
+        <span style="margin-left:auto;font-size:11px;color:#888">${doneMatches}/${totalMatches}</span>
+        ${isLocked?`<span class="tag" style="background:#FEF3E2;color:#7a4f00;font-size:9px;margin-left:4px">🔒 locked</span>`:''}
+      </div>
+      <div style="height:4px;background:#f0ede6;border-radius:4px;margin-bottom:8px"><div style="height:4px;background:#7F77DD;border-radius:4px;width:${pct}%"></div></div>
+      ${isScoreGame?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px;background:#f8f7f4;border-radius:8px">
+        <div style="flex:1">
+          <div style="font-size:11px;font-weight:700;color:#888;margin-bottom:2px">SCORE SUBMISSIONS</div>
+          <div style="font-size:11px">
+            <span style="color:${submittedCount===totalTeams?'#27500A':'#7a4f00'};font-weight:600">${submittedCount}/${totalTeams} submitted</span>
+            · <span style="color:${approvedCount===totalTeams?'#27500A':'#888'}">${approvedCount}/${totalTeams} approved</span>
+          </div>
+        </div>
+        ${approvedCount===totalTeams&&!fin?'<span style="font-size:16px">✅</span>':''}
+        ${submittedCount<totalTeams&&!fin?'<span style="font-size:11px;color:#aaa">${totalTeams-submittedCount} pending</span>':''}
+      </div>`:''}
+      ${fin?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div class="alert alert-success" style="margin:0;flex:1">✓ Points awarded!</div>
+        <button class="btn btn-sm" onclick="unlockGameScores('${game.id}')" style="width:auto;border-color:#f0a0a0;color:#c0392b;font-size:10px">🔓 Unlock</button>
+      </div>`:''}
+      ${!fin&&isLocked?'<div class="alert alert-warn" style="margin-bottom:8px;font-size:11px">🔒 Scores locked — admin can still change but players cannot resubmit.</div>':''}
       ${pendingHTML}
       ${doneHTML?`<div style="font-size:11px;color:#aaa;margin:8px 0 5px;font-weight:600">COMPLETED</div>${doneHTML}`:''}
-      ${totalMatches>0&&doneMatches===totalMatches&&!fin?`<button class="btn btn-primary" onclick="finalizeGame('${game.id}')">🏅 Finalize & award points</button>`:''}
+      ${totalMatches>0&&doneMatches===totalMatches&&!fin?`
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-primary" style="flex:1" onclick="finalizeGame('${game.id}')">🏅 Save &amp; award points</button>
+          ${!isLocked?`<button class="btn btn-sm" onclick="lockGameScores('${game.id}')" style="width:auto;background:#FEF3E2;border-color:#f5cc80;color:#7a4f00">🔒 Lock</button>`:`<button class="btn btn-sm" onclick="unlockGameScores('${game.id}')" style="width:auto;border-color:#f0a0a0;color:#c0392b">🔓 Unlock</button>`}
+        </div>`:''}
+      ${isScoreGame&&!fin?`
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn btn-primary" onclick="saveScoreGame('${game.id}')" style="flex:1">🏅 Save &amp; award points</button>
+          ${!isLocked?`<button class="btn btn-sm" onclick="lockGameScores('${game.id}')" style="width:auto;background:#FEF3E2;border-color:#f5cc80;color:#7a4f00">🔒 Lock submissions</button>`:`<button class="btn btn-sm" onclick="unlockGameScores('${game.id}')" style="width:auto;border-color:#f0a0a0;color:#c0392b">🔓 Unlock</button>`}
+        </div>`:''}
     </div>`;
   });
   // Pending score approvals panel
@@ -2971,6 +3010,18 @@ window.finalizeGame = async (gameId)=>{
   teams.forEach(team=>{const place=pl[team.id]||n,pts=Math.max(1,n-place+1);[team.p1,team.p2].filter(Boolean).forEach(p=>{newPts[p]=pts;});});
   await update(ref(db,'tournaments/'+currentTourneyId),{['scores/'+gameId]:{_fin:true},['points/'+gameId]:newPts});
 };
+window.lockGameScores = async (gameId)=>{
+  const games=(S.games||[]).map(g=>g.id===gameId?{...g,scoresLocked:true}:g);
+  await update(ref(db,'tournaments/'+currentTourneyId),{games});
+};
+window.unlockGameScores = async (gameId)=>{
+  const games=(S.games||[]).map(g=>g.id===gameId?{...g,scoresLocked:false,_fin:undefined}:g);
+  // Also clear finalized scores so admin can re-enter
+  const updates={games};
+  // Don't clear scores automatically — just unlock
+  await update(ref(db,'tournaments/'+currentTourneyId),updates);
+};
+
 window.adminApproveScoreSubmission = async (btn)=>{
   const gameId=btn.dataset.gid, teamId=btn.dataset.tid, score=parseFloat(btn.dataset.score);
   // Mark approved in Firebase
