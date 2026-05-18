@@ -2318,7 +2318,15 @@ function renderRankingStatus(){
       ${missing.length&&!isLocked?`<div style="font-size:11px;color:#7a4f00;font-weight:600;margin-bottom:4px">⏳ Still needs to rank:</div>
         <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">${missing.map(p=>`<span style="background:#FEF3E2;border:1px solid #f5cc80;color:#7a4f00;font-size:11px;padding:2px 8px;border-radius:20px">${p}</span>`).join('')}</div>`:''}
       ${done.length&&!isLocked?`<div style="display:flex;flex-wrap:wrap;gap:5px">${done.map(p=>`<span style="background:#EAF3DE;border:1px solid #b2d88a;color:#27500A;font-size:11px;padding:2px 8px;border-radius:20px">${p}</span>`).join('')}</div>`:''}
-      ${!isLocked&&done.length===players.length&&players.length>=2?`<button class="btn btn-primary btn-sm" style="width:100%;margin-top:8px" onclick="lockGameRankings('${g.id}')">🔒 Generate teams for ${g.name}</button>`:''}
+      ${!isLocked?`<div style="margin-top:8px">
+        <div style="font-size:10px;color:#aaa;margin-bottom:4px;font-weight:600">GENERATE TEAMS</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-primary" ${done.length<players.length?'disabled style="opacity:.4"':''} onclick="lockGameRankings('${g.id}')">🎯 By rankings</button>
+          <button class="btn btn-sm" onclick="lockGameRankingsRandom('${g.id}')" style="background:#EAF3DE;border-color:#97C459;color:#27500A">🎲 Random</button>
+          <button class="btn btn-sm" onclick="openManualTeams('${g.id}')" style="background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">✏️ Manual</button>
+        </div>
+        ${done.length<players.length?`<div style="font-size:10px;color:#aaa;margin-top:4px">⚠️ ${players.length-done.length} player(s) haven't ranked yet — rankings button disabled until all done. Random &amp; Manual available now.</div>`:''}
+      </div>`:''}
     </div>`;
   });
   // Check if all games are ready for bulk generation
