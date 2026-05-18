@@ -2039,7 +2039,6 @@ function renderAdminGames(){
   e.innerHTML=`
     <div class="card">
       <div class="card-title">+ Add game</div>
-      <div class="alert alert-info" style="font-size:11px">As soon as you add a game, players see a "Rank now" prompt.</div>
       <input type="text" id="game-name-input" placeholder="Game name (e.g. Cornhole)">
       <div class="sec-label">Format</div>
       <select id="game-format" onchange="toggleRoundsOption()">
@@ -2070,6 +2069,11 @@ function renderAdminGames(){
         <option value="auto">Auto: point diff → H2H</option>
         <option value="host-score">Host enters tiebreaker</option>
         <option value="host-pick">Host manually assigns</option>
+      </select>
+      <div class="sec-label">Team size</div>
+      <select id="game-teamsize">
+        <option value="2">2 players per team</option>
+        <option value="3">3 players per team</option>
       </select>
       <button class="btn btn-primary" onclick="addGame()">+ Add game</button>
     </div>
@@ -2221,7 +2225,8 @@ window.addGame = async ()=>{
   const format=el('game-format').value, tb=el('game-tiebreak').value;
   const rounds=(format==='multi-round-high'||format==='multi-round-low')?parseInt(el('game-rounds').value)||2:1;
   if(!name){ alert('Enter a game name.'); return; }
-  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending'};
+  const teamSize=parseInt(el('game-teamsize')?.value||'2');
+  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize};
   const games=[...(S.games||[]),g];
   await update(ref(db,'tournaments/'+currentTourneyId),{games});
   el('game-name-input').value='';
@@ -2277,7 +2282,12 @@ function renderGames(){
         <div class="gname">${g.name}</div>
         <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">${stag}<span class="fbadge">${fmtL[g.format]||g.format}</span></div>
       </div>
-      ${!isLocked&&!isSkipped?`<button class="btn btn-sm btn-primary" onclick="lockGameRankings('${g.id}')" ${!allR?'disabled style="opacity:.45"':''}>Generate teams</button>`:''}
+      ${!isLocked&&!isSkipped?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
+        <span style="font-size:10px;color:#aaa;align-self:center">Make teams:</span>
+        <button class="btn btn-sm btn-primary" onclick="lockGameRankings('${g.id}')" ${!allR?'disabled style="opacity:.45"':''}>🎯 By rankings</button>
+        <button class="btn btn-sm" onclick="lockGameRankingsRandom('${g.id}')" style="background:#EAF3DE;border-color:#97C459;color:#27500A">🎲 Random</button>
+        <button class="btn btn-sm" onclick="openManualTeams('${g.id}')" style="background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">✏️ Manual</button>
+      </div>`:''}
       ${!isLocked?`<button class="btn btn-sm" onclick="toggleSkipGame('${g.id}',${!isSkipped})" style="width:auto;border-color:${isSkipped?'#97C459':'#f5cc80'};color:${isSkipped?'#27500A':'#7a4f00'}">${isSkipped?'↩ Unskip':'⏭ Skip'}</button>`:''}
       ${isLocked?`<button class="btn btn-sm ${isActive?'btn-danger':'btn-success'}" onclick="${isActive?'deactivateGame':'activateGame'}('${g.id}')" style="width:auto">${isActive?'⏸ Deactivate':'▶ Activate'}</button>`:''}
       <button class="btn btn-sm btn-danger" onclick="removeGame('${g.id}')">✕</button>
@@ -2319,15 +2329,32 @@ function renderRankingStatus(){
   const anyUnlocked=games.some(g=>g.status!=='locked'&&g.status!=='skipped');
   if(anyUnlocked){
     html+=`<div class="divider"></div>
-    <button class="btn btn-primary ${allReady?'':'btn-disabled'}" onclick="generateAllTeams()" ${allReady?'':'disabled'}>
-      🎯 Generate ALL teams at once
-    </button>
+    <div style="font-size:11px;color:#888;margin-bottom:4px">Generate teams for all games at once:</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-sm btn-primary ${allReady?'':'btn-disabled'}" onclick="generateAllTeams('ranked')" ${allReady?'':'disabled'} style="flex:1">
+        🎯 By rankings
+      </button>
+      <button class="btn btn-sm" onclick="generateRandomTeams()" style="flex:1;background:#EAF3DE;border-color:#97C459;color:#27500A">
+        🎲 Random
+      </button>
+    </div>
     ${!allReady?'<div style="font-size:11px;color:#aaa;margin-top:4px;text-align:center">Waiting for all players to rank every game</div>':''}`;
   }
   html+='</div>'; e.innerHTML=html;
 }
 
 // ── TEAM GENERATION ───────────────────────────────────────
+window.lockGameRankingsRandom = async (gameId)=>{
+  const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
+  const players=[...(S.players||[])].sort(()=>Math.random()-0.5);
+  const pairs=makeTeamsFromSorted(players,game.teamSize||2);
+  const bracket=buildBracket(game,pairs);
+  const games=(S.games||[]).map(g=>g.id===gameId?{...g,status:'locked'}:g);
+  const teams={...(S.teams||{}),[gameId]:pairs};
+  const bs={...(S.bs||{}),[gameId]:bracket};
+  await update(ref(db,'tournaments/'+currentTourneyId),{games,teams,bs});
+};
+
 window.lockGameRankings = async (gameId)=>{
   const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
   const total=(S.players||[]).length;
@@ -2341,32 +2368,119 @@ window.lockGameRankings = async (gameId)=>{
   await update(ref(db,'tournaments/'+currentTourneyId),{games,teams,bs});
 };
 
-window.generateAllTeams = async ()=>{
+window.generateAllTeams = async (mode='ranked')=>{
   const players=S.players||[], games=S.games||[];
   const total=players.length;
-  // Check all games have full rankings
-  const missing=games.filter(g=>{
-    if(g.status==='locked'||g.status==='skipped') return false;
-    const rc=Object.keys((S.gameRankings&&S.gameRankings[g.id])||{}).length;
-    return rc<total;
-  });
-  if(missing.length){
-    alert('Not all players have ranked yet for: '+missing.map(g=>g.name).join(', '));
-    return;
+
+  // For ranked mode, check rankings exist (skip for random/manual)
+  if(mode==='ranked'){
+    const missing=games.filter(g=>{
+      if(g.status==='locked'||g.status==='skipped') return false;
+      if((g.teamMode||'ranked')==='manual') return false;
+      const rc=Object.keys((S.gameRankings&&S.gameRankings[g.id])||{}).length;
+      return rc<total;
+    });
+    if(missing.length){
+      alert('Not all players have ranked yet for: '+missing.map(g=>g.name).join(', '));
+      return;
+    }
   }
-  if(!confirm('Generate teams for all '+games.length+' games at once?')) return;
+
+  const label=mode==='random'?'randomly generated':mode==='manual'?'manually entered':'ranking-based';
+  if(!confirm('Generate '+label+' teams for all '+games.length+' games?')) return;
+
   const newGames=[...games], newTeams={...(S.teams||{})}, newBs={...(S.bs||{})};
   games.forEach(g=>{
     if(g.status==='locked'||g.status==='skipped') return;
+    if(g.teamMode==='manual') return; // skip manual games — admin enters separately
+    // Use game's own mode, or override with global mode
+    const effectiveMode=mode==='random'?'random':(g.teamMode||'ranked');
+    const gameWithMode={...g,teamMode:effectiveMode};
+    // Temporarily override game mode for pairing
+    const origGames=S.games;
+    S.games=S.games.map(x=>x.id===g.id?gameWithMode:x);
     const pairs=makePairsFromGameRankings(g.id);
+    S.games=origGames;
     const bracket=buildBracket(g,pairs);
-    const idx=newGames.findIndex(x=>x.id===g.id);
-    if(idx>=0) newGames[idx]={...g,status:'locked'};
+    const i=newGames.findIndex(x=>x.id===g.id);
+    if(i>=0) newGames[i]={...g,status:'locked'};
     newTeams[g.id]=pairs;
     newBs[g.id]=bracket;
   });
   await update(ref(db,'tournaments/'+currentTourneyId),{games:newGames,teams:newTeams,bs:newBs});
-  alert('✓ Teams generated for all games!');
+  alert('✓ Teams generated!');
+};
+
+// Generate random teams for all games (different randomization per game)
+window.generateRandomTeams = ()=>generateAllTeams('random');
+
+// Open manual team entry for a specific game
+window.openManualTeams = (gameId)=>{
+  const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
+  const players=[...(S.players||[])];
+  const teamSize=game.teamSize||2;
+  const numTeams=Math.floor(players.length/teamSize);
+  const existing=(S.teams&&S.teams[gameId])||[];
+
+  // Build team slots
+  let html='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
+    +'<div class="modal-handle"></div>'
+    +'<div class="modal-title"><span>👥 '+game.name+' Teams</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
+    +'<div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Assign players to teams ('+teamSize+' per team)</div>';
+
+  for(let t=0;t<numTeams;t++){
+    const ex=existing[t]||{};
+    html+='<div style="background:#f8f7f4;border-radius:10px;padding:10px;margin-bottom:8px">'
+      +'<div style="font-size:11px;font-weight:700;color:#534AB7;margin-bottom:6px">Team '+(t+1)+'</div>';
+    for(let p=1;p<=teamSize;p++){
+      const val=ex['p'+p]||'';
+      html+='<select class="manual-team-slot" data-team="'+t+'" data-pos="p'+p+'" style="margin-bottom:4px;font-size:12px">'
+        +'<option value="">— select player —</option>'
+        +players.map(pl=>'<option value="'+esc(pl)+'"'+(pl===val?' selected':'')+'>'+pl+'</option>').join('')
+        +'</select>';
+    }
+    html+='</div>';
+  }
+
+  // Remainder players (odd numbers)
+  const remainder=players.length%teamSize;
+  if(remainder>0){
+    html+='<div style="font-size:11px;color:#aaa;margin-bottom:8px">'+remainder+' player(s) will be assigned to existing teams</div>';
+  }
+
+  html+='<button class="btn btn-primary" onclick="saveManualTeams(this)" data-gid="'+gameId+'" style="width:100%;margin-top:8px">Save teams</button>'
+    +'</div></div>';
+  el('modal-area').innerHTML=html;
+};
+
+window.saveManualTeams = async (btn)=>{
+  const gameId=btn.dataset.gid;
+  const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
+  const teamSize=game.teamSize||2;
+  const slots=Array.from(document.querySelectorAll('.manual-team-slot'));
+
+  // Group by team index
+  const teamMap={};
+  slots.forEach(sel=>{
+    const t=sel.dataset.team, pos=sel.dataset.pos, val=sel.value;
+    if(!teamMap[t]) teamMap[t]={id:uid()};
+    teamMap[t][pos]=val||null;
+  });
+
+  const pairs=Object.values(teamMap).filter(t=>t.p1);
+
+  // Validate no duplicates
+  const allPicked=pairs.flatMap(t=>[t.p1,t.p2,t.p3].filter(Boolean));
+  const dupes=allPicked.filter((p,i)=>allPicked.indexOf(p)!==i);
+  if(dupes.length){ alert('Duplicate players: '+dupes.join(', ')); return; }
+
+  const bracket=buildBracket(game,pairs);
+  const newGames=(S.games||[]).map(g=>g.id===gameId?{...g,status:'locked'}:g);
+  const newTeams={...(S.teams||{}),[gameId]:pairs};
+  const newBs={...(S.bs||{}),[gameId]:bracket};
+  await update(ref(db,'tournaments/'+currentTourneyId),{games:newGames,teams:newTeams,bs:newBs});
+  closeModal();
+  alert('✓ Teams saved for '+game.name+'!');
 };
 
 function getAvgRankForGame(gameId,player){
