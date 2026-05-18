@@ -341,6 +341,58 @@ let S              = null;  // current tournament data
 Object.defineProperty(window,'_S',{get:()=>S});
 Object.defineProperty(window,'_GP',{get:()=>_globalProfiles});
 
+// Admin utility: rename a player in the current tournament
+window.renamePlayer = async (oldName, newName)=>{
+  if(!currentTourneyId){console.error('Open a tournament first');return;}
+  if(!confirm('Rename "'+oldName+'" to "'+newName+'" in this tournament?')) return;
+  const updates={};
+  const t=S;
+
+  // players array
+  const players=(t.players||[]).map(p=>p===oldName?newName:p);
+  updates['players']=players;
+
+  // playerUids
+  const playerUids={...(t.playerUids||{})};
+  Object.entries(playerUids).forEach(([u,n])=>{ if(n===oldName) playerUids[u]=newName; });
+  updates['playerUids']=playerUids;
+
+  // ghostPlayers
+  const ghostPlayers={...(t.ghostPlayers||{})};
+  Object.entries(ghostPlayers).forEach(([k,n])=>{ if(n===oldName) ghostPlayers[k]=newName; });
+  updates['ghostPlayers']=ghostPlayers;
+
+  // history
+  if(t.history?.[oldName]){
+    updates['history/'+newName]=t.history[oldName];
+    updates['history/'+oldName]=null;
+  }
+
+  // gameRankings — rename the key inside each game's ranking object
+  if(t.gameRankings){
+    Object.entries(t.gameRankings).forEach(([gid,ranks])=>{
+      if(ranks&&ranks[oldName]){
+        updates['gameRankings/'+gid+'/'+newName]=ranks[oldName];
+        updates['gameRankings/'+gid+'/'+oldName]=null;
+      }
+    });
+  }
+
+  // points
+  if(t.points){
+    Object.entries(t.points).forEach(([gid,pts])=>{
+      if(pts&&pts[oldName]!==undefined){
+        updates['points/'+gid+'/'+newName]=pts[oldName];
+        updates['points/'+gid+'/'+oldName]=null;
+      }
+    });
+  }
+
+  await update(ref(db,'tournaments/'+currentTourneyId),updates);
+  console.log('✓ Renamed "'+oldName+'" to "'+newName+'"');
+  alert('Done! "'+oldName+'" is now "'+newName+'" in this tournament.');
+};
+
 // Admin utility: fix a ghost player who has signed up
 window.fixGhost = async (playerName)=>{
   // Find their UID from global players DB
@@ -673,7 +725,10 @@ function afterSignIn(){
     });
   }
   loadTournamentList();
-  if(userProfile&&!userProfile.pendingAdminReview) linkGhostPlayerSlots(currentUser.uid,userProfile);
+  if(userProfile&&!userProfile.pendingAdminReview){
+    linkGhostPlayerSlots(currentUser.uid,userProfile);
+    syncPlayerNameAcrossTournaments(currentUser.uid,userProfile);
+  }
   showView('home');
   // Show install prompt on iOS manually
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -682,6 +737,74 @@ function afterSignIn(){
 }
 
 // ── GLOBAL PROFILES + GHOST LINKS ────────────────────────
+// When a player signs in, ensure their preferred name is consistent across all tournaments
+async function syncPlayerNameAcrossTournaments(uid2, profile){
+  const preferredName = (profile.preferredName||profile.name||profile.firstName||'').trim();
+  if(!preferredName) return;
+
+  const snap = await get(ref(db,'tournaments'));
+  if(!snap.exists()) return;
+
+  const allUpdates = {};
+
+  Object.entries(snap.val()).forEach(([tid,t])=>{
+    if(!t) return;
+    const playerUids = t.playerUids||{};
+    const players = t.players||[];
+
+    // Find what name this uid currently has in this tournament
+    const currentName = playerUids[uid2];
+    if(!currentName) return; // not in this tournament
+    if(currentName === preferredName) return; // name already correct
+
+    // Name has changed — update everywhere
+    const newPlayers = players.map(p => p===currentName ? preferredName : p);
+    allUpdates[`tournaments/${tid}/players`] = newPlayers;
+    allUpdates[`tournaments/${tid}/playerUids/${uid2}`] = preferredName;
+
+    // Move history
+    if(t.history?.[currentName]){
+      allUpdates[`tournaments/${tid}/history/${preferredName}`] = t.history[currentName];
+      allUpdates[`tournaments/${tid}/history/${currentName}`] = null;
+    }
+
+    // Move gameRankings
+    if(t.gameRankings){
+      Object.entries(t.gameRankings).forEach(([gid,ranks])=>{
+        if(ranks?.[currentName]!==undefined){
+          allUpdates[`tournaments/${tid}/gameRankings/${gid}/${preferredName}`] = ranks[currentName];
+          allUpdates[`tournaments/${tid}/gameRankings/${gid}/${currentName}`] = null;
+        }
+      });
+    }
+
+    // Move points
+    if(t.points){
+      Object.entries(t.points).forEach(([gid,pts])=>{
+        if(pts?.[currentName]!==undefined){
+          allUpdates[`tournaments/${tid}/points/${gid}/${preferredName}`] = pts[currentName];
+          allUpdates[`tournaments/${tid}/points/${gid}/${currentName}`] = null;
+        }
+      });
+    }
+
+    // Move ghostPlayers if still there
+    if(t.ghostPlayers){
+      Object.entries(t.ghostPlayers).forEach(([gk,gn])=>{
+        if(gn===currentName){
+          allUpdates[`tournaments/${tid}/ghostPlayers/${gk}`] = null;
+        }
+      });
+    }
+
+    console.log(`Renamed "${currentName}" to "${preferredName}" in tournament ${tid}`);
+  });
+
+  if(Object.keys(allUpdates).length > 0){
+    await update(ref(db,'/'), allUpdates);
+  }
+}
+
 async function linkGhostPlayerSlots(uid2,profile){
   const snap=await get(ref(db,'tournaments'));
   if(!snap.exists()) return;
