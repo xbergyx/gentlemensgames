@@ -211,6 +211,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
+        <button class="btn btn-sm" onclick="openEditProfile()" style="width:auto;color:#888">✏️ Profile</button>
         <button class="btn btn-sm" onclick="signOut()" style="width:auto;color:#888">Sign out</button>
       </div>
     </div>
@@ -1277,6 +1278,68 @@ function getEnabledBadgeIds(){
 }
 
 
+window.openEditProfile = ()=>{
+  const p=userProfile||{};
+  el('modal-area').innerHTML='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
+    +'<div class="modal-handle"></div>'
+    +'<div class="modal-title"><span>✏️ Edit Profile</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
+    +'<div class="sec-label">First name</div>'
+    +'<input type="text" id="ep-first" value="'+esc(p.firstName||'')+'" placeholder="First name">'
+    +'<div class="sec-label">Last name</div>'
+    +'<input type="text" id="ep-last" value="'+esc(p.lastName||'')+'" placeholder="Last name">'
+    +'<div class="sec-label">Preferred name (shown in app)</div>'
+    +'<input type="text" id="ep-pref" value="'+esc(p.preferredName||p.name||'')+'" placeholder="Nickname or preferred name">'
+    +'<div class="sec-label">Phone</div>'
+    +'<input type="text" id="ep-phone" value="'+esc(p.phone||'')+'" placeholder="+1 555 000 0000">'
+    +'<div class="sec-label">Email</div>'
+    +'<input type="text" id="ep-email" value="'+esc(p.email||'')+'" placeholder="email@example.com">'
+    +'<div id="ep-status" style="margin-top:6px"></div>'
+    +'<button class="btn btn-primary" onclick="saveEditProfile()" style="margin-top:10px">💾 Save</button>'
+    +'</div></div>';
+};
+
+window.saveEditProfile = async ()=>{
+  const firstName = (el('ep-first')?.value||'').trim();
+  const lastName  = (el('ep-last')?.value||'').trim();
+  const preferred = (el('ep-pref')?.value||'').trim() || firstName;
+  const phone     = (el('ep-phone')?.value||'').trim();
+  const email     = (el('ep-email')?.value||'').trim();
+  const statusEl  = el('ep-status');
+
+  if(!firstName){ statusEl.innerHTML='<div class="alert alert-warn">First name required.</div>'; return; }
+
+  statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">Saving...</div>';
+
+  const oldPreferred = userProfile?.preferredName||userProfile?.name||'';
+  const nameChanged  = preferred !== oldPreferred;
+
+  // Update Firebase profile
+  const updates = { firstName, lastName, preferredName:preferred, name:preferred };
+  if(phone) updates.phone=phone;
+  if(email) updates.email=email;
+
+  await update(ref(db,'players/'+currentUser.uid), updates);
+
+  // Update local profile
+  userProfile = {...userProfile, ...updates};
+
+  // Update home label
+  const displayName = preferred;
+  const isAdm = userProfile.email===SUPER_ADMIN_EMAIL;
+  el('home-user-label').textContent = isAdm ? '🛡 Admin · '+displayName : displayName;
+
+  // If name changed, sync across all tournaments
+  if(nameChanged){
+    statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">Updating tournaments...</div>';
+    await syncPlayerNameAcrossTournaments(currentUser.uid, userProfile);
+    statusEl.innerHTML='<div class="alert alert-success">✓ Saved! Name updated in all tournaments.</div>';
+  } else {
+    statusEl.innerHTML='<div class="alert alert-success">✓ Profile saved.</div>';
+  }
+
+  setTimeout(()=>closeModal(), 1500);
+};
+
 window.signOut = async ()=>{
   await fbSignOut(auth);
   currentUser=null; userProfile=null; actingAsUid=null; actingAsName=null;
@@ -1724,7 +1787,9 @@ window.openTournament = (tid)=>{
     const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
     isTourneyAdmin=isAdmin||!!(S.tourneyAdmins&&S.tourneyAdmins[myUid]);
     loadGlobalProfilesForTournament().then(()=>{
-      if(isTourneyAdmin&&!_viewingAsPlayer) renderAdminView();
+      // If acting as another player, always show player view
+      const actingAsOther = actingAsName && actingAsName!==(userProfile?.preferredName||userProfile?.name||'');
+      if(isTourneyAdmin&&!_viewingAsPlayer&&!actingAsOther) renderAdminView();
       else renderPlayerView(myName);
     });
   });
@@ -1843,7 +1908,10 @@ function renderAdminView(){
   if(header) header.textContent=S.tourneyName+' '+S.tourneyYear;
   show('admin-area'); hide('player-area');
   const myName=actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
-  const amPlayer=(S.players||[]).includes(myName);
+  // Check if admin (as themselves) is in the tournament
+  const myNameNorm=(myName||'').trim().toLowerCase();
+  const amPlayer=(S.players||[]).some(p=>p.trim().toLowerCase()===myNameNorm)
+    || Object.values(S.playerUids||{}).some(n=>n.trim().toLowerCase()===myNameNorm);
   el('btn-player-view')?.classList.toggle('hidden',!amPlayer);
   el('btn-admin-view')?.classList.add('hidden');
   el('btn-manage-admins')?.classList.remove('hidden');
@@ -3013,12 +3081,11 @@ function renderPlayerView(myName){
   const exactMatch=players.find(p=>p===myName);
   const normMatch=players.find(p=>p.trim().toLowerCase()===(myName||'').trim().toLowerCase());
   if(!exactMatch&&normMatch) myName=normMatch; // use the exact casing from tournament
-  // If admin is viewing as player, show the back-to-admin controls
+  // If admin is viewing as player, show the back-to-admin pill
   if(isTourneyAdmin){
     el('btn-player-view')?.classList.add('hidden');
     el('btn-admin-view')?.classList.remove('hidden');
     el('btn-manage-admins')?.classList.add('hidden');
-    // Show floating pill if not already there
     if(!el('admin-role-pill')){
       const pill=document.createElement('div');
       pill.id='admin-role-pill';
@@ -3026,8 +3093,9 @@ function renderPlayerView(myName){
         +'background:#534AB7;color:#fff;border-radius:20px;padding:10px 16px;'
         +'font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(83,74,183,.4);'
         +'display:flex;align-items:center;gap:6px';
-      pill.innerHTML='🛡 Back to Admin';
-      pill.onclick=()=>{ pill.remove(); switchToAdminView(); };
+      const actingAsOther=actingAsName&&actingAsName!==(userProfile?.preferredName||userProfile?.name||'');
+      pill.innerHTML=actingAsOther?'🛡 Back to Admin (acting as '+actingAsName+')':'🛡 Back to Admin';
+      pill.onclick=()=>{ pill.remove(); _viewingAsPlayer=false; switchToAdminView(); };
       document.body.appendChild(pill);
     }
   }
