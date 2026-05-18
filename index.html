@@ -681,7 +681,34 @@ window.linkPendingPlayer=async(btn)=>{
   await set(ref(db,'players/'+uid2),merged);
   await set(ref(db,'preAssignments/'+preKey),null);
   await set(ref(db,'pendingApprovals/'+uid2),null);
-  alert('Linked! '+merged.firstName+' '+merged.lastName+' now has their full history.');
+
+  // Fix all tournaments — move ghost slot to real playerUid
+  const tourneysSnap=await get(ref(db,'tournaments'));
+  if(tourneysSnap.exists()){
+    const playerName=merged.preferredName||merged.name||'';
+    const updates={};
+    Object.entries(tourneysSnap.val()).forEach(([tid,t])=>{
+      if(!t) return;
+      const ghosts=t.ghostPlayers||{};
+      // Find any ghost slot pointing to this player by name OR by preKey
+      Object.entries(ghosts).forEach(([gk,gn])=>{
+        if(gn===playerName||gk===preKey){
+          updates['tournaments/'+tid+'/ghostPlayers/'+gk]=null;
+          updates['tournaments/'+tid+'/playerUids/'+uid2]=playerName;
+        }
+      });
+      // Also check playerUids — remove any old entries for this name
+      Object.entries(t.playerUids||{}).forEach(([oldUid,name])=>{
+        if(name===playerName&&oldUid!==uid2){
+          updates['tournaments/'+tid+'/playerUids/'+oldUid]=null;
+          updates['tournaments/'+tid+'/playerUids/'+uid2]=playerName;
+        }
+      });
+    });
+    if(Object.keys(updates).length>0) await update(ref(db,'/'),updates);
+  }
+
+  alert('Linked! '+merged.firstName+' '+merged.lastName+' is now active in all tournaments.');
   loadPendingApprovals(); loadGlobalPlayers();
 };
 window.approvePendingAsNew=async(btn)=>{
