@@ -3762,8 +3762,8 @@ function renderPlayerGames(myName){
           if(group.length<2) return;
           const count=group.length;
           const tieWord=count===2?'2-way tie':count===3?'3-way tie':count+'-way tie';
-          const placeRange=group.map(x=>placeStr(x.i));
-          const placeLabel=placeRange[0]===placeRange[placeRange.length-1]?placeRange[0]:placeRange[0]+' to '+placeRange[placeRange.length-1];
+          const sortedIdxs=group.map(x=>x.i).sort((a,b)=>a-b);
+          const placeLabel=sortedIdxs[0]===sortedIdxs[sortedIdxs.length-1]?placeStr(sortedIdxs[0]):placeStr(sortedIdxs[0])+' to '+placeStr(sortedIdxs[sortedIdxs.length-1]);
           const names=group.map(teamLabel2);
           const s0=allSt[group[0].t.id]||{w:0,l:0};
           const record=s0.w+'W–'+s0.l+'L';
@@ -3786,6 +3786,11 @@ function renderPlayerGames(myName){
             const byH2H={};
             group.forEach(x=>{ const w=h2h[x.t.id].w; if(!byH2H[w])byH2H[w]=[]; byH2H[w].push(x); });
             Object.values(byH2H).forEach(sub=>{ if(sub.length>1) explainGroup(sub); });
+            // Also explain remaining positions (non-winners competing for 2nd+)
+            const sortedH2H=group.slice().sort((a,b)=>h2h[b.t.id].w-h2h[a.t.id].w);
+            const topH2HW=h2h[sortedH2H[0].t.id].w;
+            const restH2H=sortedH2H.filter(x=>h2h[x.t.id].w!==topH2HW);
+            if(restH2H.length>1) explainGroup(restH2H);
             return;
           }
 
@@ -3794,15 +3799,22 @@ function renderPlayerGames(myName){
           if(Math.max(...diffs)!==Math.min(...diffs)){
             const sorted=group.slice().sort((a,b)=>(h2h[b.t.id].pf-h2h[b.t.id].pa)-(h2h[a.t.id].pf-h2h[a.t.id].pa));
             const winner=sorted[0];
+            const rest=sorted.slice(1);
             const diffStrs=group.map((x,i)=>teamLabel2(x)+' ('+(diffs[i]>=0?'+':'')+diffs[i]+')').join(', ');
             explanations.push(
-              tieWord+' for '+placeLabel+' (all '+record+', H2H wins also tied): '+names.join(', ')+
-              ' — broken by point differential: '+diffStrs+
+              tieWord+' for '+placeLabel+' (all '+record+'): '+names.join(', ')+
+              ' — H2H record equal, broken by point differential: '+diffStrs+
               '. '+teamLabel2(winner)+' takes '+placeStr(winner.i)+'.'
             );
+            // Recurse: same-diff sub-groups (true ties at same level)
             const byDiff={};
             group.forEach((x,i)=>{ const d=diffs[i]; if(!byDiff[d])byDiff[d]=[]; byDiff[d].push(x); });
             Object.values(byDiff).forEach(sub=>{ if(sub.length>1) explainGroup(sub); });
+            // Always explain how remaining positions (2nd, 3rd, etc) were resolved
+            if(rest.length>1) explainGroup(rest);
+            else if(rest.length===1){
+              // Only one team left — their position is determined, nothing to explain
+            }
             return;
           }
 
@@ -3832,6 +3844,9 @@ function renderPlayerGames(myName){
             const byOv={};
             group.forEach((x,i)=>{ const d=ovDiffs[i]; if(!byOv[d])byOv[d]=[]; byOv[d].push(x); });
             Object.values(byOv).forEach(sub=>{ if(sub.length>1) explainGroup(sub); });
+            const sortedOv=group.slice().sort((a,b)=>ovDiffs[group.indexOf(b)]-ovDiffs[group.indexOf(a)]);
+            const restOv=sortedOv.slice(1);
+            if(restOv.length>1) explainGroup(restOv);
             return;
           }
 
@@ -3852,7 +3867,7 @@ function renderPlayerGames(myName){
         Object.values(tieGroups).forEach(group=>{
           if(group.length<2) return;
           const s=allSt[group[0].t.id]||{w:0,l:0};
-          explainGroup(group, '('+s.w+'W–'+s.l+'L)');
+          explainGroup(group);
         });
 
         if(explanations.length){
