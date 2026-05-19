@@ -2636,6 +2636,27 @@ function getPositionRanksForGame(gameId){
   }
   return posRank;
 }
+function makeTeamsFromSorted(sorted, teamSize){
+  const n=sorted.length;
+  const teams=[];
+  if(teamSize===3){
+    const numTeams=Math.floor(n/3);
+    // Snake: 1st gets best, middle, worst of their group
+    for(let i=0;i<numTeams;i++){
+      const t={id:uid(),p1:sorted[i],p2:sorted[n-1-i],p3:sorted[Math.floor(n/2)-Math.floor(numTeams/2)+i]||null};
+      teams.push(t);
+    }
+    // Leftover players added to existing teams
+    const assigned=new Set(teams.flatMap(t=>[t.p1,t.p2,t.p3].filter(Boolean)));
+    sorted.filter(p=>!assigned.has(p)).forEach((p,i)=>{ if(teams[i]) teams[i].p3=p; });
+  } else {
+    const half=Math.floor(n/2);
+    for(let i=0;i<half;i++) teams.push({id:uid(),p1:sorted[i],p2:sorted[n-1-i]});
+    if(n%2!==0) teams.push({id:uid(),p1:sorted[half],p2:null});
+  }
+  return teams;
+}
+
 function makePairsFromGameRankings(gameId){
   const players=S.players||[],n=players.length;
   const posRank=getPositionRanksForGame(gameId);
