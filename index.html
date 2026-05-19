@@ -4520,29 +4520,23 @@ async function renderActiveGameTab(myName){
     const myDoneMatches=allMyMatches.filter(m=>m.winner);
     const myTotalMatches=allMyMatches.length;
 
-    // Compute scheduler now so we know if my match is actually playable
-    const unplayedAll=getAllMatchesFromBracket(b,activeGame.format).filter(m=>!m.winner&&m.t1&&m.t2);
-    const doneAll=getAllMatchesFromBracket(b,activeGame.format).filter(m=>m.winner&&m.score1!=null&&m.score2!=null);
-    // Count matches played per player for priority
-    const mpAll={};
-    (S.players||[]).forEach(p=>{mpAll[p]=0;});
-    doneAll.forEach(m=>{[m.t1,m.t2].forEach(t=>{if(t)[t.p1,t.p2,t.p3].filter(Boolean).forEach(p=>{mpAll[p]=(mpAll[p]||0)+1;});});});
-    const cpAll=new Set();
+    // Helper to get all players in a match
     function pipAll(m){return [...(m.t1?[m.t1.p1,m.t1.p2,m.t1.p3].filter(Boolean):[]),...(m.t2?[m.t2.p1,m.t2.p2,m.t2.p3].filter(Boolean):[])];}
-    function mpriAll(m){const pl=pipAll(m);return pl.reduce((s,p)=>s+(mpAll[p]||0),0)-pl.filter(p=>!cpAll.has(p)).length*0.5;}
-    function schedAll(pool,max,busy2){
-      const act=[];const bz=new Set(busy2||[]);
-      const srt=[...pool].sort((a,b2)=>mpriAll(a)-mpriAll(b2));
-      for(const m of srt){if(act.length>=max)break;const pl=pipAll(m);if(pl.some(p=>bz.has(p)))continue;act.push(m);pl.forEach(p=>bz.add(p));}
-      return act;
-    }
-    const playingNow=schedAll(unplayedAll,4);
-    playingNow.forEach(m=>pipAll(m).forEach(p=>cpAll.add(p)));
-    const playingNowIds=new Set(playingNow.map(m=>m.id));
-
-    // Is my next match actually scheduled to play right now?
+    const unplayedAll=getAllMatchesFromBracket(b,activeGame.format).filter(m=>!m.winner&&m.t1&&m.t2);
     const myNextMatch=allMyMatches.find(m=>!m.winner);
-    const myMatchIsPlaying=myNextMatch&&playingNowIds.has(myNextMatch.id);
+    // My match is playable if it has pending scores OR opponents aren't actively playing elsewhere
+    const pendingForMyMatch=myNextMatch&&S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][myNextMatch.id];
+    const pendingAny=S.pendingScores&&S.pendingScores[activeGame.id]||{};
+    const oppTeamOfMine=myNextMatch&&(myNextMatch.t1.id===myTeam.id?myNextMatch.t2:myNextMatch.t1);
+    const oppPlayerNames=oppTeamOfMine?[oppTeamOfMine.p1,oppTeamOfMine.p2,oppTeamOfMine.p3].filter(Boolean):[];
+    // Opponents busy = they have pending scores in a DIFFERENT match
+    const oppBusy=unplayedAll.some(m=>{
+      if(!myNextMatch||m.id===myNextMatch.id) return false;
+      const hasOpp=oppPlayerNames.some(p=>pipAll(m).includes(p));
+      return hasOpp&&pendingAny[m.id]!=null;
+    });
+    const myMatchIsPlaying=myNextMatch&&(pendingForMyMatch||!oppBusy);
+    const cpAll=new Set(); // populated later when board computes
 
     if(myTotalMatches>0){
       html+='<div style="font-size:11px;color:#888;margin-bottom:8px">Match '+(myDoneMatches.length+1)+' of '+myTotalMatches+'</div>';
@@ -4619,16 +4613,12 @@ async function renderActiveGameTab(myName){
     const allMyDone=allMyMatches.every(m=>m.winner);
       if(allMyDone){
         html+='<div class="alert alert-success" style="text-align:center">🎉 All your matches in this game are done!</div>';
+      } else if(myNextMatch&&oppBusy){
+        html+='<div class="alert alert-info" style="font-size:12px">⏳ Your next match is against <strong>'
+          +oppPlayerNames.join(' & ')
+          +'</strong> — they are currently playing. You will be called up when they finish.</div>';
       } else if(myNextMatch){
-        const oppTeamBusy=myNextMatch.t1.id===myTeam.id?myNextMatch.t2:myNextMatch.t1;
-        const oppBusy=pipAll(myNextMatch).filter(p=>cpAll.has(p)&&![myTeam.p1,myTeam.p2,myTeam.p3].filter(Boolean).includes(p));
-        if(oppBusy.length>0){
-          html+='<div class="alert alert-info" style="font-size:12px">⏳ Your next match is against <strong>'
-            +[oppTeamBusy.p1,oppTeamBusy.p2,oppTeamBusy.p3].filter(Boolean).join(' & ')
-            +'</strong> — they are currently playing. You will be called up when they finish.</div>';
-        } else {
-          html+='<div class="alert alert-info" style="font-size:11px">Waiting for a court to open up.</div>';
-        }
+        html+='<div class="alert alert-info" style="font-size:11px">⏳ Waiting for a court to open up.</div>';
       } else {
         html+='<div class="alert alert-info" style="font-size:11px">Waiting for other matches to complete.</div>';
       }
@@ -4731,7 +4721,17 @@ async function renderActiveGameTab(myName){
         return [...mine,...others];
       }
 
-    const playing=scheduledMatches(unplayed,4);
+    let playing=scheduledMatches(unplayed,4);
+    // If myNextMatch is playable but not in playing, inject it (replace lowest priority if needed)
+    if(myNextMatch&&myMatchIsPlaying&&!playing.find(m=>m.id===myNextMatch.id)){
+      const myPlayers=pipAll(myNextMatch);
+      const conflict=playing.find(m=>playersInMatch(m).some(p=>myPlayers.includes(p)));
+      if(!conflict&&playing.length<4){
+        playing.push(myNextMatch); // slot available
+      } else if(!conflict){
+        playing.pop(); playing.push(myNextMatch); // replace last
+      }
+    }
     playing.forEach(m=>playersInMatch(m).forEach(p=>currentlyPlaying.add(p)));
     const playingIds=new Set(playing.map(m=>m.id));
     const onDeck=scheduledMatches(unplayed.filter(m=>!playingIds.has(m.id)),4,currentlyPlaying);
