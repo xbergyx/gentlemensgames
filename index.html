@@ -3730,54 +3730,119 @@ function renderPlayerGames(myName){
             +'</div>';
         });
 
-        // Tiebreak explanation
+        // Tiebreak explanation — trace sortBySt cascade for each position
+        const explanations=[];
+        const matches=b.matches||[];
+        const allSt=b.standings;
+
+        function calcH2HSt(subset){
+          const ids=new Set(subset.map(x=>x.t.id));
+          const sub={};
+          subset.forEach(x=>{sub[x.t.id]={w:0,l:0,pf:0,pa:0};});
+          matches.forEach(m=>{
+            if(m.score1===null||m.score2===null) return;
+            if(!ids.has(m.t1.id)||!ids.has(m.t2.id)) return;
+            sub[m.t1.id].pf+=m.score1; sub[m.t1.id].pa+=m.score2;
+            sub[m.t2.id].pf+=m.score2; sub[m.t2.id].pa+=m.score1;
+            if(m.score1>m.score2){sub[m.t1.id].w++;sub[m.t2.id].l++;}
+            else{sub[m.t2.id].w++;sub[m.t1.id].l++;}
+          });
+          return sub;
+        }
+
+        function explainGroup(group, winRecord){
+          if(group.length<2) return;
+          const names=group.map(x=>teamLabel(x.t));
+          const h2h=calcH2HSt(group);
+
+          // Step 1: H2H wins among group
+          const h2hWins=group.map(x=>h2h[x.t.id].w);
+          const maxH2H=Math.max(...h2hWins);
+          const minH2H=Math.min(...h2hWins);
+          if(maxH2H!==minH2H){
+            // H2H resolved at least part of it — explain each sub-result
+            explanations.push(
+              names.join(', ')+' were all tied '+(winRecord||'')+
+              ' → broken by head-to-head record among tied teams'
+            );
+            // Group by h2h wins and recurse on remaining ties
+            const byH2H={};
+            group.forEach((x,i)=>{ const w=h2hWins[i]; if(!byH2H[w])byH2H[w]=[]; byH2H[w].push(x); });
+            Object.entries(byH2H).forEach(([w,sub])=>{ if(sub.length>1) explainGroup(sub,'(still tied after H2H)'); });
+            return;
+          }
+
+          // Step 2: H2H point diff
+          const diffs=group.map(x=>h2h[x.t.id].pf-h2h[x.t.id].pa);
+          const maxDiff=Math.max(...diffs), minDiff=Math.min(...diffs);
+          if(maxDiff!==minDiff){
+            const diffStrs=group.map((x,i)=>teamLabel(x.t)+' ('+(diffs[i]>=0?'+':'')+diffs[i]+')');
+            explanations.push(
+              names.join(', ')+' were all tied '+(winRecord||'')+
+              ' → broken by head-to-head point differential: '+diffStrs.join(' vs ')
+            );
+            // Recurse on still-tied sub-groups
+            const byDiff={};
+            group.forEach((x,i)=>{ const d=diffs[i]; if(!byDiff[d])byDiff[d]=[]; byDiff[d].push(x); });
+            Object.entries(byDiff).forEach(([d,sub])=>{ if(sub.length>1) explainGroup(sub,'(still tied after H2H point diff)'); });
+            return;
+          }
+
+          // Step 3: H2H points scored
+          const pfs=group.map(x=>h2h[x.t.id].pf);
+          const maxPF=Math.max(...pfs), minPF=Math.min(...pfs);
+          if(maxPF!==minPF){
+            const pfStrs=group.map((x,i)=>teamLabel(x.t)+' ('+pfs[i]+' pts)');
+            explanations.push(
+              names.join(', ')+' were all tied '+(winRecord||'')+
+              ' → broken by head-to-head points scored: '+pfStrs.join(' vs ')
+            );
+            return;
+          }
+
+          // Step 4: overall point diff
+          const ovDiffs=group.map(x=>{const s=(allSt[x.t.id]||{pf:0,pa:0});return s.pf-s.pa;});
+          const maxOvDiff=Math.max(...ovDiffs), minOvDiff=Math.min(...ovDiffs);
+          if(maxOvDiff!==minOvDiff){
+            const ovStrs=group.map((x,i)=>teamLabel(x.t)+' ('+(ovDiffs[i]>=0?'+':'')+ovDiffs[i]+')');
+            explanations.push(
+              names.join(', ')+' were all tied '+(winRecord||'')+
+              ' → broken by overall point differential: '+ovStrs.join(' vs ')
+            );
+            const byOvDiff={};
+            group.forEach((x,i)=>{ const d=ovDiffs[i]; if(!byOvDiff[d])byOvDiff[d]=[]; byOvDiff[d].push(x); });
+            Object.entries(byOvDiff).forEach(([d,sub])=>{ if(sub.length>1) explainGroup(sub,'(still tied after overall point diff)'); });
+            return;
+          }
+
+          // Step 5: overall points scored
+          const ovPFs=group.map(x=>(allSt[x.t.id]||{pf:0}).pf);
+          const ovStrs=group.map((x,i)=>teamLabel(x.t)+' ('+ovPFs[i]+' total pts)');
+          explanations.push(
+            names.join(', ')+' were all tied '+(winRecord||'')+
+            ' → broken by overall points scored: '+ovStrs.join(' vs ')
+          );
+        }
+
+        // Find tied groups by W-L and explain each
         const tieGroups={};
         sorted2.forEach((t,i)=>{
-          const s=b.standings[t.id]||{w:0,l:0};
+          const s=allSt[t.id]||{w:0,l:0};
           const key=s.w+'-'+s.l;
-          if(!tieGroups[key]) tieGroups[key]=[];
+          if(!tieGroups[key])tieGroups[key]=[];
           tieGroups[key].push({t,i});
         });
-        const explanations=[];
         Object.values(tieGroups).forEach(group=>{
           if(group.length<2) return;
-          const names=group.map(x=>teamLabel(x.t)).join(', ');
-          const places=group.map(x=>['1st','2nd','3rd','4th','5th'][x.i]||(x.i+1)+'th');
-          const firstS=b.standings[group[0].t.id]||{};
-          const allSameWins=group.every(x=>(b.standings[x.t.id]||{w:0}).w===firstS.w);
-          if(allSameWins){
-            // Check if H2H resolved it
-            const h2hWins=group.map(x=>{
-              let w=0;
-              (b.matches||[]).forEach(m=>{
-                const inGroup=group.some(y=>y.t.id===m.t1.id)&&group.some(y=>y.t.id===m.t2.id);
-                if(!inGroup) return;
-                if(m.score1===null) return;
-                if(m.t1.id===x.t.id&&m.score1>m.score2) w++;
-                if(m.t2.id===x.t.id&&m.score2>m.score1) w++;
-              });
-              return w;
-            });
-            const allSameH2H=h2hWins.every(w=>w===h2hWins[0]);
-            if(!allSameH2H){
-              explanations.push(names+' were tied ('+firstS.w+'W–'+firstS.l+'L) → resolved by head-to-head record');
-            } else {
-              // Point diff resolved it
-              const diffs=group.map(x=>{const s2=b.standings[x.t.id]||{pf:0,pa:0};return s2.pf-s2.pa;});
-              const allSameDiff=diffs.every(d=>d===diffs[0]);
-              if(!allSameDiff){
-                explanations.push(names+' were tied ('+firstS.w+'W–'+firstS.l+'L) → resolved by point differential: '+group.map((x,xi)=>{const s2=b.standings[x.t.id]||{pf:0,pa:0};const d=s2.pf-s2.pa;return teamLabel(x.t)+' ('+(d>=0?'+':'')+d+')';}).join(' vs '));
-              } else {
-                explanations.push(names+' were tied → resolved by points scored');
-              }
-            }
-          }
+          const s=allSt[group[0].t.id]||{w:0,l:0};
+          explainGroup(group, '('+s.w+'W–'+s.l+'L)');
         });
+
         if(explanations.length){
           html+='<div style="margin-top:8px;padding:8px;background:#FFFBEB;border-radius:8px;border:1px solid #fcd34d">';
-          html+='<div style="font-size:10px;font-weight:700;color:#7a4f00;margin-bottom:4px">🔍 Tiebreaker explanation</div>';
+          html+='<div style="font-size:10px;font-weight:700;color:#7a4f00;margin-bottom:6px">🔍 How ties were broken</div>';
           explanations.forEach(ex=>{
-            html+='<div style="font-size:10px;color:#7a4f00;margin-bottom:2px">• '+ex+'</div>';
+            html+='<div style="font-size:10px;color:#7a4f00;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid #fde68a">• '+ex+'</div>';
           });
           html+='</div>';
         }
