@@ -4516,25 +4516,36 @@ async function renderActiveGameTab(myName){
   const unplayedAll=b?getAllMatchesFromBracket(b,activeGame.format).filter(m=>!m.winner&&m.t1&&m.t2):[];
   const pendingAnyGame=S.pendingScores&&S.pendingScores[activeGame.id]||{};
 
-  // Pre-compute which players are currently "on court" using the fair scheduler
-  // A match is considered in-progress if: it has pending scores OR the scheduler picked it
-  function quickSchedule(pool, max){
-    const active=[], busy=new Set();
-    for(const m of pool){
+  // Pre-compute which players are on a court using the same fair scheduler as the board
+  // Count completed matches per player for priority
+  const doneForPriority=b?getAllMatchesFromBracket(b,activeGame.format).filter(m=>m.winner&&m.t1&&m.t2):[];
+  const mpForPriority={};
+  (S.players||[]).forEach(p=>{mpForPriority[p]=0;});
+  doneForPriority.forEach(m=>pipAll(m).forEach(p=>{mpForPriority[p]=(mpForPriority[p]||0)+1;}));
+  function fairSchedule(pool, max, preBusy){
+    const active=[], busy=new Set(preBusy||[]);
+    const sorted=[...pool].sort((a,b2)=>{
+      const pa=pipAll(a).reduce((s,p)=>s+(mpForPriority[p]||0),0);
+      const pb=pipAll(b2).reduce((s,p)=>s+(mpForPriority[p]||0),0);
+      return pa-pb;
+    });
+    for(const m of sorted){
       if(active.length>=max) break;
       const pl=pipAll(m); if(pl.some(p=>busy.has(p))) continue;
       active.push(m); pl.forEach(p=>busy.add(p));
     }
     return active;
   }
-  // Matches with pending scores are definitely active
+  // Matches with pending scores are definitely in progress
   const matchesWithPending=unplayedAll.filter(m=>pendingAnyGame[m.id]!=null);
   const playersWithPending=new Set(matchesWithPending.flatMap(m=>pipAll(m)));
-  // Scheduler fills remaining courts
-  const remainingUnplayed=unplayedAll.filter(m=>pendingAnyGame[m.id]==null);
-  const scheduledActive=quickSchedule(remainingUnplayed, Math.max(0,4-matchesWithPending.length));
-  // Combined set of all players currently on a court
+  // Fill remaining courts with fair scheduler
+  const remainingPool=unplayedAll.filter(m=>pendingAnyGame[m.id]==null);
+  const scheduledActive=fairSchedule(remainingPool, Math.max(0,4-matchesWithPending.length), playersWithPending);
+  // Combined: everyone currently on a court
   const playersOnCourt=new Set([...playersWithPending, ...scheduledActive.flatMap(m=>pipAll(m))]);
+  // Also store the full set of active match IDs for board sync
+  const preComputedPlayingIds=new Set([...matchesWithPending,...scheduledActive].map(m=>m.id));
 
   // Outer-scope variables used across blocks
   let myNextMatch=null, oppPlayerNames=[], oppBusy=false, myMatchIsPlaying=false;
@@ -4745,15 +4756,16 @@ async function renderActiveGameTab(myName){
         return [...mine,...others];
       }
 
-    let playing=scheduledMatches(unplayed,4);
-    // If myNextMatch is playable but not in playing, inject it (replace lowest priority if needed)
+    // Use the pre-computed fair schedule so board and score-entry are in sync
+    let playing=[...matchesWithPending, ...scheduledActive];
+    // Inject myNextMatch if it qualifies but scheduler missed it
     if(myNextMatch&&myMatchIsPlaying&&!playing.find(m=>m.id===myNextMatch.id)){
       const myPlayers=pipAll(myNextMatch);
       const conflict=playing.find(m=>playersInMatch(m).some(p=>myPlayers.includes(p)));
       if(!conflict&&playing.length<4){
-        playing.push(myNextMatch); // slot available
+        playing.push(myNextMatch);
       } else if(!conflict){
-        playing.pop(); playing.push(myNextMatch); // replace last
+        playing.pop(); playing.push(myNextMatch);
       }
     }
     playing.forEach(m=>playersInMatch(m).forEach(p=>currentlyPlaying.add(p)));
