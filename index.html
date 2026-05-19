@@ -1969,8 +1969,16 @@ window.switchToPlayerView=()=>{
       +'background:#534AB7;color:#fff;border-radius:20px;padding:10px 16px;'
       +'font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(83,74,183,.4);'
       +'display:flex;align-items:center;gap:6px';
-    pill.innerHTML='🛡 Back to Admin';
-    pill.onclick=()=>{ pill.remove(); switchToAdminView(); };
+    const actingLabel=actingAsName&&actingAsName!==(userProfile?.preferredName||userProfile?.name||'')?
+      '🛡 Stop acting as '+actingAsName:'🛡 Back to Admin';
+    pill.innerHTML=actingLabel;
+    pill.onclick=()=>{
+      pill.remove();
+      actingAsName=''; actingAsUid='';
+      el('acting-as-name').textContent='';
+      hide('acting-as-banner');
+      switchToAdminView();
+    };
     document.body.appendChild(pill);
   }
 };
@@ -2210,11 +2218,23 @@ function renderAdminTesting(){
     e.innerHTML='<div class="card"><p class="empty">Super admin only.</p></div>';
     return;
   }
+  const players=S.players||[];
   e.innerHTML=`
     <div class="card">
       <div class="card-title">🔄 Reset</div>
       <button class="btn btn-sm" onclick="resetTournament()" style="width:auto;border-color:#f0a0a0;color:#c0392b;margin-bottom:5px">🔄 Reset (keep players &amp; games)</button>
       <button class="btn btn-sm" onclick="fillTestRankings()" style="width:auto;border-color:#ccc;color:#888">⚡ Fill random rankings</button>
+    </div>
+    <div class="card">
+      <div class="card-title">🎭 Act as real player</div>
+      <div style="font-size:10px;color:#aaa;margin-bottom:8px">View the tournament as any actual participant. Super admin only.</div>
+      <div id="act-as-real-list">${players.map(p=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0ede6">
+          <span style="flex:1;font-size:13px;font-weight:600">${p}</span>
+          <button class="btn btn-sm" onclick="actAsRealPlayer(this)" data-name="${esc(p)}" style="background:#EEEDFE;border-color:#AFA9EC;color:#3C3489;width:auto">🎭 Act as</button>
+        </div>`).join('')}
+      </div>
+      ${actingAsName?`<div class="alert alert-warn" style="font-size:11px;margin-top:8px">Currently acting as: <strong>${actingAsName}</strong> <button class="btn btn-sm" onclick="stopActingAs()" style="width:auto;margin-left:6px">Stop</button></div>`:''}
     </div>
     <div class="card">
       <div class="card-title">🤖 Test Players</div>
@@ -2228,6 +2248,36 @@ function renderAdminTesting(){
     </div>`;
   renderTestPlayersList();
 }
+
+window.actAsRealPlayer = (btn)=>{
+  if(userProfile?.email!==SUPER_ADMIN_EMAIL){alert('Super admin only.');return;}
+  const playerName=btn.dataset.name;
+  actingAsName=playerName;
+  actingAsUid=null;
+  // Find the UID for this player from playerUids
+  const uids=S.playerUids||{};
+  const uid2=Object.keys(uids).find(k=>uids[k]===playerName)||null;
+  if(uid2) actingAsUid=uid2;
+  show('acting-as-banner');
+  el('acting-as-name').textContent=playerName+' (real player)';
+  if(currentTourneyId&&S){
+    _viewingAsPlayer=true;
+    showView('tournament');
+    renderPlayerView(playerName);
+  }
+};
+
+window.stopActingAs = ()=>{
+  actingAsName=''; actingAsUid='';
+  hide('acting-as-banner');
+  el('acting-as-name').textContent='';
+  const pill=el('admin-role-pill');
+  if(pill) pill.remove();
+  if(isTourneyAdmin){
+    _viewingAsPlayer=false;
+    renderAdminView();
+  }
+};
 
 function renderPlayerList(){
   const e=el('player-list'); if(!e) return;
@@ -3779,6 +3829,13 @@ function renderPlayerView(myName){
     el('btn-player-view')?.classList.add('hidden');
     el('btn-admin-view')?.classList.remove('hidden');
     el('btn-manage-admins')?.classList.add('hidden');
+    // Update existing pill label if already shown
+    const existingPill=el('admin-role-pill');
+    if(existingPill){
+      const actingLabel2=actingAsName&&actingAsName!==(userProfile?.preferredName||userProfile?.name||'')?
+        '🛡 Stop acting as '+actingAsName:'🛡 Back to Admin';
+      existingPill.textContent=actingLabel2;
+    }
     if(!el('admin-role-pill')){
       const pill=document.createElement('div');
       pill.id='admin-role-pill';
@@ -4597,30 +4654,52 @@ async function renderActiveGameTab(myName){
     const done2=allMatches.filter(m=>m.winner&&m.score1!=null&&m.score2!=null);
 
     // Smart scheduler: pick up to 4 simultaneous matches with no player conflicts
-    function scheduledMatches(pool, max){
-      const active=[];
-      const busy=new Set(); // player names currently in a match
-      function playersInMatch(m){
+    function playersInMatch(m){
         return [...(m.t1?[m.t1.p1,m.t1.p2,m.t1.p3].filter(Boolean):[]),
                 ...(m.t2?[m.t2.p1,m.t2.p2,m.t2.p3].filter(Boolean):[])];
       }
-      // Sort: prioritise matches where my team is involved
-      const sorted=[...pool].sort((a,b)=>{
-        const aIsMe=myTeam&&(a.t1.id===myTeam.id||a.t2.id===myTeam.id)?0:1;
-        const bIsMe=myTeam&&(b.t1.id===myTeam.id||b.t2.id===myTeam.id)?0:1;
-        return aIsMe-bIsMe;
-      });
-      for(const m of sorted){
-        if(active.length>=max) break;
+      // Count completed matches per player
+      const matchesPlayed={};
+      (S.players||[]).forEach(p=>{ matchesPlayed[p]=0; });
+      done2.forEach(m=>{ playersInMatch(m).forEach(p=>{ matchesPlayed[p]=(matchesPlayed[p]||0)+1; }); });
+      // Track who is in the currently scheduled "now playing" set
+      const currentlyPlaying=new Set();
+
+      function matchPriority(m){
+        // Scheduling priority — objective, not viewer-dependent
         const players=playersInMatch(m);
-        if(players.some(p=>busy.has(p))) continue; // conflict — skip
-        active.push(m);
-        players.forEach(p=>busy.add(p));
+        // Fewer total matches played = higher priority (lower score)
+        const totalPlayed=players.reduce((s,p)=>s+(matchesPlayed[p]||0),0);
+        // Bonus for players not currently playing
+        const notPlaying=players.filter(p=>!currentlyPlaying.has(p)).length;
+        return totalPlayed-(notPlaying*0.5);
       }
-      return active;
-    }
+
+      function scheduledMatches(pool, max){
+        const active=[];
+        const busy=new Set();
+        // Sort by fairness — fewest games played, most players sitting out
+        const sorted=[...pool].sort((a,b)=>matchPriority(a)-matchPriority(b));
+        for(const m of sorted){
+          if(active.length>=max) break;
+          const players=playersInMatch(m);
+          if(players.some(p=>busy.has(p))) continue;
+          active.push(m);
+          players.forEach(p=>busy.add(p));
+        }
+        return active;
+      }
+
+      function sortForDisplay(matches){
+        // After scheduling, re-order for display: put viewer's match first
+        if(!myTeam) return matches;
+        const mine=matches.filter(m=>m.t1.id===myTeam.id||m.t2.id===myTeam.id);
+        const others=matches.filter(m=>m.t1.id!==myTeam.id&&m.t2.id!==myTeam.id);
+        return [...mine,...others];
+      }
 
     const playing=scheduledMatches(unplayed,4);
+    playing.forEach(m=>playersInMatch(m).forEach(p=>currentlyPlaying.add(p)));
     const playingIds=new Set(playing.map(m=>m.id));
     const onDeck=scheduledMatches(unplayed.filter(m=>!playingIds.has(m.id)),4);
     const waiting=unplayed.filter(m=>!playingIds.has(m.id)&&!onDeck.find(o=>o.id===m.id));
@@ -4647,12 +4726,12 @@ async function renderActiveGameTab(myName){
 
     if(playing.length){
       html+='<div style="font-size:10px;font-weight:700;color:#27500A;margin-bottom:6px">▶ NOW PLAYING ('+playing.length+' court'+(playing.length!==1?'s':'')+')</div>';
-      playing.forEach((m,mi)=>{ html+=renderMatchCard(m,mi,'Court '+(mi+1),false); });
+      sortForDisplay(playing).forEach((m,mi)=>{ html+=renderMatchCard(m,mi,'Court '+(mi+1),false); });
     }
 
     if(onDeck.length){
       html+='<div style="font-size:10px;font-weight:700;color:#534AB7;margin:'+(playing.length?'10':'0')+'px 0 6px">⏭ ON DECK — playing next when a court opens</div>';
-      onDeck.forEach((m,mi)=>{ html+=renderMatchCard(m,mi,'Next up '+(mi+1),true); });
+      sortForDisplay(onDeck).forEach((m,mi)=>{ html+=renderMatchCard(m,mi,'Next up '+(mi+1),true); });
     }
 
     if(waiting.length){
