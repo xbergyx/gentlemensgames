@@ -4515,6 +4515,27 @@ async function renderActiveGameTab(myName){
   function pipAll(m){return [...(m.t1?[m.t1.p1,m.t1.p2,m.t1.p3].filter(Boolean):[]),...(m.t2?[m.t2.p1,m.t2.p2,m.t2.p3].filter(Boolean):[])];}
   const unplayedAll=b?getAllMatchesFromBracket(b,activeGame.format).filter(m=>!m.winner&&m.t1&&m.t2):[];
   const pendingAnyGame=S.pendingScores&&S.pendingScores[activeGame.id]||{};
+
+  // Pre-compute which players are currently "on court" using the fair scheduler
+  // A match is considered in-progress if: it has pending scores OR the scheduler picked it
+  function quickSchedule(pool, max){
+    const active=[], busy=new Set();
+    for(const m of pool){
+      if(active.length>=max) break;
+      const pl=pipAll(m); if(pl.some(p=>busy.has(p))) continue;
+      active.push(m); pl.forEach(p=>busy.add(p));
+    }
+    return active;
+  }
+  // Matches with pending scores are definitely active
+  const matchesWithPending=unplayedAll.filter(m=>pendingAnyGame[m.id]!=null);
+  const playersWithPending=new Set(matchesWithPending.flatMap(m=>pipAll(m)));
+  // Scheduler fills remaining courts
+  const remainingUnplayed=unplayedAll.filter(m=>pendingAnyGame[m.id]==null);
+  const scheduledActive=quickSchedule(remainingUnplayed, Math.max(0,4-matchesWithPending.length));
+  // Combined set of all players currently on a court
+  const playersOnCourt=new Set([...playersWithPending, ...scheduledActive.flatMap(m=>pipAll(m))]);
+
   // Outer-scope variables used across blocks
   let myNextMatch=null, oppPlayerNames=[], oppBusy=false, myMatchIsPlaying=false;
   let allMyMatches=[];
@@ -4536,12 +4557,8 @@ async function renderActiveGameTab(myName){
     const pendingForMyMatch=myNextMatch&&S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][myNextMatch.id];
     const oppTeamOfMine=myNextMatch&&(myNextMatch.t1.id===myTeam.id?myNextMatch.t2:myNextMatch.t1);
     oppPlayerNames=oppTeamOfMine?[oppTeamOfMine.p1,oppTeamOfMine.p2,oppTeamOfMine.p3].filter(Boolean):[];
-    // Opponents busy = they have pending scores in a DIFFERENT match
-    oppBusy=unplayedAll.some(m=>{
-      if(!myNextMatch||m.id===myNextMatch.id) return false;
-      const hasOpp=oppPlayerNames.some(p=>pipAll(m).includes(p));
-      return hasOpp&&pendingAnyGame[m.id]!=null;
-    });
+    // Opponents busy = any of their players are currently on a court
+    oppBusy=oppPlayerNames.some(p=>playersOnCourt.has(p));
     myMatchIsPlaying=myNextMatch&&(pendingForMyMatch||!oppBusy)?true:false;
     const cpAll=new Set(); // populated later when board computes
 
