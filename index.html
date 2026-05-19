@@ -1824,21 +1824,25 @@ function buildTournamentShell(){
   </div>
   <div id="admin-area" class="hidden">
     <div class="phase-tabs">
-      <div class="phase-tab active" data-phase="setup">Setup</div>
-      <div class="phase-tab" data-phase="games">Games</div>
-      <div class="phase-tab" data-phase="rankings">Rankings</div>
-      <div class="phase-tab" data-phase="scores">Scores</div>
-      <div class="phase-tab" data-phase="board">Leaderboard</div>
-      <div class="phase-tab" data-phase="power">Power Rankings</div>
-      <div class="phase-tab" data-phase="history">History</div>
+      <div class="phase-tab active" data-phase="setup">⚙️ Setup</div>
+      <div class="phase-tab" data-phase="players">👥 Players</div>
+      <div class="phase-tab" data-phase="games">🎮 Games</div>
+      <div class="phase-tab" data-phase="rankings">📋 Rankings</div>
+      <div class="phase-tab" data-phase="scores">🏅 Scores</div>
+      <div class="phase-tab" data-phase="board">📊 Leaderboard</div>
+      <div class="phase-tab" data-phase="history">📜 History</div>
+      <div class="phase-tab" data-phase="testing">🧪 Testing</div>
     </div>
     <div id="admin-setup"></div>
+    <div id="admin-players" class="hidden"></div>
     <div id="admin-games" class="hidden"></div>
     <div id="admin-rankings" class="hidden"></div>
     <div id="admin-scores" class="hidden"></div>
     <div id="admin-board" class="hidden"></div>
     <div id="admin-power" class="hidden"></div>
     <div id="admin-history" class="hidden"></div>
+    <div id="admin-testing" class="hidden"></div>
+    <div id="admin-players" class="hidden"></div>
   </div>
   <div id="player-area" class="hidden">
     <div class="card" id="player-header-card"></div>
@@ -1846,12 +1850,14 @@ function buildTournamentShell(){
       <div class="ptab-btn active" id="ptab-active" data-tab="active">🎯 Now Playing</div>
       <div class="ptab-btn" id="ptab-lb" data-tab="lb">🏅 Standings</div>
       <div class="ptab-btn" id="ptab-games" data-tab="games">📊 Results</div>
+      <div class="ptab-btn" id="ptab-info" data-tab="info">📋 Games</div>
       <div class="ptab-btn" id="ptab-teams" data-tab="teams">👥 My Teams</div>
       <div class="ptab-btn" id="ptab-rank" data-tab="rank">🎯 Rankings</div>
     </div>
     <div id="pview-active"></div>
     <div id="pview-lb" class="hidden"></div>
     <div id="pview-games" class="hidden"></div>
+    <div id="pview-info" class="hidden"></div>
     <div id="pview-teams" class="hidden"></div>
     <div id="pview-rank" class="hidden"></div>
   </div>
@@ -1984,7 +1990,9 @@ function showAdminPhase(phase){
   const target=el('admin-'+phase); if(target) target.classList.remove('hidden');
   document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===phase) t.classList.add('active'); });
   if(phase==='setup')    renderAdminSetup();
+  if(phase==='players')  renderAdminPlayers();
   if(phase==='games')    renderAdminGames();
+  if(phase==='testing')  renderAdminTesting();
   if(phase==='rankings') renderRankingStatus();
   if(phase==='scores')   renderMatchFeed();
   if(phase==='board')    { renderLeaderboard(); renderGPB(); updateStats(); renderTiebreakerPanel(); }
@@ -1996,17 +2004,7 @@ function renderAdminSetup(){
   const e=el('admin-setup'); if(!e) return;
   const players=S.players||[];
   e.innerHTML=`
-    <div class="card">
-      <div class="card-title">👥 Players <span class="tag tag-purple">${players.length}</span></div>
-      <div class="alert alert-info" style="font-size:11px">Add players from the global database or invite new ones. They'll receive an invite link to join.</div>
-      <div class="search-box" style="margin-bottom:8px">
-        <span class="search-icon">🔍</span>
-        <input type="text" id="player-search-input" placeholder="Search global players to add..." oninput="searchPlayersToAdd(this.value)" style="padding-left:32px;margin:0">
-      </div>
-      <div id="player-search-results"></div>
-      <div class="divider"></div>
-      <div id="player-list"></div>
-    </div>
+
     <div class="card">
       <div class="card-title">📤 Join code</div>
       <div class="alert alert-info" style="font-size:11px">Players can also join by opening this link:</div>
@@ -2019,17 +2017,6 @@ function renderAdminSetup(){
       <div class="divider"></div>
       <button class="btn btn-sm btn-primary" onclick="syncTournamentHistory()" style="width:auto;font-size:11px;margin-bottom:5px">Sync player history from global DB</button>
       <div style="font-size:10px;color:#aaa;margin-bottom:10px">Pulls history, stats and badges for all players.</div>
-      <div style="font-size:11px;color:#aaa;margin-bottom:6px;font-weight:600">🧪 TESTING</div>
-      <button class="btn btn-sm" onclick="resetTournament()" style="width:auto;border-color:#f0a0a0;color:#c0392b;font-size:11px;margin-bottom:5px">🔄 Reset (keep players &amp; games)</button>
-      <button class="btn btn-sm" onclick="fillTestRankings()" style="width:auto;border-color:#ccc;color:#888;font-size:11px;margin-bottom:8px">⚡ Fill random rankings</button>
-      <div style="font-size:11px;color:#aaa;margin-bottom:4px;margin-top:4px;font-weight:600">🤖 Test Players</div>
-      <div style="font-size:10px;color:#aaa;margin-bottom:6px">Add fake ghost players to test the player experience. Super admin only.</div>
-      <div style="display:flex;gap:4px;margin-bottom:4px">
-        <input type="text" id="test-player-name" placeholder="Player name (e.g. Test User)" style="margin:0;font-size:12px">
-        <button class="btn btn-sm btn-primary" onclick="addTestPlayer()" style="flex-shrink:0;white-space:nowrap">+ Add</button>
-      </div>
-      <div id="test-players-list" style="margin-bottom:8px"></div>
-      <button class="btn btn-sm" onclick="removeAllTestPlayers()" style="width:auto;border-color:#f0a0a0;color:#c0392b;font-size:11px">🗑 Remove all test players</button>
       <div style="font-size:11px;color:#888;margin-bottom:5px">📊 Upload full Excel ranking sheet</div>
       <label class="btn btn-sm" style="width:auto;cursor:pointer;background:#EAF3DE;border-color:#97C459;color:#27500A">
         📂 Choose Excel (.xlsx)
@@ -2044,7 +2031,6 @@ function renderAdminSetup(){
       <div id="ranking-grid-wrap"></div>
       <div id="ranking-upload-status" style="margin-top:6px"></div>
     </div>`;
-  renderPlayerList();
   renderStartTourneyCard();
   renderRankingUploadPlayerSelect();
 }
@@ -2079,11 +2065,11 @@ function renderAdminGames(){
         <div class="sec-label">Number of rounds</div>
         <input type="number" id="game-rounds" min="2" max="10" value="2">
       </div>
-      <div class="sec-label">Tiebreaker</div>
+      <div class="sec-label">Tiebreaker Rules</div>
       <select id="game-tiebreak">
-        <option value="auto">Auto: point diff → H2H</option>
-        <option value="host-score">Host enters tiebreaker</option>
-        <option value="host-pick">Host manually assigns</option>
+        <option value="auto">Tiebreaker Rules (point diff → H2H)</option>
+        <option value="host-score">Host enters tiebreaker score</option>
+        <option value="host-pick">Host manually picks winner</option>
       </select>
       <div class="sec-label">Team size</div>
       <select id="game-teamsize">
@@ -2092,9 +2078,12 @@ function renderAdminGames(){
       </select>
       <div class="sec-label">Tiebreaker method</div>
       <select id="game-tbmode">
-        <option value="restart">Restart (H2H → point diff, reset after each pick)</option>
-        <option value="stayon">Stay on step (rank all tied teams by one step, no restart)</option>
+        <option value="stayon">Stay on step (rank all tied teams by one criterion)</option>
+        <option value="restart">Restart (pick one winner at a time, reset to step 1)</option>
       </select>
+      <div class="sec-label">Game rules</div>
+      <div style="font-size:10px;color:#aaa;margin-bottom:4px">Auto-filled based on format — edit as needed. Each line = one rule.</div>
+      <textarea id="game-rules" rows="4" placeholder="• Rule 1&#10;• Rule 2" style="font-size:12px;padding:8px;border-radius:8px;border:1px solid #e0ddd6;width:100%;resize:vertical"></textarea>
       <button class="btn btn-primary" onclick="addGame()">+ Add game</button>
     </div>
     <div class="card">
@@ -2188,6 +2177,51 @@ window.removePlayer=async(name)=>{
   await update(ref(db,'tournaments/'+currentTourneyId),{players,ghostPlayers:newGhosts,playerUids});
 };
 
+function renderAdminPlayers(){
+  const e=el('admin-players'); if(!e) return;
+  const players=S.players||[];
+  const ghosts=S.ghostPlayers||{};
+  e.innerHTML=`
+    <div class="card">
+      <div class="card-title">👥 Players <span class="tag tag-purple">${players.length}</span></div>
+      <div class="alert alert-info" style="font-size:11px">Add players from the global database below, or they can join via the join code.</div>
+      <div id="player-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🔍 Add from global database</div>
+      <input type="text" id="global-search" placeholder="Search players..." oninput="loadGlobalPlayers(this.value)" style="margin-bottom:8px">
+      <div id="global-player-list"></div>
+    </div>
+`;
+  renderPlayerList();
+  loadGlobalPlayers('');
+}
+
+function renderAdminTesting(){
+  const e=el('admin-testing'); if(!e) return;
+  if(userProfile?.email!==SUPER_ADMIN_EMAIL){
+    e.innerHTML='<div class="card"><p class="empty">Super admin only.</p></div>';
+    return;
+  }
+  e.innerHTML=`
+    <div class="card">
+      <div class="card-title">🔄 Reset</div>
+      <button class="btn btn-sm" onclick="resetTournament()" style="width:auto;border-color:#f0a0a0;color:#c0392b;margin-bottom:5px">🔄 Reset (keep players &amp; games)</button>
+      <button class="btn btn-sm" onclick="fillTestRankings()" style="width:auto;border-color:#ccc;color:#888">⚡ Fill random rankings</button>
+    </div>
+    <div class="card">
+      <div class="card-title">🤖 Test Players</div>
+      <div style="font-size:10px;color:#aaa;margin-bottom:8px">Add fake ghost players to test the player experience.</div>
+      <div style="display:flex;gap:4px;margin-bottom:6px">
+        <input type="text" id="test-player-name" placeholder="Player name (e.g. Test User)" style="margin:0;font-size:12px">
+        <button class="btn btn-sm btn-primary" onclick="addTestPlayer()" style="flex-shrink:0;white-space:nowrap">+ Add</button>
+      </div>
+      <div id="test-players-list" style="margin-bottom:8px"></div>
+      <button class="btn btn-sm" onclick="removeAllTestPlayers()" style="width:auto;border-color:#f0a0a0;color:#c0392b;font-size:11px">🗑 Remove all test players</button>
+    </div>`;
+  renderTestPlayersList();
+}
+
 function renderPlayerList(){
   const e=el('player-list'); if(!e) return;
   const players=S.players||[];
@@ -2235,9 +2269,27 @@ window.startTournament = async ()=>{
 
 // ── GAMES ─────────────────────────────────────────────────
 window.toggleRoundsOption = ()=>{
-  const v=el('game-format')?.value||'';
+  const fmt=el('game-format')?.value||'';
   const ro=el('rounds-option');
-  if(ro) ro.classList.toggle('hidden',v!=='multi-round-high'&&v!=='multi-round-low');
+  if(ro) ro.classList.toggle('hidden',!fmt.includes('multi'));
+  // Auto-fill rules if empty
+  const rulesEl=el('game-rules');
+  if(rulesEl&&!rulesEl.value.trim()){
+    const defaults={
+      'h2h-points':'• Play to 21 points\n• Win by 2\n• First to 21 wins the match',
+      'h2h-wins':'• Best of 3 games\n• Team with most wins advances',
+      'score-low':'• Lowest total score wins\n• All players complete all holes/frames\n• Ties broken by admin',
+      'score-high':'• Highest total score wins\n• All players complete all frames\n• Ties broken by admin',
+      'multi-round-high':'• Highest combined score across all rounds wins\n• All rounds must be completed',
+      'multi-round-low':'• Lowest combined score across all rounds wins\n• All rounds must be completed',
+      'round-robin':'• Every team plays every other team once\n• Ties broken by point differential then H2H',
+      'single-elim':'• Single elimination bracket\n• Lose once = eliminated',
+      'double-elim':'• Double elimination bracket\n• Two losses = eliminated',
+      'two-pool':'• Split into 2 pools for round robin\n• Top teams from each pool advance to crossover finals',
+      'pool-playoff':'• Pool stage followed by knockout rounds\n• Top teams from pools advance',
+    };
+    if(defaults[fmt]) rulesEl.value=defaults[fmt];
+  }
 };
 window.addGame = async ()=>{
   if(S.tournamentStarted){ alert('Tournament started — games locked.'); return; }
@@ -2246,8 +2298,9 @@ window.addGame = async ()=>{
   const rounds=(format==='multi-round-high'||format==='multi-round-low')?parseInt(el('game-rounds').value)||2:1;
   if(!name){ alert('Enter a game name.'); return; }
   const teamSize=parseInt(el('game-teamsize')?.value||'2');
-  const tbMode=el('game-tbmode')?.value||'restart';
-  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize,tbMode};
+  const tbMode=el('game-tbmode')?.value||'stayon';
+  const rules=(el('game-rules')?.value||'').trim();
+  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize,tbMode,rules};
   const games=[...(S.games||[]),g];
   await update(ref(db,'tournaments/'+currentTourneyId),{games});
   el('game-name-input').value='';
@@ -2261,7 +2314,8 @@ window.removeGame = async (id)=>{
   const gr={...(S.gameRankings||{})}; delete gr[id];
   await update(ref(db,'tournaments/'+currentTourneyId),{games,teams,scores,points,bs,gameRankings:gr});
 };
-window.activateGame = async (gameId)=>{
+window.activateGame = async (btnOrId)=>{
+  const gameId=typeof btnOrId==='string'?btnOrId:(btnOrId?.dataset?.gid||btnOrId);
   // Deactivate any currently active game first
   const games=(S.games||[]).map(g=>({
     ...g,
@@ -2269,7 +2323,8 @@ window.activateGame = async (gameId)=>{
   }));
   await update(ref(db,'tournaments/'+currentTourneyId),{games, activeGameId:gameId});
 };
-window.deactivateGame = async (gameId)=>{
+window.deactivateGame = async (btnOrId)=>{
+  const gameId=typeof btnOrId==='string'?btnOrId:(btnOrId?.dataset?.gid||btnOrId);
   const games=(S.games||[]).map(g=>g.id===gameId?{...g,active:false}:g);
   await update(ref(db,'tournaments/'+currentTourneyId),{games, activeGameId:null});
 };
@@ -2756,7 +2811,27 @@ function renderMatchFeed(){
   const e=el('admin-scores'); if(!e) return;
   const lockedGames=(S.games||[]).filter(g=>(g.status==='locked'||g.status==='scoring')&&g.status!=='skipped');
   if(!lockedGames.length){ e.innerHTML='<div class="card"><div class="alert alert-info">No games with locked teams yet.</div></div>'; return; }
+  // Active game banner at top of scores
+  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
   let html='';
+  if(activeGame){
+    html+='<div class="card" style="border-color:#27500A;background:#EAF3DE">'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="font-size:20px">▶</span>'
+      +'<div style="flex:1"><div style="font-size:13px;font-weight:700;color:#27500A">Active: '+activeGame.name+'</div>'
+      +'<div style="font-size:11px;color:#27500A">Players are seeing this game on their Now Playing tab</div></div>'
+      +'<button class="btn btn-sm" onclick="deactivateGame(this)" data-gid="'+activeGame.id+'" style="width:auto;border-color:#f0a0a0;color:#c0392b;background:#fff">⏸ Deactivate</button>'
+      +'</div></div>';
+  } else {
+    const nextGames=lockedGames.filter(g=>!(S.scores&&S.scores[g.id]&&S.scores[g.id]._fin));
+    if(nextGames.length){
+      html+='<div class="card" style="border-color:#f5cc80">'
+        +'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px">▶ Activate a game for players:</div>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:4px">'
+        +nextGames.map(g=>'<button class="btn btn-sm btn-primary" onclick="activateGame(this)" data-gid="'+g.id+'" style="width:auto">▶ '+g.name+'</button>').join('')
+        +'</div></div>';
+    }
+  }
   lockedGames.forEach(game=>{
     const teams=(S.teams&&S.teams[game.id])||[];
     const b=S.bs&&S.bs[game.id];
@@ -3239,7 +3314,25 @@ window.saveScoreGame = async (gid)=>{
     [team.p1,team.p2,team.p3].filter(Boolean).forEach(p=>{newPts[p]=pts;});
   });
   await update(ref(db,'tournaments/'+currentTourneyId),{['scores/'+gid]:newScores,['points/'+gid]:newPts});
+  // Deactivate the current game and offer to activate next
+  const updatedGames=(S.games||[]).map(g=>g.id===gid?{...g,active:false}:g);
+  await update(ref(db,'tournaments/'+currentTourneyId),{games:updatedGames,activeGameId:null});
   renderMatchFeed();
+  // Ask which game to activate next
+  const remaining=(S.games||[]).filter(g=>g.id!==gid&&!(S.scores&&S.scores[g.id]&&S.scores[g.id]._fin)&&g.status!=='skipped');
+  if(remaining.length){
+    const opts=remaining.map((g,i)=>(i+1)+'. '+g.name).join(' | ');
+    const pick=prompt('Game saved! Which game is next? '+opts+' - Enter number (or cancel to skip):');
+    if(pick){
+      const idx2=parseInt(pick)-1;
+      if(idx2>=0&&idx2<remaining.length){
+        await activateGame(remaining[idx2].id);
+        alert('✓ '+remaining[idx2].name+' is now active!');
+      }
+    }
+  } else {
+    alert('All games complete!');
+  }
 };
 
 // ── LEADERBOARD ───────────────────────────────────────────
@@ -3702,15 +3795,89 @@ function getSmartDefaultTab(myName){
 function showPlayerTab(tab,myName){
   _tab=tab;
   myName=myName||actingAsName||(userProfile?.name)||'';
-  ['active','lb','games','teams','rank'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
+  ['active','lb','games','info','teams','rank'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
   const tv=el('pview-'+tab);if(tv)tv.classList.remove('hidden');
   const tb=el('ptab-'+tab);if(tb)tb.classList.add('active');
   if(tab==='rank')   renderPlayerRankings(myName);
   if(tab==='teams')  renderMyTeams(myName);
   if(tab==='active') renderActiveGameTab(myName);
   if(tab==='games')  renderPlayerGames(myName);
+  if(tab==='info')   renderGameInfo();
   if(tab==='lb')     { renderPlayerLB(myName); renderAllPlayerBadges(); }
 }
+function renderGameInfo(){
+  const e=el('pview-info'); if(!e) return;
+  const games=S.games||[];
+  if(!games.length){ e.innerHTML='<div class="card"><p class="empty">No games yet.</p></div>'; return; }
+
+  const fmtFull={
+    'h2h-points':'Head-to-head points','h2h-wins':'Head-to-head wins',
+    'score-low':'Lowest score wins (golf)','score-high':'Highest score wins (bowling)',
+    'multi-round-high':'Multi-round high score','multi-round-low':'Multi-round low score',
+    'round-robin':'Round robin','single-elim':'Single elimination',
+    'double-elim':'Double elimination','two-pool':'2 pools → crossover finals',
+    'pool-playoff':'Pool stage + knockout'
+  };
+  const tbFull={
+    'auto':'Point differential → H2H',
+    'host-score':'Host enters tiebreaker score',
+    'host-pick':'Host manually picks winner'
+  };
+  const tbSteps={
+    'auto': [
+      '1. Most overall wins',
+      '2. Head-to-head record among tied teams',
+      '3. Point differential in H2H matches',
+      '4. Points scored in H2H matches',
+      '5. Overall point differential',
+      '6. Overall points scored'
+    ],
+    'host-score': [
+      '1. Most overall wins',
+      '2. Head-to-head record',
+      '3. Host enters a tiebreaker score for each tied team',
+      '4. Best tiebreaker score wins'
+    ],
+    'host-pick': [
+      '1. Most overall wins',
+      '2. Head-to-head record',
+      '3. Host manually selects the winner'
+    ]
+  };
+  const tbMethodFull={
+    'restart':'Restart after each winner — after picking a winner, restart from step 1 for remaining teams',
+    'stayon':'Stay on step — rank all tied teams by whichever step first separates them'
+  };
+
+  let html='';
+  games.forEach(g=>{
+    const steps=tbSteps[g.tiebreak||'auto']||tbSteps['auto'];
+    const rulesLines=(g.rules||'').split('\n').filter(Boolean);
+    html+='<div class="card">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      +'<div style="font-size:15px;font-weight:700">'+g.name+'</div>'
+      +'<span class="tag" style="background:#EEEDFE;color:#3C3489">'+(fmtFull[g.format]||g.format)+'</span>'
+      +'</div>';
+
+    if(rulesLines.length){
+      html+='<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:5px">RULES</div>';
+      html+='<div style="background:#f8f7f4;border-radius:8px;padding:8px 10px;margin-bottom:10px">';
+      html+=rulesLines.map(r=>'<div style="font-size:12px;padding:2px 0">'+r+'</div>').join('');
+      html+='</div>';
+    }
+
+    html+='<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:5px">TIEBREAKER</div>';
+    html+='<div style="background:#FFFBEB;border-radius:8px;padding:8px 10px;margin-bottom:6px">';
+    steps.forEach(s=>{
+      html+='<div style="font-size:11px;padding:2px 0;color:#7a4f00">'+s+'</div>';
+    });
+    html+='</div>';
+    html+='<div style="font-size:10px;color:#aaa">Method: '+(tbMethodFull[g.tbMode||'stayon'])+'</div>';
+    html+='</div>';
+  });
+  e.innerHTML=html;
+}
+
 function renderPlayerGames(myName){
   const e=el('pview-games'); if(!e) return;
   const allGames=S.games||[];
