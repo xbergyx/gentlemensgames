@@ -2391,28 +2391,26 @@ function pipForSchedule(m){
 }
 
 async function advanceMatchScheduler(gameId){
-  // Called after a match completes - fills open courts from waiting matches
+  // Use current S state — called after Firebase already updated
   const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
   const b=S.bs&&S.bs[gameId]; if(!b) return;
   const allM=getAllMatchesFromBracket(b,game.format);
-  const unplayed=allM.filter(m=>!m.winner&&m.t1&&m.t2);
+  const unplayed=allM.filter(m=>!m.winner&&m.t1&&m.t1.p1&&m.t2&&m.t2.p1); // ensure team objects
   const currentActive=new Set(Object.keys((S.activeMatchIds&&S.activeMatchIds[gameId])||{}));
 
   // Remove completed matches from active set
-  const confirmedIds=allM.filter(m=>m.winner).map(m=>m.id);
-  confirmedIds.forEach(id=>currentActive.delete(id));
+  allM.filter(m=>m.winner).forEach(m=>currentActive.delete(m.id));
 
   // Count games played per player
   const done=allM.filter(m=>m.winner&&m.t1&&m.t2);
   const played={};(S.players||[]).forEach(p=>{played[p]=0;});
   done.forEach(m=>pipForSchedule(m).forEach(p=>{played[p]=(played[p]||0)+1;}));
 
-  // Fill up to 4 active courts
+  // Seed busy from currently active matches (players already on court)
   const busy=new Set();
-  // Keep existing active matches' players busy
   unplayed.filter(m=>currentActive.has(m.id)).forEach(m=>pipForSchedule(m).forEach(p=>busy.add(p)));
 
-  // Add new matches by priority (fewest games played)
+  // Add new matches by priority (fewest games played, no player conflicts)
   const waiting=unplayed.filter(m=>!currentActive.has(m.id));
   const sorted=[...waiting].sort((a,b2)=>{
     const pa=pipForSchedule(a).reduce((s,p)=>s+(played[p]||0),0);
@@ -2427,7 +2425,7 @@ async function advanceMatchScheduler(gameId){
     pl.forEach(p=>busy.add(p));
   }
 
-  // Write back to Firebase
+  // Write to Firebase
   const activeMatchIds={...(S.activeMatchIds||{})};
   activeMatchIds[gameId]={};
   currentActive.forEach(id=>{ activeMatchIds[gameId][id]=true; });
@@ -4616,8 +4614,11 @@ async function renderActiveGameTab(myName){
     const oppTeamOfMine=myNextMatch&&(myNextMatch.t1.id===myTeam.id?myNextMatch.t2:myNextMatch.t1);
     oppPlayerNames=oppTeamOfMine?[oppTeamOfMine.p1,oppTeamOfMine.p2,oppTeamOfMine.p3].filter(Boolean):[];
     // Opponents busy = any of their players are currently on a court
-    oppBusy=oppPlayerNames.some(p=>playersOnCourt.has(p));
-    myMatchIsPlaying=myNextMatch&&(pendingForMyMatch||!oppBusy)?true:false;
+    // Opponents are "busy in another match" only if they're on court WITHOUT me
+    const myPlayers=[myTeam.p1,myTeam.p2,myTeam.p3].filter(Boolean);
+    const myTeamOnCourt=myPlayers.some(p=>playersOnCourt.has(p));
+    oppBusy=!myTeamOnCourt&&oppPlayerNames.some(p=>playersOnCourt.has(p));
+    myMatchIsPlaying=myNextMatch&&activeMatchIds.has(myNextMatch.id)?true:false;
     const cpAll=new Set(); // populated later when board computes
 
     if(myTotalMatches>0){
