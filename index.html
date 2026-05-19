@@ -1809,7 +1809,7 @@ window.openTournament = (tid)=>{
       // If acting as another player, always show player view
       const actingAsOther = actingAsName && actingAsName!==(userProfile?.preferredName||userProfile?.name||'');
       if(isTourneyAdmin&&!_viewingAsPlayer&&!actingAsOther) renderAdminView();
-      else renderPlayerView(myName);
+      else { renderPlayerView(myName); updateVoteTabVisibility(myName); }
     });
   });
 };
@@ -1855,7 +1855,7 @@ function buildTournamentShell(){
       <div class="ptab-btn" id="ptab-info" data-tab="info">📋 Games</div>
       <div class="ptab-btn" id="ptab-teams" data-tab="teams">👥 My Teams</div>
       <div class="ptab-btn" id="ptab-rank" data-tab="rank">🎯 Rankings</div>
-      <div class="ptab-btn" id="ptab-vote" data-tab="vote">🗳️ Vote</div>
+      <div class="ptab-btn" id="ptab-vote" data-tab="vote" style="display:none">🗳️ Vote</div>
     </div>
     <div id="pview-active"></div>
     <div id="pview-lb" class="hidden"></div>
@@ -3769,6 +3769,7 @@ function renderPlayerView(myName){
   }
   // Smart default tab: active game if they have something to do, otherwise leaderboard
   const defaultTab = getSmartDefaultTab(myName);
+  updateVoteTabVisibility(myName);
   showPlayerTab(_tab||defaultTab,myName);
 }
 
@@ -3819,6 +3820,13 @@ function getSmartDefaultTab(myName){
     return 'lb';
   }
 }
+function updateVoteTabVisibility(myName){
+  const votes=S.votes||{};
+  const hasActiveVote=Object.values(votes).some(v=>v.active&&(!v.participants||v.participants.includes(myName)));
+  const btn=el('ptab-vote');
+  if(btn) btn.style.display=hasActiveVote?'':'none';
+}
+
 function showPlayerTab(tab,myName){
   _tab=tab;
   myName=myName||actingAsName||(userProfile?.name)||'';
@@ -5144,9 +5152,7 @@ function renderAdminVotes(){
       <button type="button" class="btn btn-sm" onclick="voteSelectAll()" style="width:auto">✓ All</button>
       <button type="button" class="btn btn-sm" onclick="voteSelectNone()" style="width:auto">✕ None</button>
     </div>
-    <div id="vote-participants" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
-      ${(S.players||[]).map(p=>`<label style="display:flex;align-items:center;gap:4px;background:#f8f7f4;border:1px solid #e0ddd6;border-radius:20px;padding:3px 10px;font-size:12px;cursor:pointer"><input type="checkbox" class="vote-participant-check" value="${esc(p)}" checked style="margin:0;accent-color:#7F77DD"> ${p}</label>`).join('')}
-    </div>
+    <div id="vote-participants" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
     <button class="btn btn-primary" onclick="createVote()" style="margin-top:4px">📢 Start vote</button>
   </div>`;
 
@@ -5210,6 +5216,16 @@ function renderAdminVotes(){
   }
 
   e.innerHTML=html;
+  // Build participant checkboxes dynamically
+  const vpWrap=el('vote-participants');
+  if(vpWrap){
+    const players=S.players||[];
+    vpWrap.innerHTML=players.map(p=>{
+      const safe=p.replace(/"/g,'&quot;');
+      return '<label style="display:flex;align-items:center;gap:4px;background:#f8f7f4;border:1px solid #e0ddd6;border-radius:20px;padding:3px 10px;font-size:12px;cursor:pointer">'
+        +'<input type="checkbox" class="vote-participant-check" value="'+safe+'" checked style="margin:0;accent-color:#7F77DD"> '+p+'</label>';
+    }).join('');
+  }
 }
 
 function renderPlayerVotes(myName){
