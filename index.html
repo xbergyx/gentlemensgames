@@ -4618,6 +4618,7 @@ async function renderActiveGameTab(myName){
     const myPlayers=[myTeam.p1,myTeam.p2,myTeam.p3].filter(Boolean);
     const myTeamOnCourt=myPlayers.some(p=>playersOnCourt.has(p));
     oppBusy=!myTeamOnCourt&&oppPlayerNames.some(p=>playersOnCourt.has(p));
+    console.log('DEBUG: myNextMatch=',myNextMatch?.id, 'activeMatchIds=',Array.from(activeMatchIds), 'match=',myNextMatch&&activeMatchIds.has(myNextMatch.id));
     myMatchIsPlaying=myNextMatch&&activeMatchIds.has(myNextMatch.id)?true:false;
     const cpAll=new Set(); // populated later when board computes
 
