@@ -2493,7 +2493,12 @@ window.generateAllTeams = async (mode='ranked')=>{
   }
 
   const label=mode==='random'?'randomly generated':mode==='manual'?'manually entered':'ranking-based';
-  if(!confirm('Generate '+label+' teams for all '+games.length+' games?')) return;
+  const toGenerate=games.filter(g=>g.status!=='locked'&&g.status!=='skipped'&&g.teamMode!=='manual');
+  const alreadyLocked=games.filter(g=>g.status==='locked'||g.status==='skipped');
+  let msg='Generate '+label+' teams for '+toGenerate.length+' game(s)?';
+  if(alreadyLocked.length) msg+='\n\nSkipping '+alreadyLocked.length+' already-locked game(s): '+alreadyLocked.map(g=>g.name).join(', ');
+  if(!toGenerate.length){alert('All games already have teams locked in.');return;}
+  if(!confirm(msg)) return;
 
   const newGames=[...games], newTeams={...(S.teams||{})}, newBs={...(S.bs||{})};
   games.forEach(g=>{
@@ -3798,7 +3803,7 @@ function renderPlayerView(myName){
   // Smart default tab: active game if they have something to do, otherwise leaderboard
   const defaultTab = getSmartDefaultTab(myName);
   updateVoteTabVisibility(myName);
-  showPlayerTab(_tab||defaultTab,myName);
+  showPlayerTab(_tab||'active',myName);
 }
 
 function getSmartDefaultTab(myName){
@@ -4585,68 +4590,89 @@ async function renderActiveGameTab(myName){
 
   html+='</div>'; // close my match card
 
-  // ── ALL OTHER MATCHES ─────────────────────────────────
-  html+='<div class="card"><div class="card-title" style="color:#888;font-size:13px">All matches — '+activeGame.name+'</div>';
-
+  // ── ALL OTHER MATCHES — smart scheduler (max 4 courts) ──
   if(b){
-    const allMatches=[];
-    const fmt=activeGame.format;
-    if(fmt==='round-robin'&&b.matches) allMatches.push(...b.matches);
-    else if(fmt==='two-pool'){ if(b.poolAM)allMatches.push(...b.poolAM); if(b.poolBM)allMatches.push(...b.poolBM); if(b.crossover)allMatches.push(...b.crossover); }
-    else if(fmt==='single-elim'&&b.rounds) b.rounds.forEach(r=>allMatches.push(...r));
-    else if(fmt==='double-elim'){ if(b.winners)b.winners.forEach(r=>allMatches.push(...r)); if(b.losers)b.losers.forEach(r=>allMatches.push(...r)); }
-    else if(fmt==='pool-playoff'&&b.pools){ b.pools.forEach(p=>allMatches.push(...p.matches)); if(b.knockout)allMatches.push(...b.knockout); }
+    const allMatches=getAllMatchesFromBracket(b,activeGame.format);
+    const unplayed=allMatches.filter(m=>!m.winner&&m.t1&&m.t2);
+    const done2=allMatches.filter(m=>m.winner&&m.score1!=null&&m.score2!=null);
 
-    const pending2=allMatches.filter(m=>!m.winner&&m.t1&&m.t2);
-    const done2=allMatches.filter(m=>m.winner&&m.score1!==null);
-
-    if(pending2.length){
-      html+='<div style="font-size:10px;font-weight:700;color:#888;margin-bottom:8px">NOW PLAYING — '+pending2.length+' match'+(pending2.length!==1?'es':'')+' in progress</div>';
-      pending2.forEach((m,mi)=>{
-        const isMyMatch=myTeam&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id);
-        const ps=S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][m.id];
-        const t1sub=ps&&ps.t1?'✓':'';
-        const t2sub=ps&&ps.t2?'✓':'';
-        html+='<div style="border:2px solid '+(isMyMatch?'#7F77DD':'#e8e6df')+';border-radius:12px;padding:10px;margin-bottom:8px;background:'+(isMyMatch?'#FAFAFE':'#fff')+'">';
-        // Match number + YOU badge
-        html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
-        html+='<span style="font-size:10px;color:#aaa;font-weight:600">Match '+(mi+1)+'</span>';
-        if(isMyMatch) html+='<span style="font-size:9px;font-weight:700;color:#fff;background:#7F77DD;padding:2px 7px;border-radius:10px">YOUR MATCH</span>';
-        html+='</div>';
-        // Teams row
-        html+='<div style="display:flex;align-items:center;gap:6px">';
-        // Team 1
-        html+='<div style="flex:1;text-align:center">';
-        html+='<div style="font-size:13px;font-weight:700;margin-bottom:2px">'+tLabel(m.t1)+'</div>';
-        if(t1sub) html+='<div style="font-size:10px;color:#27500A;font-weight:700">✓ submitted</div>';
-        html+='</div>';
-        // VS
-        html+='<div style="font-size:12px;color:#aaa;font-weight:600;flex-shrink:0">VS</div>';
-        // Team 2
-        html+='<div style="flex:1;text-align:center">';
-        html+='<div style="font-size:13px;font-weight:700;margin-bottom:2px">'+tLabel(m.t2)+'</div>';
-        if(t2sub) html+='<div style="font-size:10px;color:#27500A;font-weight:700">✓ submitted</div>';
-        html+='</div>';
-        html+='</div>'; // teams row
-        html+='</div>'; // match card
+    // Smart scheduler: pick up to 4 simultaneous matches with no player conflicts
+    function scheduledMatches(pool, max){
+      const active=[];
+      const busy=new Set(); // player names currently in a match
+      function playersInMatch(m){
+        return [...(m.t1?[m.t1.p1,m.t1.p2,m.t1.p3].filter(Boolean):[]),
+                ...(m.t2?[m.t2.p1,m.t2.p2,m.t2.p3].filter(Boolean):[])];
+      }
+      // Sort: prioritise matches where my team is involved
+      const sorted=[...pool].sort((a,b)=>{
+        const aIsMe=myTeam&&(a.t1.id===myTeam.id||a.t2.id===myTeam.id)?0:1;
+        const bIsMe=myTeam&&(b.t1.id===myTeam.id||b.t2.id===myTeam.id)?0:1;
+        return aIsMe-bIsMe;
       });
+      for(const m of sorted){
+        if(active.length>=max) break;
+        const players=playersInMatch(m);
+        if(players.some(p=>busy.has(p))) continue; // conflict — skip
+        active.push(m);
+        players.forEach(p=>busy.add(p));
+      }
+      return active;
+    }
+
+    const playing=scheduledMatches(unplayed,4);
+    const playingIds=new Set(playing.map(m=>m.id));
+    const onDeck=scheduledMatches(unplayed.filter(m=>!playingIds.has(m.id)),4);
+    const waiting=unplayed.filter(m=>!playingIds.has(m.id)&&!onDeck.find(o=>o.id===m.id));
+
+    function renderMatchCard(m,mi,label,dimmed){
+      const isMyMatch=myTeam&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id);
+      const ps=S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][m.id];
+      const t1sub=ps&&ps.t1, t2sub=ps&&ps.t2;
+      let card='<div style="border:2px solid '+(isMyMatch?'#7F77DD':dimmed?'#f0ede6':'#e8e6df')+';border-radius:12px;padding:10px;margin-bottom:8px;background:'+(isMyMatch?'#FAFAFE':dimmed?'#fafafa':'#fff')+';opacity:'+(dimmed?'.6':'1')+'">';
+      card+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+      card+='<span style="font-size:10px;color:#aaa;font-weight:600">'+label+'</span>';
+      if(isMyMatch) card+='<span style="font-size:9px;font-weight:700;color:#fff;background:#7F77DD;padding:2px 7px;border-radius:10px">YOUR MATCH</span>';
+      card+='</div>';
+      card+='<div style="display:flex;align-items:center;gap:6px">';
+      card+='<div style="flex:1;text-align:center"><div style="font-size:13px;font-weight:700">'+tLabel(m.t1)+'</div>'+(t1sub?'<div style="font-size:10px;color:#27500A">✓ submitted</div>':'')+'</div>';
+      card+='<div style="font-size:12px;color:#aaa;font-weight:600;flex-shrink:0">VS</div>';
+      card+='<div style="flex:1;text-align:center"><div style="font-size:13px;font-weight:700">'+tLabel(m.t2)+'</div>'+(t2sub?'<div style="font-size:10px;color:#27500A">✓ submitted</div>':'')+'</div>';
+      card+='</div></div>';
+      return card;
+    }
+
+    html+='<div class="card">';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div class="card-title" style="font-size:13px;margin:0">All matches — '+activeGame.name+'</div><span style="font-size:9px;color:#27500A;background:#EAF3DE;padding:2px 8px;border-radius:10px;font-weight:600">● LIVE</span></div>';
+
+    if(playing.length){
+      html+='<div style="font-size:10px;font-weight:700;color:#27500A;margin-bottom:6px">▶ NOW PLAYING ('+playing.length+' court'+(playing.length!==1?'s':'')+')</div>';
+      playing.forEach((m,mi)=>{ html+=renderMatchCard(m,mi,'Court '+(mi+1),false); });
+    }
+
+    if(onDeck.length){
+      html+='<div style="font-size:10px;font-weight:700;color:#534AB7;margin:'+(playing.length?'10':'0')+'px 0 6px">⏭ ON DECK — playing next when a court opens</div>';
+      onDeck.forEach((m,mi)=>{ html+=renderMatchCard(m,mi,'Next up '+(mi+1),true); });
+    }
+
+    if(waiting.length){
+      html+='<div style="font-size:10px;color:#aaa;margin-top:8px">+'+waiting.length+' more match'+(waiting.length!==1?'es':'')+' waiting</div>';
     }
 
     if(done2.length){
-      html+='<div style="font-size:10px;font-weight:700;color:#888;margin:'+(pending2.length?'10':'0')+'px 0 6px">COMPLETED</div>';
-      done2.forEach(m=>{
+      html+='<div style="font-size:10px;font-weight:700;color:#888;margin:'+(playing.length||onDeck.length?'10':'0')+'px 0 6px">✓ COMPLETED</div>';
+      done2.slice().reverse().forEach(m=>{
         const isMyMatch=myTeam&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id);
         const wScore=m.score1>m.score2?m.score1:m.score2;
         const lScore=m.score1>m.score2?m.score2:m.score1;
-        html+='<div style="padding:7px 10px;font-size:11px;color:#444;border-bottom:1px solid #f0ede6;'+(isMyMatch?'background:#EAF3DE;border-radius:6px;margin-bottom:3px':'')+'">';
+        html+='<div style="padding:6px 8px;font-size:11px;color:#444;border-bottom:1px solid #f0ede6;'+(isMyMatch?'background:#EAF3DE;border-radius:6px;margin-bottom:2px':'')+'">';
         html+='<span style="font-weight:600;color:#27500A">✓ '+tLabel(m.winner)+'</span> '+wScore+'–'+lScore+' def. '+tLabel(m.t1.id===m.winner.id?m.t2:m.t1);
         html+='</div>';
       });
     }
 
-    if(!pending2.length&&!done2.length){
-      html+='<p class="empty">No matches yet.</p>';
-    }
+    if(!playing.length&&!done2.length) html+='<p class="empty">No matches yet.</p>';
+    html+='</div>';
   }
 
   html+='</div>';
