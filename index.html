@@ -134,7 +134,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v2.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v3.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -208,7 +208,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v2.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v3.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4649,14 +4649,24 @@ async function renderActiveGameTab(myName){
     const myPlayers=[myTeam.p1,myTeam.p2,myTeam.p3].filter(Boolean);
     const myTeamOnCourt=myPlayers.some(p=>playersOnCourt.has(p));
     oppBusy=!myTeamOnCourt&&oppPlayerNames.some(p=>playersOnCourt.has(p));
-    myMatchIsPlaying=myNextMatch&&activeMatchIds.has(myNextMatch.id)?true:false;
+    // Check by match ID AND by player name presence in active matches
+    const myActiveMatch=myNextMatch&&(activeMatchIds.has(myNextMatch.id)?myNextMatch:
+      allMatchesForGame.find(m=>activeMatchIds.has(m.id)&&!m.winner&&
+        (myPlayerNames.some(p=>m.t1&&(m.t1.p1===p||m.t1.p2===p||m.t1.p3===p))||
+         myPlayerNames.some(p=>m.t2&&(m.t2.p1===p||m.t2.p2===p||m.t2.p3===p)))));
+    myMatchIsPlaying=!!myActiveMatch;
+    // Use the actual active match for score entry (might differ from myNextMatch by ID)
+    if(myActiveMatch&&myNextMatch&&myActiveMatch.id!==myNextMatch.id){
+      // Sync: the active match IS our next match, just found it by player name
+      myNextMatch.id; // keep reference
+    }
     const cpAll=new Set(); // populated later when board computes
 
     if(myTotalMatches>0){
       html+='<div style="font-size:11px;color:#888;margin-bottom:8px">Match '+(myDoneMatches.length+1)+' of '+myTotalMatches+'</div>';
     }
     if(myMatchIsPlaying){
-      const myMatch=myNextMatch;
+      const myMatch=myActiveMatch||myNextMatch;
       const myIsT1=myMatch.t1.id===myTeam.id||myPlayerNames.some(p=>myMatch.t1.p1===p||myMatch.t1.p2===p||myMatch.t1.p3===p);
       const oppTeam=myIsT1?myMatch.t2:myMatch.t1;
       const myTeamSide=myIsT1?'t1':'t2';
@@ -4828,13 +4838,7 @@ async function renderActiveGameTab(myName){
         return active;
       }
 
-      function sortForDisplay(matches){
-        // After scheduling, re-order for display: put viewer's match first
-        if(!myTeam) return matches;
-        const mine=matches.filter(m=>m.t1.id===myTeam.id||m.t2.id===myTeam.id);
-        const others=matches.filter(m=>m.t1.id!==myTeam.id&&m.t2.id!==myTeam.id);
-        return [...mine,...others];
-      }
+      function sortForDisplay(m){ return m; } // court order is same for everyone
 
     // Active matches come from explicit Firebase state
     let playing=unplayed.filter(m=>activeMatchIds.has(m.id));
