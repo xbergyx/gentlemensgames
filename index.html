@@ -4576,10 +4576,33 @@ async function renderActiveGameTab(myName){
   const unplayedAll=b?getAllMatchesFromBracket(b,activeGame.format).filter(m=>!m.winner&&m.t1&&m.t2):[];
   const pendingAnyGame=S.pendingScores&&S.pendingScores[activeGame.id]||{};
 
-  // Active match IDs are explicitly stored in Firebase by the scheduler
-  const activeMatchIds=new Set(Object.keys((S.activeMatchIds&&S.activeMatchIds[activeGame.id])||{}));
-  // Players on court = players in any active match
+  // Active match IDs stored in Firebase — auto-populate if missing
+  const storedActiveIds=Object.keys((S.activeMatchIds&&S.activeMatchIds[activeGame.id])||{});
   const allMatchesForGame=b?getAllMatchesFromBracket(b,activeGame.format):[];
+  let activeMatchIds;
+  if(storedActiveIds.length>0){
+    activeMatchIds=new Set(storedActiveIds);
+  } else if(b){
+    // Fallback: auto-initialize scheduler for existing tournaments
+    advanceMatchScheduler(activeGame.id); // async, will update Firebase
+    // Meanwhile compute locally for this render
+    const unplayedFb=allMatchesForGame.filter(m=>!m.winner&&m.t1&&m.t2);
+    const doneFb=allMatchesForGame.filter(m=>m.winner&&m.t1&&m.t2);
+    const mpFb={};(S.players||[]).forEach(p=>{mpFb[p]=0;});
+    doneFb.forEach(m=>pipAll(m).forEach(p=>{mpFb[p]=(mpFb[p]||0)+1;}));
+    const busyFb=new Set(); const tmpActive=[];
+    const sortedFb=[...unplayedFb].sort((a,b2)=>{
+      return pipAll(a).reduce((s,p)=>s+(mpFb[p]||0),0)-pipAll(b2).reduce((s,p)=>s+(mpFb[p]||0),0);
+    });
+    for(const m of sortedFb){
+      if(tmpActive.length>=4) break;
+      const pl=pipAll(m); if(pl.some(p=>busyFb.has(p))) continue;
+      tmpActive.push(m); pl.forEach(p=>busyFb.add(p));
+    }
+    activeMatchIds=new Set(tmpActive.map(m=>m.id));
+  } else {
+    activeMatchIds=new Set();
+  }
   const activeMatches=allMatchesForGame.filter(m=>activeMatchIds.has(m.id));
   const playersOnCourt=new Set(activeMatches.flatMap(m=>pipAll(m)));
 
@@ -4796,10 +4819,6 @@ async function renderActiveGameTab(myName){
     let playing=unplayed.filter(m=>activeMatchIds.has(m.id));
     // Fall back to fair scheduler if no active matches set yet
     if(!playing.length){
-      const doneAll2=allMatches.filter(m=>m.winner&&m.t1&&m.t2);
-      const mpAll2={};(S.players||[]).forEach(p=>{mpAll2[p]=0;});
-      doneAll2.forEach(m=>pipAll(m).forEach(p=>{mpAll2[p]=(mpAll2[p]||0)+1;}));
-      const cpTmp=new Set();
       playing=scheduledMatches(unplayed,4);
     }
     playing.forEach(m=>playersInMatch(m).forEach(p=>currentlyPlaying.add(p)));
