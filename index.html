@@ -2451,7 +2451,8 @@ function renderRankingStatus(){
 // ── TEAM GENERATION ───────────────────────────────────────
 window.lockGameRankingsRandom = async (gameId)=>{
   const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
-  const players=[...(S.players||[])].sort(()=>Math.random()-0.5);
+  const players=[...(S.players||[])];
+  for(let i=players.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[players[i],players[j]]=[players[j],players[i]];}
   const pairs=makeTeamsFromSorted(players,game.teamSize||2);
   const bracket=buildBracket(game,pairs);
   const games=(S.games||[]).map(g=>g.id===gameId?{...g,status:'locked'}:g);
@@ -2497,15 +2498,21 @@ window.generateAllTeams = async (mode='ranked')=>{
   const newGames=[...games], newTeams={...(S.teams||{})}, newBs={...(S.bs||{})};
   games.forEach(g=>{
     if(g.status==='locked'||g.status==='skipped') return;
-    if(g.teamMode==='manual') return; // skip manual games — admin enters separately
-    // Use game's own mode, or override with global mode
-    const effectiveMode=mode==='random'?'random':(g.teamMode||'ranked');
-    const gameWithMode={...g,teamMode:effectiveMode};
-    // Temporarily override game mode for pairing
-    const origGames=S.games;
-    S.games=S.games.map(x=>x.id===g.id?gameWithMode:x);
-    const pairs=makePairsFromGameRankings(g.id);
-    S.games=origGames;
+    if(g.teamMode==='manual') return;
+    let pairs;
+    if(mode==='random'){
+      // Fresh independent shuffle per game — guarantees different teams each game
+      const shuffled=[...players];
+      for(let i=shuffled.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
+      pairs=makeTeamsFromSorted(shuffled,g.teamSize||2);
+    } else {
+      const effectiveMode=g.teamMode||'ranked';
+      const gameWithMode={...g,teamMode:effectiveMode};
+      const origGames=S.games;
+      S.games=S.games.map(x=>x.id===g.id?gameWithMode:x);
+      pairs=makePairsFromGameRankings(g.id);
+      S.games=origGames;
+    }
     const bracket=buildBracket(g,pairs);
     const i=newGames.findIndex(x=>x.id===g.id);
     if(i>=0) newGames[i]={...g,status:'locked'};
