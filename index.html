@@ -4515,6 +4515,9 @@ async function renderActiveGameTab(myName){
   function pipAll(m){return [...(m.t1?[m.t1.p1,m.t1.p2,m.t1.p3].filter(Boolean):[]),...(m.t2?[m.t2.p1,m.t2.p2,m.t2.p3].filter(Boolean):[])];}
   const unplayedAll=b?getAllMatchesFromBracket(b,activeGame.format).filter(m=>!m.winner&&m.t1&&m.t2):[];
   const pendingAnyGame=S.pendingScores&&S.pendingScores[activeGame.id]||{};
+  // Outer-scope variables used across blocks
+  let myNextMatch=null, oppPlayerNames=[], oppBusy=false, myMatchIsPlaying=false;
+  let allMyMatches=[];
 
   if(myTeam && b){
     const partners=[myTeam.p1,myTeam.p2,myTeam.p3].filter(p=>p&&p!==myName);
@@ -4523,24 +4526,23 @@ async function renderActiveGameTab(myName){
     html+='<div style="font-size:16px;font-weight:700">'+nameSpan(myName)+(partners.length?' & '+partners.map(p=>nameSpan(p)).join(' & '):'')+'</div>';
     html+='</div>';
 
-    const allMyMatches=getAllMatchesFromBracket(b,activeGame.format)
+    allMyMatches=getAllMatchesFromBracket(b,activeGame.format)
       .filter(m=>m&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id));
     const myDoneMatches=allMyMatches.filter(m=>m.winner);
     const myTotalMatches=allMyMatches.length;
 
-    const myNextMatch=allMyMatches.find(m=>!m.winner);
+    myNextMatch=allMyMatches.find(m=>!m.winner)||null;
     // My match is playable if it has pending scores OR opponents aren't actively playing elsewhere
     const pendingForMyMatch=myNextMatch&&S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][myNextMatch.id];
-    // pendingAny hoisted as pendingAnyGame above
     const oppTeamOfMine=myNextMatch&&(myNextMatch.t1.id===myTeam.id?myNextMatch.t2:myNextMatch.t1);
-    const oppPlayerNames=oppTeamOfMine?[oppTeamOfMine.p1,oppTeamOfMine.p2,oppTeamOfMine.p3].filter(Boolean):[];
+    oppPlayerNames=oppTeamOfMine?[oppTeamOfMine.p1,oppTeamOfMine.p2,oppTeamOfMine.p3].filter(Boolean):[];
     // Opponents busy = they have pending scores in a DIFFERENT match
-    const oppBusy=unplayedAll.some(m=>{
+    oppBusy=unplayedAll.some(m=>{
       if(!myNextMatch||m.id===myNextMatch.id) return false;
       const hasOpp=oppPlayerNames.some(p=>pipAll(m).includes(p));
       return hasOpp&&pendingAnyGame[m.id]!=null;
     });
-    const myMatchIsPlaying=myNextMatch&&(pendingForMyMatch||!oppBusy);
+    myMatchIsPlaying=myNextMatch&&(pendingForMyMatch||!oppBusy)?true:false;
     const cpAll=new Set(); // populated later when board computes
 
     if(myTotalMatches>0){
