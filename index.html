@@ -4482,6 +4482,7 @@ window.submitGameRanking = async (btnOrId, myNameOrUndef)=>{
 };
 async function renderActiveGameTab(myName){
   const e=el('pview-active');if(!e)return;
+  try {
   const fmtL={'h2h-points':'H2H points','h2h-wins':'H2H wins','score-low':'Low score','score-high':'High score','multi-round-high':'Multi-round high','multi-round-low':'Multi-round low','round-robin':'Round robin','single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools','pool-playoff':'Pool + knockout'};
 
   // Find the currently active game
@@ -4795,6 +4796,10 @@ async function renderActiveGameTab(myName){
 
   html+='</div>';
   e.innerHTML=html;
+  } catch(err){
+    console.error('renderActiveGameTab error:',err);
+    if(e) e.innerHTML='<div class="card"><div class="alert alert-warn" style="font-size:11px">Error loading this tab: '+err.message+'</div></div>';
+  }
 }
 
 function renderMyTeams(myName){
