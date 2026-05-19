@@ -4508,6 +4508,11 @@ async function renderActiveGameTab(myName){
   html+='<div class="card-title" style="color:#534AB7">▶ '+activeGame.name+'</div>';
 
   // ── MY MATCH ──────────────────────────────────────────
+  // Helpers available to both myTeam block and board block
+  function pipAll(m){return [...(m.t1?[m.t1.p1,m.t1.p2,m.t1.p3].filter(Boolean):[]),...(m.t2?[m.t2.p1,m.t2.p2,m.t2.p3].filter(Boolean):[])];}
+  const unplayedAll=b?getAllMatchesFromBracket(b,activeGame.format).filter(m=>!m.winner&&m.t1&&m.t2):[];
+  const pendingAnyGame=S.pendingScores&&S.pendingScores[activeGame.id]||{};
+
   if(myTeam && b){
     const partners=[myTeam.p1,myTeam.p2,myTeam.p3].filter(p=>p&&p!==myName);
     html+='<div style="background:#EEEDFE;border-radius:10px;padding:10px;margin-bottom:10px">';
@@ -4520,20 +4525,17 @@ async function renderActiveGameTab(myName){
     const myDoneMatches=allMyMatches.filter(m=>m.winner);
     const myTotalMatches=allMyMatches.length;
 
-    // Helper to get all players in a match
-    function pipAll(m){return [...(m.t1?[m.t1.p1,m.t1.p2,m.t1.p3].filter(Boolean):[]),...(m.t2?[m.t2.p1,m.t2.p2,m.t2.p3].filter(Boolean):[])];}
-    const unplayedAll=getAllMatchesFromBracket(b,activeGame.format).filter(m=>!m.winner&&m.t1&&m.t2);
     const myNextMatch=allMyMatches.find(m=>!m.winner);
     // My match is playable if it has pending scores OR opponents aren't actively playing elsewhere
     const pendingForMyMatch=myNextMatch&&S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][myNextMatch.id];
-    const pendingAny=S.pendingScores&&S.pendingScores[activeGame.id]||{};
+    // pendingAny hoisted as pendingAnyGame above
     const oppTeamOfMine=myNextMatch&&(myNextMatch.t1.id===myTeam.id?myNextMatch.t2:myNextMatch.t1);
     const oppPlayerNames=oppTeamOfMine?[oppTeamOfMine.p1,oppTeamOfMine.p2,oppTeamOfMine.p3].filter(Boolean):[];
     // Opponents busy = they have pending scores in a DIFFERENT match
     const oppBusy=unplayedAll.some(m=>{
       if(!myNextMatch||m.id===myNextMatch.id) return false;
       const hasOpp=oppPlayerNames.some(p=>pipAll(m).includes(p));
-      return hasOpp&&pendingAny[m.id]!=null;
+      return hasOpp&&pendingAnyGame[m.id]!=null;
     });
     const myMatchIsPlaying=myNextMatch&&(pendingForMyMatch||!oppBusy);
     const cpAll=new Set(); // populated later when board computes
@@ -4672,7 +4674,7 @@ async function renderActiveGameTab(myName){
   // ── ALL OTHER MATCHES — smart scheduler (max 4 courts) ──
   if(b){
     const allMatches=getAllMatchesFromBracket(b,activeGame.format);
-    const unplayed=allMatches.filter(m=>!m.winner&&m.t1&&m.t2);
+    const unplayed=unplayedAll; // already computed above
     const done2=allMatches.filter(m=>m.winner&&m.score1!=null&&m.score2!=null);
 
     // Smart scheduler: pick up to 4 simultaneous matches with no player conflicts
