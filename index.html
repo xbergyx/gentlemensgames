@@ -2385,6 +2385,60 @@ window.removeGame = async (id)=>{
   const gr={...(S.gameRankings||{})}; delete gr[id];
   await update(ref(db,'tournaments/'+currentTourneyId),{games,teams,scores,points,bs,gameRankings:gr});
 };
+// ── MATCH SCHEDULER ─────────────────────────────────────
+function pipForSchedule(m){
+  return [...(m.t1?[m.t1.p1,m.t1.p2,m.t1.p3].filter(Boolean):[]),...(m.t2?[m.t2.p1,m.t2.p2,m.t2.p3].filter(Boolean):[])];
+}
+
+async function advanceMatchScheduler(gameId){
+  // Called after a match completes - fills open courts from waiting matches
+  const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
+  const b=S.bs&&S.bs[gameId]; if(!b) return;
+  const allM=getAllMatchesFromBracket(b,game.format);
+  const unplayed=allM.filter(m=>!m.winner&&m.t1&&m.t2);
+  const currentActive=new Set(Object.keys((S.activeMatchIds&&S.activeMatchIds[gameId])||{}));
+
+  // Remove completed matches from active set
+  const confirmedIds=allM.filter(m=>m.winner).map(m=>m.id);
+  confirmedIds.forEach(id=>currentActive.delete(id));
+
+  // Count games played per player
+  const done=allM.filter(m=>m.winner&&m.t1&&m.t2);
+  const played={};(S.players||[]).forEach(p=>{played[p]=0;});
+  done.forEach(m=>pipForSchedule(m).forEach(p=>{played[p]=(played[p]||0)+1;}));
+
+  // Fill up to 4 active courts
+  const busy=new Set();
+  // Keep existing active matches' players busy
+  unplayed.filter(m=>currentActive.has(m.id)).forEach(m=>pipForSchedule(m).forEach(p=>busy.add(p)));
+
+  // Add new matches by priority (fewest games played)
+  const waiting=unplayed.filter(m=>!currentActive.has(m.id));
+  const sorted=[...waiting].sort((a,b2)=>{
+    const pa=pipForSchedule(a).reduce((s,p)=>s+(played[p]||0),0);
+    const pb=pipForSchedule(b2).reduce((s,p)=>s+(played[p]||0),0);
+    return pa-pb;
+  });
+  for(const m of sorted){
+    if(currentActive.size>=4) break;
+    const pl=pipForSchedule(m);
+    if(pl.some(p=>busy.has(p))) continue;
+    currentActive.add(m.id);
+    pl.forEach(p=>busy.add(p));
+  }
+
+  // Write back to Firebase
+  const activeMatchIds={...(S.activeMatchIds||{})};
+  activeMatchIds[gameId]={};
+  currentActive.forEach(id=>{ activeMatchIds[gameId][id]=true; });
+  await update(ref(db,'tournaments/'+currentTourneyId),{activeMatchIds});
+}
+
+// Called when game is activated — set initial 4 matches
+async function initMatchScheduler(gameId){
+  await advanceMatchScheduler(gameId);
+}
+
 window.activateGame = async (btnOrId)=>{
   const gameId=typeof btnOrId==='string'?btnOrId:(btnOrId?.dataset?.gid||btnOrId);
   // Deactivate any currently active game first
@@ -2393,6 +2447,7 @@ window.activateGame = async (btnOrId)=>{
     active: g.id===gameId ? true : false
   }));
   await update(ref(db,'tournaments/'+currentTourneyId),{games, activeGameId:gameId});
+  await initMatchScheduler(gameId);
 };
 window.deactivateGame = async (btnOrId)=>{
   const gameId=typeof btnOrId==='string'?btnOrId:(btnOrId?.dataset?.gid||btnOrId);
@@ -2774,7 +2829,10 @@ function buildBracket(game,teams){
 function setResult(m,s1,s2){
   if(isNaN(s1)||isNaN(s2)){alert('Enter scores for both teams.');return false;}
   if(s1===s2){alert('No draws allowed.');return false;}
-  m.score1=s1;m.score2=s2;m.winner=s1>s2?m.t1:m.t2;return true;
+  m.score1=s1;m.score2=s2;m.winner=s1>s2?m.t1:m.t2;
+  // Schedule next matches async after save
+  setTimeout(()=>advanceMatchScheduler(gameId),500);
+  return true;
 }
 function updSt(st,m){
   if(!st[m.t1.id])st[m.t1.id]={w:0,l:0,pf:0,pa:0};
@@ -3273,6 +3331,8 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
     }
   }
   await update(ref(db,'tournaments/'+currentTourneyId+'/bs'),{[gameId]:b});
+  // Auto-advance scheduler after match saved
+  advanceMatchScheduler(gameId);
 };
 
 window.finalizeGame = async (gameId)=>{
@@ -4516,36 +4576,12 @@ async function renderActiveGameTab(myName){
   const unplayedAll=b?getAllMatchesFromBracket(b,activeGame.format).filter(m=>!m.winner&&m.t1&&m.t2):[];
   const pendingAnyGame=S.pendingScores&&S.pendingScores[activeGame.id]||{};
 
-  // Pre-compute which players are on a court using the same fair scheduler as the board
-  // Count completed matches per player for priority
-  const doneForPriority=b?getAllMatchesFromBracket(b,activeGame.format).filter(m=>m.winner&&m.t1&&m.t2):[];
-  const mpForPriority={};
-  (S.players||[]).forEach(p=>{mpForPriority[p]=0;});
-  doneForPriority.forEach(m=>pipAll(m).forEach(p=>{mpForPriority[p]=(mpForPriority[p]||0)+1;}));
-  function fairSchedule(pool, max, preBusy){
-    const active=[], busy=new Set(preBusy||[]);
-    const sorted=[...pool].sort((a,b2)=>{
-      const pa=pipAll(a).reduce((s,p)=>s+(mpForPriority[p]||0),0);
-      const pb=pipAll(b2).reduce((s,p)=>s+(mpForPriority[p]||0),0);
-      return pa-pb;
-    });
-    for(const m of sorted){
-      if(active.length>=max) break;
-      const pl=pipAll(m); if(pl.some(p=>busy.has(p))) continue;
-      active.push(m); pl.forEach(p=>busy.add(p));
-    }
-    return active;
-  }
-  // Matches with pending scores are definitely in progress
-  const matchesWithPending=unplayedAll.filter(m=>pendingAnyGame[m.id]!=null);
-  const playersWithPending=new Set(matchesWithPending.flatMap(m=>pipAll(m)));
-  // Fill remaining courts with fair scheduler
-  const remainingPool=unplayedAll.filter(m=>pendingAnyGame[m.id]==null);
-  const scheduledActive=fairSchedule(remainingPool, Math.max(0,4-matchesWithPending.length), playersWithPending);
-  // Combined: everyone currently on a court
-  const playersOnCourt=new Set([...playersWithPending, ...scheduledActive.flatMap(m=>pipAll(m))]);
-  // Also store the full set of active match IDs for board sync
-  const preComputedPlayingIds=new Set([...matchesWithPending,...scheduledActive].map(m=>m.id));
+  // Active match IDs are explicitly stored in Firebase by the scheduler
+  const activeMatchIds=new Set(Object.keys((S.activeMatchIds&&S.activeMatchIds[activeGame.id])||{}));
+  // Players on court = players in any active match
+  const allMatchesForGame=b?getAllMatchesFromBracket(b,activeGame.format):[];
+  const activeMatches=allMatchesForGame.filter(m=>activeMatchIds.has(m.id));
+  const playersOnCourt=new Set(activeMatches.flatMap(m=>pipAll(m)));
 
   // Outer-scope variables used across blocks
   let myNextMatch=null, oppPlayerNames=[], oppBusy=false, myMatchIsPlaying=false;
@@ -4756,17 +4792,15 @@ async function renderActiveGameTab(myName){
         return [...mine,...others];
       }
 
-    // Use the pre-computed fair schedule so board and score-entry are in sync
-    let playing=[...matchesWithPending, ...scheduledActive];
-    // Inject myNextMatch if it qualifies but scheduler missed it
-    if(myNextMatch&&myMatchIsPlaying&&!playing.find(m=>m.id===myNextMatch.id)){
-      const myPlayers=pipAll(myNextMatch);
-      const conflict=playing.find(m=>playersInMatch(m).some(p=>myPlayers.includes(p)));
-      if(!conflict&&playing.length<4){
-        playing.push(myNextMatch);
-      } else if(!conflict){
-        playing.pop(); playing.push(myNextMatch);
-      }
+    // Active matches come from explicit Firebase state
+    let playing=unplayed.filter(m=>activeMatchIds.has(m.id));
+    // Fall back to fair scheduler if no active matches set yet
+    if(!playing.length){
+      const doneAll2=allMatches.filter(m=>m.winner&&m.t1&&m.t2);
+      const mpAll2={};(S.players||[]).forEach(p=>{mpAll2[p]=0;});
+      doneAll2.forEach(m=>pipAll(m).forEach(p=>{mpAll2[p]=(mpAll2[p]||0)+1;}));
+      const cpTmp=new Set();
+      playing=scheduledMatches(unplayed,4);
     }
     playing.forEach(m=>playersInMatch(m).forEach(p=>currentlyPlaying.add(p)));
     const playingIds=new Set(playing.map(m=>m.id));
