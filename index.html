@@ -5181,13 +5181,14 @@ function renderAdminVotes(){
       (vote.options||[]).forEach((opt,i)=>{
         const cnt=tally[i]||0;
         const pct=totalVotes>0?Math.round(cnt/totalVotes*100):0;
+        const isNoVote=opt==='No vote';
         html+='<div style="margin-bottom:6px">';
         html+='<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">';
-        html+='<span style="font-weight:600">'+opt+'</span>';
+        html+='<span style="font-weight:600;color:'+(isNoVote?'#aaa':'inherit')+'">'+opt+'</span>';
         html+='<span style="color:#888">'+cnt+' vote'+(cnt!==1?'s':'')+(totalVotes>0?' ('+pct+'%)':'')+'</span>';
         html+='</div>';
         html+='<div style="height:6px;background:#f0ede6;border-radius:3px">';
-        html+='<div style="height:6px;background:#7F77DD;border-radius:3px;width:'+pct+'%"></div>';
+        html+='<div style="height:6px;background:'+(isNoVote?'#ddd':'#7F77DD')+';border-radius:3px;width:'+pct+'%"></div>';
         html+='</div>';
         html+='</div>';
       });
@@ -5206,7 +5207,7 @@ function renderAdminVotes(){
 
       html+='<div style="display:flex;gap:4px;margin-top:8px">';
       if(isActive){
-        html+='<button class="btn btn-sm" onclick="closeVote(this)" data-vid="'+vid+'" style="border-color:#f0a0a0;color:#c0392b;width:auto">⏸ Close vote</button>';
+        html+='<button class="btn btn-sm" onclick="closeVote(this)" data-vid="'+vid+'" style="border-color:#f0a0a0;color:#c0392b;width:auto">⏸ End voting</button>';
       } else {
         html+='<button class="btn btn-sm" onclick="reopenVote(this)" data-vid="'+vid+'" style="width:auto">🔄 Reopen</button>';
       }
@@ -5362,7 +5363,28 @@ window.clearMyVote = async (btn)=>{
 
 window.closeVote = async (btn)=>{
   const vid=btn.dataset.vid;
-  await update(ref(db,'tournaments/'+currentTourneyId+'/votes/'+vid),{active:false});
+  const vote=S.votes&&S.votes[vid];
+  if(!vote) return;
+  const notVoted=(vote.participants||(S.players||[])).filter(p=>!(vote.results&&vote.results[p]!==undefined));
+  const msg=notVoted.length>0?'End voting? '+notVoted.length+' player(s) have not voted yet ('+notVoted.join(', ')+') — they will be recorded as "No vote".':'End voting and close this vote?';
+  if(!confirm(msg)) return;
+  // Record "no vote" for all participants who didn't vote
+  const participants=vote.participants||(S.players||[]);
+  const results={...(vote.results||{})};
+  const noVoteIdx=vote.options.length; // index beyond options = no vote
+  // Add a "No vote" option if not already there
+  const options=[...(vote.options||[])];
+  let noVoteAdded=false;
+  if(!options.includes('No vote')){
+    options.push('No vote');
+    noVoteAdded=true;
+  }
+  participants.forEach(p=>{
+    if(results[p]===undefined) results[p]=options.length-1; // last option = No vote
+  });
+  const updates={active:false,results,closedAt:Date.now()};
+  if(noVoteAdded) updates.options=options;
+  await update(ref(db,'tournaments/'+currentTourneyId+'/votes/'+vid),updates);
   renderAdminVotes();
 };
 
