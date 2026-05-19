@@ -4515,16 +4515,40 @@ async function renderActiveGameTab(myName){
     html+='<div style="font-size:16px;font-weight:700">'+nameSpan(myName)+(partners.length?' & '+partners.map(p=>nameSpan(p)).join(' & '):'')+'</div>';
     html+='</div>';
 
-    const myMatch=findMyActiveMatch(b,myTeam,activeGame.format);
-    // Check if I have any remaining matches at all
     const allMyMatches=getAllMatchesFromBracket(b,activeGame.format)
       .filter(m=>m&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id));
     const myDoneMatches=allMyMatches.filter(m=>m.winner);
     const myTotalMatches=allMyMatches.length;
+
+    // Compute scheduler now so we know if my match is actually playable
+    const unplayedAll=getAllMatchesFromBracket(b,activeGame.format).filter(m=>!m.winner&&m.t1&&m.t2);
+    const doneAll=getAllMatchesFromBracket(b,activeGame.format).filter(m=>m.winner&&m.score1!=null&&m.score2!=null);
+    // Count matches played per player for priority
+    const mpAll={};
+    (S.players||[]).forEach(p=>{mpAll[p]=0;});
+    doneAll.forEach(m=>{[m.t1,m.t2].forEach(t=>{if(t)[t.p1,t.p2,t.p3].filter(Boolean).forEach(p=>{mpAll[p]=(mpAll[p]||0)+1;});});});
+    const cpAll=new Set();
+    function pipAll(m){return [...(m.t1?[m.t1.p1,m.t1.p2,m.t1.p3].filter(Boolean):[]),...(m.t2?[m.t2.p1,m.t2.p2,m.t2.p3].filter(Boolean):[])];}
+    function mpriAll(m){const pl=pipAll(m);return pl.reduce((s,p)=>s+(mpAll[p]||0),0)-pl.filter(p=>!cpAll.has(p)).length*0.5;}
+    function schedAll(pool,max,busy2){
+      const act=[];const bz=new Set(busy2||[]);
+      const srt=[...pool].sort((a,b2)=>mpriAll(a)-mpriAll(b2));
+      for(const m of srt){if(act.length>=max)break;const pl=pipAll(m);if(pl.some(p=>bz.has(p)))continue;act.push(m);pl.forEach(p=>bz.add(p));}
+      return act;
+    }
+    const playingNow=schedAll(unplayedAll,4);
+    playingNow.forEach(m=>pipAll(m).forEach(p=>cpAll.add(p)));
+    const playingNowIds=new Set(playingNow.map(m=>m.id));
+
+    // Is my next match actually scheduled to play right now?
+    const myNextMatch=allMyMatches.find(m=>!m.winner);
+    const myMatchIsPlaying=myNextMatch&&playingNowIds.has(myNextMatch.id);
+
     if(myTotalMatches>0){
       html+='<div style="font-size:11px;color:#888;margin-bottom:8px">Match '+(myDoneMatches.length+1)+' of '+myTotalMatches+'</div>';
     }
-    if(myMatch){
+    if(myMatchIsPlaying){
+      const myMatch=myNextMatch;
       const oppTeam=myMatch.t1.id===myTeam.id?myMatch.t2:myMatch.t1;
       const myTeamSide=myMatch.t1.id===myTeam.id?'t1':'t2';
       const otherSide=myTeamSide==='t1'?'t2':'t1';
@@ -4592,16 +4616,24 @@ async function renderActiveGameTab(myName){
         html+='<button class="btn btn-primary" onclick="playerSubmitScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" style="font-size:14px;padding:12px">Submit score</button>';
         html+='<div id="ps-'+myMatch.id+'-status"></div>';
       }
-    const allDone2=getAllMatchesFromBracket(b,activeGame.format)
-        .filter(m=>m&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id))
-        .every(m=>m.winner);
-      if(allDone2){
+    const allMyDone=allMyMatches.every(m=>m.winner);
+      if(allMyDone){
         html+='<div class="alert alert-success" style="text-align:center">🎉 All your matches in this game are done!</div>';
+      } else if(myNextMatch){
+        const oppTeamBusy=myNextMatch.t1.id===myTeam.id?myNextMatch.t2:myNextMatch.t1;
+        const oppBusy=pipAll(myNextMatch).filter(p=>cpAll.has(p)&&![myTeam.p1,myTeam.p2,myTeam.p3].filter(Boolean).includes(p));
+        if(oppBusy.length>0){
+          html+='<div class="alert alert-info" style="font-size:12px">⏳ Your next match is against <strong>'
+            +[oppTeamBusy.p1,oppTeamBusy.p2,oppTeamBusy.p3].filter(Boolean).join(' & ')
+            +'</strong> — they are currently playing. You will be called up when they finish.</div>';
+        } else {
+          html+='<div class="alert alert-info" style="font-size:11px">Waiting for a court to open up.</div>';
+        }
       } else {
-        html+='<div class="alert alert-info" style="font-size:11px">No active match right now — waiting for other matches to complete.</div>';
+        html+='<div class="alert alert-info" style="font-size:11px">Waiting for other matches to complete.</div>';
       }
     }
-  } else if(!myTeam){
+    } else if(!myTeam){
     html+='<div class="alert alert-info" style="font-size:11px">You don\'t have a team in this game.</div>';
   }
 
