@@ -4576,21 +4576,42 @@ async function renderActiveGameTab(myName){
   const unplayedAll=b?getAllMatchesFromBracket(b,activeGame.format).filter(m=>!m.winner&&m.t1&&m.t2):[];
   const pendingAnyGame=S.pendingScores&&S.pendingScores[activeGame.id]||{};
 
-  // Active match IDs stored in Firebase — single source of truth
-  const storedActiveIds=Object.keys((S.activeMatchIds&&S.activeMatchIds[activeGame.id])||{});
+  // Compute active courts locally — deterministic, sorted by match ID so all players agree
   const allMatchesForGame=b?getAllMatchesFromBracket(b,activeGame.format):[];
+  const unplayedForSchedule=allMatchesForGame.filter(m=>!m.winner&&m.t1&&m.t2);
+  
+  // Count matches played per player for priority
+  const doneForSched=allMatchesForGame.filter(m=>m.winner&&m.t1&&m.t2);
+  const mpSched={};(S.players||[]).forEach(p=>{mpSched[p]=0;});
+  doneForSched.forEach(m=>pipAll(m).forEach(p=>{mpSched[p]=(mpSched[p]||0)+1;}));
 
-  if(!storedActiveIds.length && b){
-    // Not initialized yet — only the first player to open triggers it, others wait
-    if(!window._schedulerInitiating) {
-      window._schedulerInitiating=true;
-      advanceMatchScheduler(activeGame.id).then(()=>{ window._schedulerInitiating=false; });
-    }
-    e.innerHTML='<div class="card" style="text-align:center;padding:24px"><div style="font-size:24px;margin-bottom:8px">⏳</div><div style="font-size:13px;font-weight:600">Setting up courts...</div><div style="font-size:11px;color:#888;margin-top:4px">This takes just a second.</div></div>';
-    return;
+  // Sort unplayed by (fewest total games played, then by match ID for tiebreak consistency)
+  const sortedForSched=[...unplayedForSchedule].sort((a,b2)=>{
+    const pa=pipAll(a).reduce((s,p)=>s+(mpSched[p]||0),0);
+    const pb=pipAll(b2).reduce((s,p)=>s+(mpSched[p]||0),0);
+    if(pa!==pb) return pa-pb;
+    return a.id<b2.id?-1:1; // deterministic tiebreak
+  });
+
+  // Pick up to 4 with no player conflicts — same algorithm, same result for everyone
+  const activeMatchIds=new Set();
+  const busySched=new Set();
+  for(const m of sortedForSched){
+    if(activeMatchIds.size>=4) break;
+    const pl=pipAll(m);
+    if(pl.some(p=>busySched.has(p))) continue;
+    activeMatchIds.add(m.id);
+    pl.forEach(p=>busySched.add(p));
   }
-
-  const activeMatchIds=new Set(storedActiveIds);
+  // Keep matches with pending scores active regardless (in-progress)
+  const pendingMatchIds=Object.keys(pendingAnyGame);
+  pendingMatchIds.forEach(mid=>{
+    const m=unplayedForSchedule.find(x=>x.id===mid);
+    if(m&&!activeMatchIds.has(mid)){
+      // A pending match not in active set — add it (override)
+      activeMatchIds.add(mid);
+    }
+  });
   const activeMatches=allMatchesForGame.filter(m=>activeMatchIds.has(m.id));
   const playersOnCourt=new Set(activeMatches.flatMap(m=>pipAll(m)));
 
@@ -4807,15 +4828,30 @@ async function renderActiveGameTab(myName){
       }
 
     // Active matches come from explicit Firebase state
-    // Sort active matches by ID for stable court numbering across all players
-    let playing=unplayed.filter(m=>activeMatchIds.has(m.id)).sort((a,b2)=>a.id<b2.id?-1:1);
+    let playing=unplayed.filter(m=>activeMatchIds.has(m.id));
     // Fall back to fair scheduler if no active matches set yet
     if(!playing.length){
       playing=scheduledMatches(unplayed,4);
     }
     playing.forEach(m=>playersInMatch(m).forEach(p=>currentlyPlaying.add(p)));
     const playingIds=new Set(playing.map(m=>m.id));
-    const onDeck=scheduledMatches(unplayed.filter(m=>!playingIds.has(m.id)),4,currentlyPlaying);
+    // On deck: same deterministic sort, excluding already-playing players
+    const onDeckPool=unplayed.filter(m=>!playingIds.has(m.id));
+    const onDeckSorted=[...onDeckPool].sort((a,b2)=>{
+      const pa=pipAll(a).reduce((s,p)=>s+(mpSched[p]||0),0);
+      const pb=pipAll(b2).reduce((s,p)=>s+(mpSched[p]||0),0);
+      if(pa!==pb) return pa-pb;
+      return a.id<b2.id?-1:1;
+    });
+    const onDeckBusy=new Set(currentlyPlaying);
+    const onDeck=[];
+    for(const m of onDeckSorted){
+      if(onDeck.length>=4) break;
+      const pl=pipAll(m);
+      if(pl.some(p=>onDeckBusy.has(p))) continue;
+      onDeck.push(m);
+      pl.forEach(p=>onDeckBusy.add(p));
+    }
     const waiting=unplayed.filter(m=>!playingIds.has(m.id)&&!onDeck.find(o=>o.id===m.id));
 
     function renderMatchCard(m,mi,label,dimmed){
