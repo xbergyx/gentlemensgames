@@ -3854,6 +3854,7 @@ function renderPlayerGames(myName){
 
         // Tiebreak explanation
         const tbMode=g.tbMode||'restart';
+        function placeStr(i){ return ['1st','2nd','3rd','4th','5th','6th','7th','8th'][i]||(i+1)+'th'; }
         const matches=b.matches||[];
         const allSt=b.standings;
         const explanations=[];
@@ -3923,7 +3924,6 @@ function renderPlayerGames(myName){
 
         } else {
           // Restart mode: trace pick-one-at-a-time cascade, explain each pick
-          function placeStr(i){ return ['1st','2nd','3rd','4th','5th','6th','7th','8th'][i]||(i+1)+'th'; }
           function explainGroup(group){
             if(group.length<2) return;
             const count=group.length;
