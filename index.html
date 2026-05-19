@@ -2090,6 +2090,11 @@ function renderAdminGames(){
         <option value="2">2 players per team</option>
         <option value="3">3 players per team</option>
       </select>
+      <div class="sec-label">Tiebreaker method</div>
+      <select id="game-tbmode">
+        <option value="restart">Restart (H2H → point diff, reset after each pick)</option>
+        <option value="stayon">Stay on step (rank all tied teams by one step, no restart)</option>
+      </select>
       <button class="btn btn-primary" onclick="addGame()">+ Add game</button>
     </div>
     <div class="card">
@@ -2241,7 +2246,8 @@ window.addGame = async ()=>{
   const rounds=(format==='multi-round-high'||format==='multi-round-low')?parseInt(el('game-rounds').value)||2:1;
   if(!name){ alert('Enter a game name.'); return; }
   const teamSize=parseInt(el('game-teamsize')?.value||'2');
-  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize};
+  const tbMode=el('game-tbmode')?.value||'restart';
+  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize,tbMode};
   const games=[...(S.games||[]),g];
   await update(ref(db,'tournaments/'+currentTourneyId),{games});
   el('game-name-input').value='';
@@ -2618,7 +2624,48 @@ function updSt(st,m){
   st[m.t2.id].pf+=m.score2;st[m.t2.id].pa+=m.score1;
   if(m.score1>m.score2){st[m.t1.id].w++;st[m.t2.id].l++;}else{st[m.t2.id].w++;st[m.t1.id].l++;}
 }
-function sortBySt(teams,st,matches){
+function stayOnSort(teams,st,matches){
+  // Sort entire group by each criterion in order; no restarting after a winner is found
+  function calcSubSt(subset,matchList){
+    const ids=new Set(subset.map(t=>t.id));
+    const sub={};
+    subset.forEach(t=>{sub[t.id]={w:0,l:0,pf:0,pa:0};});
+    (matchList||[]).forEach(m=>{
+      if(m.score1===null||m.score2===null) return;
+      if(!ids.has(m.t1.id)||!ids.has(m.t2.id)) return;
+      sub[m.t1.id].pf+=m.score1; sub[m.t1.id].pa+=m.score2;
+      sub[m.t2.id].pf+=m.score2; sub[m.t2.id].pa+=m.score1;
+      if(m.score1>m.score2){sub[m.t1.id].w++;sub[m.t2.id].l++;}
+      else{sub[m.t2.id].w++;sub[m.t1.id].l++;}
+    });
+    return sub;
+  }
+  return teams.slice().sort((a,b)=>{
+    // 1. Overall wins
+    const wa=(st[a.id]||{w:0}).w, wb=(st[b.id]||{w:0}).w;
+    if(wb!==wa) return wb-wa;
+    // 2. H2H wins among all tied teams (just these two)
+    const h2h=calcSubSt([...teams],matches);
+    const ha=h2h[a.id]||{w:0,pf:0,pa:0}, hb=h2h[b.id]||{w:0,pf:0,pa:0};
+    if(hb.w!==ha.w) return hb.w-ha.w;
+    // 3. H2H point diff
+    const da=ha.pf-ha.pa, db=hb.pf-hb.pa;
+    if(db!==da) return db-da;
+    // 4. Overall point diff
+    const oa=st[a.id]||{pf:0,pa:0}, ob=st[b.id]||{pf:0,pa:0};
+    const ovA=oa.pf-oa.pa, ovB=ob.pf-ob.pa;
+    if(ovB!==ovA) return ovB-ovA;
+    // 5. Overall points scored
+    return ob.pf-oa.pf;
+  });
+}
+
+function sortBySt(teams,st,matches,tbMode){
+  // ── Stay-on-step mode: rank all by one criterion, no restart ──
+  if(tbMode==='stayon'){
+    return stayOnSort(teams,st,matches);
+  }
+
   // Build sub-standings for any subset of teams using only matches between them
   function calcSubSt(subset, matchList){
     const ids=new Set(subset.map(t=>t.id));
@@ -2688,7 +2735,7 @@ function sortBySt(teams,st,matches){
 }
 function stHTML(teams,st){
   let h=`<div class="st-row" style="font-weight:700"><span class="st-name">Team</span><span class="st-col">W</span><span class="st-col">L</span><span class="st-col">PF</span><span class="st-col">PA</span><span class="st-col hi">+/-</span></div>`;
-  sortBySt(teams,st,b&&b.matches).forEach(t=>{
+  sortBySt(teams,st,b&&b.matches,game&&game.tbMode).forEach(t=>{
     const s=st[t.id]||{w:0,l:0,pf:0,pa:0},diff=s.pf-s.pa;
     h+=`<div class="st-row"><span class="st-name">${teamLabel(t)}</span><span class="st-col">${s.w}</span><span class="st-col">${s.l}</span><span class="st-col">${s.pf}</span><span class="st-col">${s.pa}</span><span class="st-col hi">${diff>0?'+':''}${diff}</span></div>`;
   });
@@ -3031,7 +3078,7 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
   if(type==='pool'){
     const pd=b.poolAM.every(x=>x.winner)&&b.poolBM.every(x=>x.winner);
     if(pd&&!b.crossoverBuilt){
-      const rA=sortBySt(b.poolA,b.poolASt,b.poolAM),rB=sortBySt(b.poolB,b.poolBSt,b.poolBM);
+      const rA=sortBySt(b.poolA,b.poolASt,b.poolAM,game&&game.tbMode),rB=sortBySt(b.poolB,b.poolBSt,b.poolBM,game&&game.tbMode);
       b.crossover=[];const len=Math.min(rA.length,rB.length);
       for(let i=0;i<len;i++) b.crossover.push({id:uid(),t1:rA[i],t2:rB[i],winner:null,score1:null,score2:null,label:`🏆 ${ordinal(i*2+1)}/${ordinal(i*2+2)} — Pool A ${ordinal(i+1)} vs Pool B ${ordinal(i+1)}`,winPlace:i*2+1,losePlace:i*2+2});
       b.crossoverBuilt=true;
@@ -3040,7 +3087,7 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
   if(type==='pppool'){
     const pd=b.pools.every(p=>p.matches.every(x=>x.winner));
     if(pd&&!b.knockoutBuilt){
-      const ranked=b.pools.map(p=>sortBySt(p.teams,p.standings,p.matches));
+      const ranked=b.pools.map(p=>sortBySt(p.teams,p.standings,p.matches,game&&game.tbMode));
       b.knockout=[];const maxR=ranked[0].length;
       for(let r=0;r<maxR;r++){const mt=ranked.filter(p=>p[r]).map(p=>p[r]);for(let i=0;i+1<mt.length;i+=2)b.knockout.push({id:uid(),t1:mt[i],t2:mt[i+1],winner:null,score1:null,score2:null,label:ordinal(r+1)+'-place playoff'});}
       b.knockoutBuilt=true;
@@ -3051,7 +3098,7 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
 
 window.finalizeGame = async (gameId)=>{
   const game=(S.games||[]).find(g=>g.id===gameId),teams=(S.teams&&S.teams[gameId])||[],b=S.bs&&S.bs[gameId],fmt=game.format,pl={},n=teams.length;
-  if(fmt==='round-robin')sortBySt(teams,b.standings,b.matches).forEach((t,i)=>{pl[t.id]=i+1;});
+  if(fmt==='round-robin')sortBySt(teams,b.standings,b.matches,game&&game.tbMode).forEach((t,i)=>{pl[t.id]=i+1;});
   else if(fmt==='single-elim'){b.rounds[b.rounds.length-1].forEach(m=>{if(m.winner){pl[m.winner.id]=1;const l=m.winner.id===m.t1.id?m.t2:m.t1;if(l)pl[l.id]=2;}});if(b.rounds.length>1)b.rounds[b.rounds.length-2].forEach((m,i)=>{if(m.winner){const l=m.winner.id===m.t1.id?m.t2:m.t1;if(l&&!pl[l.id])pl[l.id]=3+i;}});}
   else if(fmt==='double-elim'){const gf=b.grandFinal;if(gf&&gf.winner){pl[gf.winner.id]=1;const ru=gf.winner.id===gf.t1.id?gf.t2:gf.t1;if(ru)pl[ru.id]=2;}}
   else if(fmt==='two-pool')(b.crossover||[]).forEach((m,i)=>{if(m.winner){pl[m.winner.id]=m.winPlace||(i*2+1);const l=m.winner.id===m.t1.id?m.t2:m.t1;if(l)pl[l.id]=m.losePlace||(i*2+2);}});
@@ -3210,7 +3257,17 @@ function renderLeaderboard(){
   html+=`<div class="card"><div class="two-col"><div class="stat-card"><div class="stat-val" id="stat-games">0</div><div class="stat-label">Games done</div></div><div class="stat-card"><div class="stat-val" id="stat-players">0</div><div class="stat-label">Players</div></div></div></div>`;
   html+=`<div class="card"><div class="card-title">📊 Points per game</div><div id="game-pts-breakdown"></div></div>`;
   html+=`<div class="card" id="tiebreaker-card"><div class="card-title">🏓 Overall tiebreaker</div><div id="tiebreaker-panel"></div></div>`;
-  html+=`<div class="card"><div class="card-title">🏆 Declare champion</div><div class="alert alert-warn" style="font-size:11px">Do at end of day. Saves to history and awards all badges.</div><button class="btn btn-primary" onclick="declareTournamentWinner()">🏆 Finalize &amp; save to history</button><div id="declare-status"></div></div>`;
+  html+=`<div class="card"><div class="card-title">🏆 Declare champion</div><div class="alert alert-warn" style="font-size:11px">Do at end of day. Saves to history and awards all badges.</div>
+      <div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">Overall tiebreaker game</div>
+      <div style="font-size:10px;color:#aaa;margin-bottom:6px">If there is an overall points tie, set the tiebreaker game here so players know what to play. Admin enters the score.</div>
+      <input type="text" id="tb-game-name" placeholder="Game name (e.g. 3 Cup Beer Pong)" style="margin-bottom:4px">
+      <input type="text" id="tb-game-desc" placeholder="Description (e.g. First to 3 cups wins)" style="margin-bottom:4px">
+      <div id="tb-teams-wrap"></div>
+      <button class="btn btn-sm" onclick="addTiebreakerTeam()" style="margin-bottom:6px">+ Add team</button>
+      <button class="btn btn-primary" onclick="saveTiebreakerGame()" style="margin-bottom:6px">📢 Announce tiebreaker</button>
+      <button class="btn btn-sm" onclick="clearTiebreakerGame()" style="color:#c0392b;border-color:#f0a0a0">✕ Clear tiebreaker</button>
+      <div style="margin-top:10px;border-top:1px solid #f0ede6;padding-top:10px"></div>
+      <button class="btn btn-primary" onclick="declareTournamentWinner()">🏆 Finalize &amp; save to history</button><div id="declare-status"></div></div>`;
   html+=`<div class="card"><div class="card-title">👥 Tournament admins</div><div class="alert alert-info" style="font-size:11px;margin-bottom:8px">Add others who can approve scores and manage this tournament.</div><button class="btn" onclick="manageTourneyAdmins()">👥 Manage tournament admins</button></div>`;
   e.innerHTML=html;
   renderGPB(); updateStats(); renderTiebreakerPanel();
@@ -3294,6 +3351,44 @@ window.toggleTourneyAdmin = async (uid2,add)=>{
   else delete tourneyAdmins[uid2];
   await update(ref(db,'tournaments/'+currentTourneyId),{tourneyAdmins});
   manageTourneyAdmins();
+};
+
+// ── TIEBREAKER GAME ──────────────────────────────────────
+let _tbTeams=[];
+window.addTiebreakerTeam = ()=>{
+  _tbTeams.push({id:uid(),players:[]});
+  renderTbTeams();
+};
+function renderTbTeams(){
+  const wrap=el('tb-teams-wrap'); if(!wrap) return;
+  const players=S.players||[];
+  if(!_tbTeams.length){ wrap.innerHTML=''; return; }
+  wrap.innerHTML=_tbTeams.map((t,ti)=>
+    '<div style="display:flex;gap:4px;margin-bottom:4px;align-items:center">'
+    +'<span style="font-size:11px;color:#888;width:50px">Team '+(ti+1)+'</span>'
+    +'<select onchange="updateTbTeam('+ti+',this.value)" style="flex:1;margin:0;font-size:12px">'
+    +'<option value="">— select player —</option>'
+    +players.map(p=>'<option value="'+esc(p)+'"'+(t.players[0]===p?' selected':'')+'>'+p+'</option>').join('')
+    +'</select>'
+    +'<button onclick="removeTbTeam('+ti+')" style="font-size:10px;color:#c0392b;background:none;border:none;cursor:pointer">✕</button>'
+    +'</div>'
+  ).join('');
+}
+window.updateTbTeam=(i,val)=>{ _tbTeams[i].players=[val]; };
+window.removeTbTeam=(i)=>{ _tbTeams.splice(i,1); renderTbTeams(); };
+window.saveTiebreakerGame = async ()=>{
+  const name=el('tb-game-name')?.value.trim();
+  const desc=el('tb-game-desc')?.value.trim();
+  if(!name){alert('Enter a game name.');return;}
+  const tbGame={name,description:desc||'',teams:_tbTeams.filter(t=>t.players[0]),announcedAt:Date.now()};
+  await update(ref(db,'tournaments/'+currentTourneyId),{tiebreakerGame:tbGame});
+  alert('✓ Tiebreaker announced to players!');
+};
+window.clearTiebreakerGame = async ()=>{
+  if(!confirm('Clear the tiebreaker game?')) return;
+  await update(ref(db,'tournaments/'+currentTourneyId),{tiebreakerGame:null});
+  _tbTeams=[];
+  renderTbTeams();
 };
 
 window.declareTournamentWinner=async()=>{
@@ -3560,8 +3655,7 @@ function renderPlayerView(myName){
 function getSmartDefaultTab(myName){
   if(!S) return 'lb';
   // Find active game
-  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id)
-    ||(S.games||[]).find(g=>g.status==='locked'||g.status==='scoring');
+  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
   if(!activeGame) return 'lb';
 
   const isScoreGame=['score-low','score-high','multi-round-high','multi-round-low'].includes(activeGame.format);
@@ -3619,11 +3713,34 @@ function showPlayerTab(tab,myName){
 }
 function renderPlayerGames(myName){
   const e=el('pview-games'); if(!e) return;
-  const games=(S.games||[]).filter(g=>g.status!=='pending');
-  if(!games.length){
-    e.innerHTML='<div class="card"><p class="empty">No games in progress yet.</p></div>';
+  const allGames=S.games||[];
+  const activeGames=allGames.filter(g=>g.status!=='pending');
+  if(!allGames.length){
+    e.innerHTML='<div class="card"><p class="empty">No games added yet.</p></div>';
     return;
   }
+  // Show pending games as info cards if no results yet
+  if(!activeGames.length){
+    const fmtFull={'h2h-points':'Head-to-head points (e.g. cornhole)','h2h-wins':'Head-to-head wins (e.g. kan jam)','score-low':'Lowest score wins (e.g. golf)','score-high':'Highest score wins (e.g. bowling)','multi-round-high':'Multi-round high score','multi-round-low':'Multi-round low score','round-robin':'Round robin','single-elim':'Single elimination bracket','double-elim':'Double elimination bracket','two-pool':'2 pools → crossover finals','pool-playoff':'Pool stage + knockout'};
+    const tbFull={'auto':'Automatic (point diff → H2H)','host-score':'Host enters tiebreaker score','host-pick':'Host manually picks winner'};
+    const tbModeFull={'restart':'H2H first, restart after each pick','stayon':'Stay on step (rank all by one criterion)'};
+    let html='';
+    allGames.forEach(g=>{
+      html+='<div class="card">'
+        +'<div class="card-title">'+g.name+'</div>'
+        +'<div style="font-size:12px;color:#666;margin-bottom:6px">Teams not set yet — here is what is planned:</div>'
+        +'<div style="display:flex;flex-direction:column;gap:4px">'
+        +'<div style="font-size:12px"><span style="color:#888;width:100px;display:inline-block">Format</span><strong>'+(fmtFull[g.format]||g.format)+'</strong></div>'
+        +'<div style="font-size:12px"><span style="color:#888;width:100px;display:inline-block">Team size</span><strong>'+(g.teamSize||2)+' players</strong></div>'
+        +(g.rounds>1?'<div style="font-size:12px"><span style="color:#888;width:100px;display:inline-block">Rounds</span><strong>'+g.rounds+'</strong></div>':'')
+        +'<div style="font-size:12px"><span style="color:#888;width:100px;display:inline-block">Tiebreaker</span><strong>'+(tbFull[g.tiebreak]||g.tiebreak)+'</strong></div>'
+        +'<div style="font-size:12px"><span style="color:#888;width:100px;display:inline-block">TB method</span><strong>'+(tbModeFull[g.tbMode||'restart'])+'</strong></div>'
+        +'</div></div>';
+    });
+    e.innerHTML=html;
+    return;
+  }
+  const games=activeGames;
 
   let html='';
   games.forEach(g=>{
@@ -3718,7 +3835,7 @@ function renderPlayerGames(myName){
 
       // Final standings with tiebreak explanation
       if(isDone && b.standings){
-        const sorted2=sortBySt(teams,b.standings,b.matches);
+        const sorted2=sortBySt(teams,b.standings,b.matches,g.tbMode);
         html+='<div style="font-size:11px;font-weight:700;color:#888;margin:10px 0 6px">FINAL STANDINGS</div>';
         sorted2.forEach((t,i)=>{
           const s=b.standings[t.id]||{w:0,l:0,pf:0,pa:0};
@@ -4016,8 +4133,7 @@ async function renderActiveGameTab(myName){
   const fmtL={'h2h-points':'H2H points','h2h-wins':'H2H wins','score-low':'Low score','score-high':'High score','multi-round-high':'Multi-round high','multi-round-low':'Multi-round low','round-robin':'Round robin','single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools','pool-playoff':'Pool + knockout'};
 
   // Find the currently active game
-  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id)
-    || (S.games||[]).find(g=>g.status==='locked'||g.status==='scoring');
+  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
 
   if(!activeGame){
     // Check if all games are done
