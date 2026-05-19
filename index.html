@@ -3066,11 +3066,16 @@ window.lockGameScores = async (gameId)=>{
   await update(ref(db,'tournaments/'+currentTourneyId),{games});
 };
 window.unlockGameScores = async (gameId)=>{
-  const games=(S.games||[]).map(g=>g.id===gameId?{...g,scoresLocked:false,_fin:undefined}:g);
-  // Also clear finalized scores so admin can re-enter
-  const updates={games};
-  // Don't clear scores automatically — just unlock
+  if(!confirm('Unlock scores for this game? The finalized scores will be cleared so you can re-enter them.')) return;
+  const games=(S.games||[]).map(g=>g.id===gameId?{...g,scoresLocked:false,status:'locked'}:g);
+  // Clear the finalized scores so admin can re-enter
+  const updates={
+    games,
+    ['scores/'+gameId]:null,
+    ['points/'+gameId]:null,
+  };
   await update(ref(db,'tournaments/'+currentTourneyId),updates);
+  renderMatchFeed();
 };
 
 window.adminApproveScoreSubmission = async (btn)=>{
@@ -3750,78 +3755,90 @@ function renderPlayerGames(myName){
           return sub;
         }
 
-        function explainGroup(group, winRecord){
+        function placeStr(i){ return ['1st','2nd','3rd','4th','5th','6th','7th','8th'][i]||(i+1)+'th'; }
+        function teamLabel2(x){ return teamLabel(x.t); }
+
+        function explainGroup(group){
           if(group.length<2) return;
-          const names=group.map(x=>teamLabel(x.t));
+          const count=group.length;
+          const tieWord=count===2?'2-way tie':count===3?'3-way tie':count+'-way tie';
+          const placeRange=group.map(x=>placeStr(x.i));
+          const placeLabel=placeRange[0]===placeRange[placeRange.length-1]?placeRange[0]:placeRange[0]+' to '+placeRange[placeRange.length-1];
+          const names=group.map(teamLabel2);
+          const s0=allSt[group[0].t.id]||{w:0,l:0};
+          const record=s0.w+'W–'+s0.l+'L';
           const h2h=calcH2HSt(group);
 
-          // Step 1: H2H wins among group
+          // Step 1: H2H wins
           const h2hWins=group.map(x=>h2h[x.t.id].w);
-          const maxH2H=Math.max(...h2hWins);
-          const minH2H=Math.min(...h2hWins);
-          if(maxH2H!==minH2H){
-            // H2H resolved at least part of it — explain each sub-result
+          if(Math.max(...h2hWins)!==Math.min(...h2hWins)){
+            // Find winner(s) and loser(s)
+            const sorted=group.slice().sort((a,b)=>h2h[b.t.id].w-h2h[a.t.id].w);
+            const topW=h2h[sorted[0].t.id].w;
+            const winners=sorted.filter(x=>h2h[x.t.id].w===topW);
+            const losers=sorted.filter(x=>h2h[x.t.id].w!==topW);
             explanations.push(
-              names.join(', ')+' were all tied '+(winRecord||'')+
-              ' → broken by head-to-head record among tied teams'
+              tieWord+' for '+placeLabel+' (all '+record+'): '+names.join(', ')+
+              ' — broken by head-to-head. '+
+              winners.map(teamLabel2).join(' & ')+' went '+topW+'-'+(group.length-1-topW)+' in H2H'+
+              (winners.length===1?' → '+placeStr(winners[0].i):'')+'.'
             );
-            // Group by h2h wins and recurse on remaining ties
             const byH2H={};
-            group.forEach((x,i)=>{ const w=h2hWins[i]; if(!byH2H[w])byH2H[w]=[]; byH2H[w].push(x); });
-            Object.entries(byH2H).forEach(([w,sub])=>{ if(sub.length>1) explainGroup(sub,'(still tied after H2H)'); });
+            group.forEach(x=>{ const w=h2h[x.t.id].w; if(!byH2H[w])byH2H[w]=[]; byH2H[w].push(x); });
+            Object.values(byH2H).forEach(sub=>{ if(sub.length>1) explainGroup(sub); });
             return;
           }
 
           // Step 2: H2H point diff
           const diffs=group.map(x=>h2h[x.t.id].pf-h2h[x.t.id].pa);
-          const maxDiff=Math.max(...diffs), minDiff=Math.min(...diffs);
-          if(maxDiff!==minDiff){
-            const diffStrs=group.map((x,i)=>teamLabel(x.t)+' ('+(diffs[i]>=0?'+':'')+diffs[i]+')');
+          if(Math.max(...diffs)!==Math.min(...diffs)){
+            const sorted=group.slice().sort((a,b)=>(h2h[b.t.id].pf-h2h[b.t.id].pa)-(h2h[a.t.id].pf-h2h[a.t.id].pa));
+            const winner=sorted[0];
+            const diffStrs=group.map((x,i)=>teamLabel2(x)+' ('+(diffs[i]>=0?'+':'')+diffs[i]+')').join(', ');
             explanations.push(
-              names.join(', ')+' were all tied '+(winRecord||'')+
-              ' → broken by head-to-head point differential: '+diffStrs.join(' vs ')
+              tieWord+' for '+placeLabel+' (all '+record+', H2H wins also tied): '+names.join(', ')+
+              ' — broken by point differential: '+diffStrs+
+              '. '+teamLabel2(winner)+' takes '+placeStr(winner.i)+'.'
             );
-            // Recurse on still-tied sub-groups
             const byDiff={};
             group.forEach((x,i)=>{ const d=diffs[i]; if(!byDiff[d])byDiff[d]=[]; byDiff[d].push(x); });
-            Object.entries(byDiff).forEach(([d,sub])=>{ if(sub.length>1) explainGroup(sub,'(still tied after H2H point diff)'); });
+            Object.values(byDiff).forEach(sub=>{ if(sub.length>1) explainGroup(sub); });
             return;
           }
 
           // Step 3: H2H points scored
           const pfs=group.map(x=>h2h[x.t.id].pf);
-          const maxPF=Math.max(...pfs), minPF=Math.min(...pfs);
-          if(maxPF!==minPF){
-            const pfStrs=group.map((x,i)=>teamLabel(x.t)+' ('+pfs[i]+' pts)');
+          if(Math.max(...pfs)!==Math.min(...pfs)){
+            const sorted=group.slice().sort((a,b)=>h2h[b.t.id].pf-h2h[a.t.id].pf);
+            const winner=sorted[0];
+            const pfStrs=group.map((x,i)=>teamLabel2(x)+' ('+pfs[i]+'pts)').join(', ');
             explanations.push(
-              names.join(', ')+' were all tied '+(winRecord||'')+
-              ' → broken by head-to-head points scored: '+pfStrs.join(' vs ')
+              tieWord+' for '+placeLabel+' — broken by H2H points scored: '+pfStrs+
+              '. '+teamLabel2(winner)+' takes '+placeStr(winner.i)+'.'
             );
             return;
           }
 
           // Step 4: overall point diff
           const ovDiffs=group.map(x=>{const s=(allSt[x.t.id]||{pf:0,pa:0});return s.pf-s.pa;});
-          const maxOvDiff=Math.max(...ovDiffs), minOvDiff=Math.min(...ovDiffs);
-          if(maxOvDiff!==minOvDiff){
-            const ovStrs=group.map((x,i)=>teamLabel(x.t)+' ('+(ovDiffs[i]>=0?'+':'')+ovDiffs[i]+')');
+          if(Math.max(...ovDiffs)!==Math.min(...ovDiffs)){
+            const sorted=group.slice().sort((a,b)=>ovDiffs[group.indexOf(b)]-ovDiffs[group.indexOf(a)]);
+            const winner=sorted[0];
+            const ovStrs=group.map((x,i)=>teamLabel2(x)+' ('+(ovDiffs[i]>=0?'+':'')+ovDiffs[i]+')').join(', ');
             explanations.push(
-              names.join(', ')+' were all tied '+(winRecord||'')+
-              ' → broken by overall point differential: '+ovStrs.join(' vs ')
+              tieWord+' for '+placeLabel+' — broken by overall point differential: '+ovStrs+
+              '. '+teamLabel2(winner)+' takes '+placeStr(winner.i)+'.'
             );
-            const byOvDiff={};
-            group.forEach((x,i)=>{ const d=ovDiffs[i]; if(!byOvDiff[d])byOvDiff[d]=[]; byOvDiff[d].push(x); });
-            Object.entries(byOvDiff).forEach(([d,sub])=>{ if(sub.length>1) explainGroup(sub,'(still tied after overall point diff)'); });
+            const byOv={};
+            group.forEach((x,i)=>{ const d=ovDiffs[i]; if(!byOv[d])byOv[d]=[]; byOv[d].push(x); });
+            Object.values(byOv).forEach(sub=>{ if(sub.length>1) explainGroup(sub); });
             return;
           }
 
           // Step 5: overall points scored
           const ovPFs=group.map(x=>(allSt[x.t.id]||{pf:0}).pf);
-          const ovStrs=group.map((x,i)=>teamLabel(x.t)+' ('+ovPFs[i]+' total pts)');
-          explanations.push(
-            names.join(', ')+' were all tied '+(winRecord||'')+
-            ' → broken by overall points scored: '+ovStrs.join(' vs ')
-          );
+          const ovStrs=group.map((x,i)=>teamLabel2(x)+' ('+ovPFs[i]+' pts)').join(', ');
+          explanations.push(tieWord+' for '+placeLabel+' — broken by total points scored: '+ovStrs+'.');
         }
 
         // Find tied groups by W-L and explain each
@@ -3988,7 +4005,12 @@ async function renderActiveGameTab(myName){
     || (S.games||[]).find(g=>g.status==='locked'||g.status==='scoring');
 
   if(!activeGame){
-    e.innerHTML='<div class="card" style="text-align:center;padding:20px"><div style="font-size:36px;margin-bottom:8px">⏳</div><div style="font-size:14px;font-weight:600">No active game yet</div><div style="font-size:12px;color:#888;margin-top:4px">The host will start a game soon.</div></div>';
+    // Check if all games are done
+    const allGames=S.games||[];
+    const allDone=allGames.length>0&&allGames.every(g=>g.status==='done'||(S.scores&&S.scores[g.id]&&S.scores[g.id]._fin));
+    e.innerHTML=allDone
+      ? '<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">🎉</div><div style="font-size:15px;font-weight:700">All games complete!</div><div style="font-size:12px;color:#888;margin-top:4px">Check the Standings tab for final results.</div></div>'
+      : '<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">⏳</div><div style="font-size:15px;font-weight:700">No active game right now</div><div style="font-size:12px;color:#888;margin-top:6px">The host will kick off the next game soon.<br>Check the Standings tab while you wait.</div></div>';
     return;
   }
 
