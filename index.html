@@ -134,7 +134,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v2.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -208,6 +208,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v2.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4626,15 +4627,22 @@ async function renderActiveGameTab(myName){
     html+='<div style="font-size:16px;font-weight:700">'+nameSpan(myName)+(partners.length?' & '+partners.map(p=>nameSpan(p)).join(' & '):'')+'</div>';
     html+='</div>';
 
+    // Match by player name AND team ID for robustness
+    const myPlayerNames=[myTeam.p1,myTeam.p2,myTeam.p3].filter(Boolean);
     allMyMatches=getAllMatchesFromBracket(b,activeGame.format)
-      .filter(m=>m&&m.t1&&m.t2&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id));
+      .filter(m=>m&&m.t1&&m.t2&&(
+        m.t1.id===myTeam.id||m.t2.id===myTeam.id||
+        myPlayerNames.some(p=>m.t1.p1===p||m.t1.p2===p||m.t1.p3===p)||
+        myPlayerNames.some(p=>m.t2.p1===p||m.t2.p2===p||m.t2.p3===p)
+      ));
     const myDoneMatches=allMyMatches.filter(m=>m.winner);
     const myTotalMatches=allMyMatches.length;
 
     myNextMatch=allMyMatches.find(m=>!m.winner)||null;
     // My match is playable if it has pending scores OR opponents aren't actively playing elsewhere
     const pendingForMyMatch=myNextMatch&&S.pendingScores&&S.pendingScores[activeGame.id]&&S.pendingScores[activeGame.id][myNextMatch.id];
-    const oppTeamOfMine=myNextMatch&&(myNextMatch.t1.id===myTeam.id?myNextMatch.t2:myNextMatch.t1);
+    const myIsT1ForOpp=myNextMatch&&(myNextMatch.t1.id===myTeam.id||myPlayerNames.some(p=>myNextMatch.t1.p1===p||myNextMatch.t1.p2===p||myNextMatch.t1.p3===p));
+    const oppTeamOfMine=myNextMatch&&(myIsT1ForOpp?myNextMatch.t2:myNextMatch.t1);
     oppPlayerNames=oppTeamOfMine?[oppTeamOfMine.p1,oppTeamOfMine.p2,oppTeamOfMine.p3].filter(Boolean):[];
     // Opponents busy = any of their players are currently on a court
     // Opponents are "busy in another match" only if they're on court WITHOUT me
@@ -4649,8 +4657,9 @@ async function renderActiveGameTab(myName){
     }
     if(myMatchIsPlaying){
       const myMatch=myNextMatch;
-      const oppTeam=myMatch.t1.id===myTeam.id?myMatch.t2:myMatch.t1;
-      const myTeamSide=myMatch.t1.id===myTeam.id?'t1':'t2';
+      const myIsT1=myMatch.t1.id===myTeam.id||myPlayerNames.some(p=>myMatch.t1.p1===p||myMatch.t1.p2===p||myMatch.t1.p3===p);
+      const oppTeam=myIsT1?myMatch.t2:myMatch.t1;
+      const myTeamSide=myIsT1?'t1':'t2';
       const otherSide=myTeamSide==='t1'?'t2':'t1';
 
       // Always read fresh pending scores from Firebase
