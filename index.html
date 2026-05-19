@@ -5149,10 +5149,11 @@ function renderAdminVotes(){
     <textarea id="vote-options" rows="4" placeholder="Yes&#10;No&#10;Yes, but opponents pick the substitute&#10;Yes, anyone can use it" style="font-size:12px;padding:8px;border-radius:8px;border:1px solid #e0ddd6;width:100%;resize:vertical"></textarea>
     <div class="sec-label">Who can vote</div>
     <div style="display:flex;gap:6px;margin-bottom:6px">
-      <button type="button" class="btn btn-sm" onclick="voteSelectAll()" style="width:auto">✓ All</button>
-      <button type="button" class="btn btn-sm" onclick="voteSelectNone()" style="width:auto">✕ None</button>
+      <button type="button" class="btn btn-sm" onclick="voteSelectAll()" style="width:auto">✓ Select all</button>
+      <button type="button" class="btn btn-sm" onclick="voteSelectNone()" style="width:auto">✕ Clear all</button>
     </div>
     <div id="vote-participants" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+    <div id="vote-participant-count" style="font-size:11px;color:#888;margin-bottom:8px"></div>
     <button class="btn btn-primary" onclick="createVote()" style="margin-top:4px">📢 Start vote</button>
   </div>`;
 
@@ -5216,16 +5217,9 @@ function renderAdminVotes(){
   }
 
   e.innerHTML=html;
-  // Build participant checkboxes dynamically
-  const vpWrap=el('vote-participants');
-  if(vpWrap){
-    const players=S.players||[];
-    vpWrap.innerHTML=players.map(p=>{
-      const safe=p.replace(/"/g,'&quot;');
-      return '<label style="display:flex;align-items:center;gap:4px;background:#f8f7f4;border:1px solid #e0ddd6;border-radius:20px;padding:3px 10px;font-size:12px;cursor:pointer">'
-        +'<input type="checkbox" class="vote-participant-check" value="'+safe+'" checked style="margin:0;accent-color:#7F77DD"> '+p+'</label>';
-    }).join('');
-  }
+  // Build participant toggle pills
+  window._votePicks=new Set((S.players||[]).map(p=>p));
+  renderVoteParticipantPills();
 }
 
 function renderPlayerVotes(myName){
@@ -5314,7 +5308,7 @@ window.createVote = async ()=>{
   const opts=(el('vote-options')?.value||'').split('\n').map(s=>s.trim()).filter(Boolean);
   if(!q){alert('Enter a question.');return;}
   if(opts.length<2){alert('Enter at least 2 options.');return;}
-  const checked=Array.from(document.querySelectorAll('.vote-participant-check:checked')).map(cb=>cb.value);
+  const checked=window._votePicks?Array.from(window._votePicks):(S.players||[]);
   if(!checked.length){alert('Select at least one participant.');return;}
   const vid=uid();
   const vote={question:q,options:opts,results:{},participants:checked,createdBy:userProfile?.name||'Admin',createdAt:Date.now(),active:true};
@@ -5324,8 +5318,32 @@ window.createVote = async ()=>{
   renderAdminVotes();
 };
 
-window.voteSelectAll=()=>{ document.querySelectorAll('.vote-participant-check').forEach(cb=>cb.checked=true); };
-window.voteSelectNone=()=>{ document.querySelectorAll('.vote-participant-check').forEach(cb=>cb.checked=false); };
+window.voteSelectAll=()=>{
+  window._votePicks=new Set((S.players||[]));
+  renderVoteParticipantPills();
+};
+window.voteSelectNone=()=>{
+  window._votePicks=new Set();
+  renderVoteParticipantPills();
+};
+window.toggleVotePick=(name)=>{
+  if(!window._votePicks) window._votePicks=new Set();
+  if(window._votePicks.has(name)) window._votePicks.delete(name);
+  else window._votePicks.add(name);
+  renderVoteParticipantPills();
+};
+function renderVoteParticipantPills(){
+  const wrap=el('vote-participants'); if(!wrap) return;
+  const players=S.players||[];
+  if(!window._votePicks) window._votePicks=new Set(players);
+  wrap.innerHTML=players.map(p=>{
+    const sel=window._votePicks.has(p);
+    return '<div onclick="toggleVotePick(this.dataset.name)" data-name="'+p.replace(/"/g,'&quot;')+'" style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;user-select:none;border:2px solid '+(sel?'#7F77DD':'#e0ddd6')+';background:'+(sel?'#EEEDFE':'#fff')+';color:'+(sel?'#3C3489':'#aaa')+'">'+p+'</div>';
+  }).join('');
+  const cnt=window._votePicks.size;
+  const countEl=el('vote-participant-count');
+  if(countEl) countEl.textContent=cnt===players.length?'All '+cnt+' players':cnt+' of '+players.length+' players selected';
+}
 
 
 window.castVote = async (btn)=>{
