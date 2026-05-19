@@ -4675,9 +4675,10 @@ async function renderActiveGameTab(myName){
         return totalPlayed-(notPlaying*0.5);
       }
 
-      function scheduledMatches(pool, max){
+      function scheduledMatches(pool, max, alreadyBusy){
         const active=[];
-        const busy=new Set();
+        // Pre-seed busy with anyone already on a court
+        const busy=new Set(alreadyBusy||[]);
         // Sort by fairness — fewest games played, most players sitting out
         const sorted=[...pool].sort((a,b)=>matchPriority(a)-matchPriority(b));
         for(const m of sorted){
@@ -4701,7 +4702,7 @@ async function renderActiveGameTab(myName){
     const playing=scheduledMatches(unplayed,4);
     playing.forEach(m=>playersInMatch(m).forEach(p=>currentlyPlaying.add(p)));
     const playingIds=new Set(playing.map(m=>m.id));
-    const onDeck=scheduledMatches(unplayed.filter(m=>!playingIds.has(m.id)),4);
+    const onDeck=scheduledMatches(unplayed.filter(m=>!playingIds.has(m.id)),4,currentlyPlaying);
     const waiting=unplayed.filter(m=>!playingIds.has(m.id)&&!onDeck.find(o=>o.id===m.id));
 
     function renderMatchCard(m,mi,label,dimmed){
