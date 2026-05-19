@@ -1832,6 +1832,7 @@ function buildTournamentShell(){
       <div class="phase-tab" data-phase="board">📊 Leaderboard</div>
       <div class="phase-tab" data-phase="history">📜 History</div>
       <div class="phase-tab" data-phase="testing">🧪 Testing</div>
+      <div class="phase-tab" data-phase="votes">🗳️ Votes</div>
     </div>
     <div id="admin-setup"></div>
     <div id="admin-players" class="hidden"></div>
@@ -1843,6 +1844,7 @@ function buildTournamentShell(){
     <div id="admin-history" class="hidden"></div>
     <div id="admin-testing" class="hidden"></div>
     <div id="admin-players" class="hidden"></div>
+    <div id="admin-votes" class="hidden"></div>
   </div>
   <div id="player-area" class="hidden">
     <div class="card" id="player-header-card"></div>
@@ -1853,6 +1855,7 @@ function buildTournamentShell(){
       <div class="ptab-btn" id="ptab-info" data-tab="info">📋 Games</div>
       <div class="ptab-btn" id="ptab-teams" data-tab="teams">👥 My Teams</div>
       <div class="ptab-btn" id="ptab-rank" data-tab="rank">🎯 Rankings</div>
+      <div class="ptab-btn" id="ptab-vote" data-tab="vote">🗳️ Vote</div>
     </div>
     <div id="pview-active"></div>
     <div id="pview-lb" class="hidden"></div>
@@ -1860,6 +1863,7 @@ function buildTournamentShell(){
     <div id="pview-info" class="hidden"></div>
     <div id="pview-teams" class="hidden"></div>
     <div id="pview-rank" class="hidden"></div>
+    <div id="pview-vote" class="hidden"></div>
   </div>
   <div id="modal-area"></div>`;
 }
@@ -1983,7 +1987,7 @@ window.switchToAdminView=()=>{
 
 function showAdminPhase(phase){
   _phase=phase;
-  ['setup','games','rankings','scores','board','power','history'].forEach(p=>{
+  ['setup','players','games','rankings','scores','board','history','testing','votes'].forEach(p=>{
     const panel=el('admin-'+p); if(panel) panel.classList.add('hidden');
     document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===p) t.classList.remove('active'); });
   });
@@ -1993,6 +1997,7 @@ function showAdminPhase(phase){
   if(phase==='players')  renderAdminPlayers();
   if(phase==='games')    renderAdminGames();
   if(phase==='testing')  renderAdminTesting();
+  if(phase==='votes')    renderAdminVotes();
   if(phase==='rankings') renderRankingStatus();
   if(phase==='scores')   renderMatchFeed();
   if(phase==='board')    { renderLeaderboard(); renderGPB(); updateStats(); renderTiebreakerPanel(); }
@@ -3817,10 +3822,11 @@ function getSmartDefaultTab(myName){
 function showPlayerTab(tab,myName){
   _tab=tab;
   myName=myName||actingAsName||(userProfile?.name)||'';
-  ['active','lb','games','info','teams','rank'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
+  ['active','lb','games','info','teams','rank','vote'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
   const tv=el('pview-'+tab);if(tv)tv.classList.remove('hidden');
   const tb=el('ptab-'+tab);if(tb)tb.classList.add('active');
   if(tab==='rank')   renderPlayerRankings(myName);
+  if(tab==='vote')   renderPlayerVotes(myName);
   if(tab==='teams')  renderMyTeams(myName);
   if(tab==='active') renderActiveGameTab(myName);
   if(tab==='games')  renderPlayerGames(myName);
@@ -5120,6 +5126,225 @@ window.fillTestRankings = async ()=>{
 };
 
 // ── MODAL ─────────────────────────────────────────────────
+// ── VOTING SYSTEM ────────────────────────────────────────
+function renderAdminVotes(){
+  const e=el('admin-votes'); if(!e) return;
+  const votes=S.votes||{};
+  const voteList=Object.entries(votes).sort((a,b)=>b[1].createdAt-a[1].createdAt);
+  const isSuperAdmin=userProfile?.email===SUPER_ADMIN_EMAIL;
+
+  let html=`<div class="card">
+    <div class="card-title">🗳️ Create a vote</div>
+    <div class="sec-label">Question</div>
+    <input type="text" id="vote-question" placeholder="e.g. Can Andy use a substitute for Beer Die?">
+    <div class="sec-label">Options (one per line)</div>
+    <textarea id="vote-options" rows="4" placeholder="Yes&#10;No&#10;Yes, but opponents pick the substitute&#10;Yes, anyone can use it" style="font-size:12px;padding:8px;border-radius:8px;border:1px solid #e0ddd6;width:100%;resize:vertical"></textarea>
+    <div class="sec-label">Who can vote</div>
+    <div style="display:flex;gap:6px;margin-bottom:6px">
+      <button type="button" class="btn btn-sm" onclick="voteSelectAll()" style="width:auto">✓ All</button>
+      <button type="button" class="btn btn-sm" onclick="voteSelectNone()" style="width:auto">✕ None</button>
+    </div>
+    <div id="vote-participants" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+      ${(S.players||[]).map(p=>`<label style="display:flex;align-items:center;gap:4px;background:#f8f7f4;border:1px solid #e0ddd6;border-radius:20px;padding:3px 10px;font-size:12px;cursor:pointer"><input type="checkbox" class="vote-participant-check" value="${esc(p)}" checked style="margin:0;accent-color:#7F77DD"> ${p}</label>`).join('')}
+    </div>
+    <button class="btn btn-primary" onclick="createVote()" style="margin-top:4px">📢 Start vote</button>
+  </div>`;
+
+  if(voteList.length){
+    voteList.forEach(([vid,vote])=>{
+      const totalVotes=Object.keys(vote.results||{}).length;
+      const totalPlayers=(S.players||[]).length;
+      const isActive=vote.active;
+
+      // Tally results
+      const tally={};
+      (vote.options||[]).forEach((_,i)=>{tally[i]=0;});
+      Object.values(vote.results||{}).forEach(pick=>{ tally[pick]=(tally[pick]||0)+1; });
+
+      html+='<div class="card" style="border-color:'+(isActive?'#7F77DD':'#e0ddd6')+'">';
+      html+='<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">';
+      html+='<div style="font-size:14px;font-weight:700;flex:1">'+vote.question+'</div>';
+      html+='<span class="tag" style="background:'+(isActive?'#EEEDFE':'#f0ede6')+';color:'+(isActive?'#534AB7':'#888')+';flex-shrink:0">'+(isActive?'🟢 Active':'⏸ Closed')+'</span>';
+      html+='</div>';
+      const eligibleCount=(vote.participants||S.players||[]).length;
+      html+='<div style="font-size:11px;color:#888;margin-bottom:8px">'+totalVotes+'/'+eligibleCount+' eligible players voted'
+        +(vote.participants&&vote.participants.length<(S.players||[]).length?' <span style="color:#534AB7">('+vote.participants.join(', ')+')</span>':'')+'</div>';
+
+      // Results bar chart
+      (vote.options||[]).forEach((opt,i)=>{
+        const cnt=tally[i]||0;
+        const pct=totalVotes>0?Math.round(cnt/totalVotes*100):0;
+        html+='<div style="margin-bottom:6px">';
+        html+='<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">';
+        html+='<span style="font-weight:600">'+opt+'</span>';
+        html+='<span style="color:#888">'+cnt+' vote'+(cnt!==1?'s':'')+(totalVotes>0?' ('+pct+'%)':'')+'</span>';
+        html+='</div>';
+        html+='<div style="height:6px;background:#f0ede6;border-radius:3px">';
+        html+='<div style="height:6px;background:#7F77DD;border-radius:3px;width:'+pct+'%"></div>';
+        html+='</div>';
+        html+='</div>';
+      });
+
+      // Individual votes — super admin only
+      if(isSuperAdmin&&totalVotes>0){
+        html+='<details style="margin-top:8px"><summary style="font-size:10px;color:#aaa;cursor:pointer">Individual votes (admin only)</summary>';
+        html+='<div style="margin-top:4px">';
+        Object.entries(vote.results||{}).forEach(([player,pick])=>{
+          html+='<div style="font-size:10px;padding:2px 0;display:flex;justify-content:space-between">';
+          html+='<span>'+player+'</span><span style="color:#534AB7;font-weight:600">'+(vote.options[pick]||pick)+'</span>';
+          html+='</div>';
+        });
+        html+='</div></details>';
+      }
+
+      html+='<div style="display:flex;gap:4px;margin-top:8px">';
+      if(isActive){
+        html+='<button class="btn btn-sm" onclick="closeVote(this)" data-vid="'+vid+'" style="border-color:#f0a0a0;color:#c0392b;width:auto">⏸ Close vote</button>';
+      } else {
+        html+='<button class="btn btn-sm" onclick="reopenVote(this)" data-vid="'+vid+'" style="width:auto">🔄 Reopen</button>';
+      }
+      html+='<button class="btn btn-sm" onclick="deleteVote(this)" data-vid="'+vid+'" style="border-color:#f0a0a0;color:#c0392b;width:auto">🗑 Delete</button>';
+      html+='</div>';
+      html+='</div>';
+    });
+  }
+
+  e.innerHTML=html;
+}
+
+function renderPlayerVotes(myName){
+  const e=el('pview-vote'); if(!e) return;
+  const votes=S.votes||{};
+  const activeVotes=Object.entries(votes).filter(([,v])=>v.active&&(!v.participants||v.participants.includes(myName)));
+  const closedVotes=Object.entries(votes).filter(([,v])=>!v.active&&(!v.participants||v.participants.includes(myName)));
+
+  if(!activeVotes.length&&!closedVotes.length){
+    e.innerHTML='<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">🗳️</div><div style="font-size:14px;font-weight:600">No votes yet</div><div style="font-size:12px;color:#888;margin-top:4px">Admin will post votes here when needed.</div></div>';
+    return;
+  }
+
+  let html='';
+
+  if(activeVotes.length){
+    html+='<div class="card"><div class="card-title">🟢 Open votes</div>';
+    activeVotes.forEach(([vid,vote])=>{
+      const myPick=vote.results&&vote.results[myName];
+      const totalVotes=Object.keys(vote.results||{}).length;
+      const totalPlayers=(S.players||[]).length;
+      const tally={};
+      (vote.options||[]).forEach((_,i)=>{tally[i]=0;});
+      Object.values(vote.results||{}).forEach(pick=>{ tally[pick]=(tally[pick]||0)+1; });
+
+      html+='<div style="border:1px solid #e8e6df;border-radius:10px;padding:12px;margin-bottom:10px">';
+      html+='<div style="font-size:14px;font-weight:700;margin-bottom:8px">'+vote.question+'</div>';
+      html+='<div style="font-size:11px;color:#888;margin-bottom:8px">'+totalVotes+'/'+totalPlayers+' voted</div>';
+
+      if(myPick!==undefined){
+        // Already voted - show result + change option
+        html+='<div class="alert alert-success" style="font-size:12px;margin-bottom:8px">✓ You voted: <strong>'+(vote.options[myPick])+'</strong></div>';
+        // Show tally
+        (vote.options||[]).forEach((opt,i)=>{
+          const cnt=tally[i]||0;
+          const pct=totalVotes>0?Math.round(cnt/totalVotes*100):0;
+          html+='<div style="margin-bottom:4px;display:flex;align-items:center;gap:8px">';
+          html+='<div style="flex:1;font-size:11px'+(i===myPick?';font-weight:700':'')+'">'+opt+'</div>';
+          html+='<div style="width:60px;height:5px;background:#f0ede6;border-radius:3px;flex-shrink:0"><div style="height:5px;background:'+(i===myPick?'#7F77DD':'#b8b8b8')+';border-radius:3px;width:'+pct+'%"></div></div>';
+          html+='<div style="font-size:10px;color:#888;width:30px;text-align:right">'+pct+'%</div>';
+          html+='</div>';
+        });
+        html+='<button class="btn btn-sm" onclick="clearMyVote(this)" data-vid="'+vid+'" data-name="'+esc(myName)+'" style="margin-top:6px;width:auto;font-size:10px;color:#888">Change vote</button>';
+      } else {
+        // Not voted yet
+        (vote.options||[]).forEach((opt,i)=>{
+          html+='<button class="btn" onclick="castVote(this)" data-vid="'+vid+'" data-name="'+esc(myName)+'" data-opt="'+i+'" style="width:100%;text-align:left;margin-bottom:6px;font-size:13px;padding:10px 12px">'+opt+'</button>';
+        });
+      }
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+
+  if(closedVotes.length){
+    html+='<div class="card"><div class="card-title" style="color:#888">⏸ Closed votes</div>';
+    closedVotes.forEach(([vid,vote])=>{
+      const totalVotes=Object.keys(vote.results||{}).length;
+      const tally={};
+      (vote.options||[]).forEach((_,i)=>{tally[i]=0;});
+      Object.values(vote.results||{}).forEach(pick=>{ tally[pick]=(tally[pick]||0)+1; });
+      const winnerIdx=Object.entries(tally).sort((a,b)=>b[1]-a[1])[0]?.[0];
+
+      html+='<div style="border:1px solid #e0ddd6;border-radius:10px;padding:10px;margin-bottom:8px;opacity:.85">';
+      html+='<div style="font-size:13px;font-weight:700;margin-bottom:4px">'+vote.question+'</div>';
+      if(winnerIdx!==undefined) html+='<div style="font-size:11px;color:#27500A;margin-bottom:6px">✓ Top result: <strong>'+(vote.options[winnerIdx])+'</strong> ('+(tally[winnerIdx])+' votes)</div>';
+      (vote.options||[]).forEach((opt,i)=>{
+        const cnt=tally[i]||0;
+        const pct=totalVotes>0?Math.round(cnt/totalVotes*100):0;
+        html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">';
+        html+='<div style="flex:1;font-size:10px">'+opt+'</div>';
+        html+='<div style="width:50px;height:4px;background:#f0ede6;border-radius:2px;flex-shrink:0"><div style="height:4px;background:#bbb;border-radius:2px;width:'+pct+'%"></div></div>';
+        html+='<div style="font-size:9px;color:#aaa;width:25px;text-align:right">'+pct+'%</div>';
+        html+='</div>';
+      });
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+
+  e.innerHTML=html;
+}
+
+window.createVote = async ()=>{
+  const q=el('vote-question')?.value.trim();
+  const opts=(el('vote-options')?.value||'').split('\n').map(s=>s.trim()).filter(Boolean);
+  if(!q){alert('Enter a question.');return;}
+  if(opts.length<2){alert('Enter at least 2 options.');return;}
+  const checked=Array.from(document.querySelectorAll('.vote-participant-check:checked')).map(cb=>cb.value);
+  if(!checked.length){alert('Select at least one participant.');return;}
+  const vid=uid();
+  const vote={question:q,options:opts,results:{},participants:checked,createdBy:userProfile?.name||'Admin',createdAt:Date.now(),active:true};
+  await update(ref(db,'tournaments/'+currentTourneyId+'/votes/'+vid),vote);
+  el('vote-question').value='';
+  el('vote-options').value='';
+  renderAdminVotes();
+};
+
+window.voteSelectAll=()=>{ document.querySelectorAll('.vote-participant-check').forEach(cb=>cb.checked=true); };
+window.voteSelectNone=()=>{ document.querySelectorAll('.vote-participant-check').forEach(cb=>cb.checked=false); };
+
+
+window.castVote = async (btn)=>{
+  const vid=btn.dataset.vid, playerName=btn.dataset.name, optIdx=parseInt(btn.dataset.opt);
+  await update(ref(db,'tournaments/'+currentTourneyId+'/votes/'+vid+'/results'),{[playerName]:optIdx});
+  const myName=actingAsName||(userProfile?.name)||'';
+  renderPlayerVotes(myName);
+};
+
+window.clearMyVote = async (btn)=>{
+  const vid=btn.dataset.vid, playerName=btn.dataset.name;
+  await update(ref(db,'tournaments/'+currentTourneyId),{['votes/'+vid+'/results/'+playerName]:null});
+  const myName=actingAsName||(userProfile?.name)||'';
+  renderPlayerVotes(myName);
+};
+
+window.closeVote = async (btn)=>{
+  const vid=btn.dataset.vid;
+  await update(ref(db,'tournaments/'+currentTourneyId+'/votes/'+vid),{active:false});
+  renderAdminVotes();
+};
+
+window.reopenVote = async (btn)=>{
+  const vid=btn.dataset.vid;
+  await update(ref(db,'tournaments/'+currentTourneyId+'/votes/'+vid),{active:true});
+  renderAdminVotes();
+};
+
+window.deleteVote = async (btn)=>{
+  const vid=btn.dataset.vid;
+  if(!confirm('Delete this vote?')) return;
+  await update(ref(db,'tournaments/'+currentTourneyId),{['votes/'+vid]:null});
+  renderAdminVotes();
+};
+
 window.closeModal = ()=>{ const e=el('modal-area'); if(e)e.innerHTML=''; };
 
 // ── UTILS ─────────────────────────────────────────────────
