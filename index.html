@@ -2391,11 +2391,10 @@ function pipForSchedule(m){
 }
 
 async function advanceMatchScheduler(gameId){
-  // Read fresh from Firebase to get latest bracket with correct match IDs
-  const freshSnap=await get(ref(db,'tournaments/'+currentTourneyId+'/bs/'+gameId));
-  const b=freshSnap.exists()?freshSnap.val():(S.bs&&S.bs[gameId]);
-  if(!b) return;
+  // MUST use S.bs — same source as the player view renders from
+  // Reading fresh from Firebase can return a different bracket version
   const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
+  const b=S.bs&&S.bs[gameId]; if(!b) return;
   const allM=getAllMatchesFromBracket(b,game.format);
   const unplayed=allM.filter(m=>!m.winner&&m.t1&&m.t1.p1&&m.t2&&m.t2.p1);
   // Always start fresh — stale IDs from previous bracket builds cause mismatches
@@ -4621,9 +4620,6 @@ async function renderActiveGameTab(myName){
     const myPlayers=[myTeam.p1,myTeam.p2,myTeam.p3].filter(Boolean);
     const myTeamOnCourt=myPlayers.some(p=>playersOnCourt.has(p));
     oppBusy=!myTeamOnCourt&&oppPlayerNames.some(p=>playersOnCourt.has(p));
-    console.log('match IDs in active:', Array.from(activeMatchIds));
-    console.log('myNextMatch id:', myNextMatch?.id, 'in set:', myNextMatch&&activeMatchIds.has(myNextMatch.id));
-    console.log('allMyMatches ids:', allMyMatches.map(m=>m.id));
     myMatchIsPlaying=myNextMatch&&activeMatchIds.has(myNextMatch.id)?true:false;
     const cpAll=new Set(); // populated later when board computes
 
@@ -4811,9 +4807,8 @@ async function renderActiveGameTab(myName){
       }
 
     // Active matches come from explicit Firebase state
-    let playing=unplayed.filter(m=>activeMatchIds.has(m.id));
-    console.log('board playing ids:', playing.map(m=>m.id));
-    console.log('unplayed ids:', unplayed.slice(0,4).map(m=>m.id));
+    // Sort active matches by ID for stable court numbering across all players
+    let playing=unplayed.filter(m=>activeMatchIds.has(m.id)).sort((a,b2)=>a.id<b2.id?-1:1);
     // Fall back to fair scheduler if no active matches set yet
     if(!playing.length){
       playing=scheduledMatches(unplayed,4);
