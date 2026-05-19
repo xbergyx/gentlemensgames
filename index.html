@@ -57,8 +57,8 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 
 .phase-tab{padding:7px 10px;font-size:11px;font-weight:600;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;white-space:nowrap;touch-action:manipulation}
 .phase-tab.active{background:#EEEDFE;color:#3C3489;border-color:#AFA9EC}
-.ptab{display:flex;gap:5px;margin-bottom:1rem}
-.ptab-btn{flex:1;padding:8px 4px;font-size:11px;font-weight:600;text-align:center;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;touch-action:manipulation}
+.ptab{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:1rem}
+.ptab-btn{flex:0 0 calc(33.33% - 4px);padding:8px 4px;font-size:10px;font-weight:600;text-align:center;border:1px solid #e0ddd6;border-radius:8px;cursor:pointer;color:#888;background:#fff;touch-action:manipulation}
 .ptab-btn.active{background:#7F77DD;color:#fff;border-color:#7F77DD}
 .tourney-card{background:#fff;border:1px solid #e8e6df;border-radius:14px;padding:1rem;margin-bottom:8px;cursor:pointer;transition:all .15s;touch-action:manipulation}
 .tourney-card:hover{border-color:#7F77DD;box-shadow:0 2px 8px rgba(127,119,221,.15)}
@@ -2067,7 +2067,7 @@ function renderAdminGames(){
       </div>
       <div class="sec-label">Tiebreaker Rules</div>
       <select id="game-tiebreak">
-        <option value="auto">Tiebreaker Rules (point diff → H2H)</option>
+        <option value="auto">Auto Tiebreaker</option>
         <option value="host-score">Host enters tiebreaker score</option>
         <option value="host-pick">Host manually picks winner</option>
       </select>
@@ -2083,7 +2083,7 @@ function renderAdminGames(){
       </select>
       <div class="sec-label">Game rules</div>
       <div style="font-size:10px;color:#aaa;margin-bottom:4px">Auto-filled based on format — edit as needed. Each line = one rule.</div>
-      <textarea id="game-rules" rows="4" placeholder="• Rule 1&#10;• Rule 2" style="font-size:12px;padding:8px;border-radius:8px;border:1px solid #e0ddd6;width:100%;resize:vertical"></textarea>
+      <textarea id="game-rules" rows="4" placeholder="• Rule 1&#10;• Rule 2" onkeydown="autoRuleBullet(event,this)" style="font-size:12px;padding:8px;border-radius:8px;border:1px solid #e0ddd6;width:100%;resize:vertical"></textarea>
       <button class="btn btn-primary" onclick="addGame()">+ Add game</button>
     </div>
     <div class="card">
@@ -2180,19 +2180,21 @@ window.removePlayer=async(name)=>{
 function renderAdminPlayers(){
   const e=el('admin-players'); if(!e) return;
   const players=S.players||[];
-  const ghosts=S.ghostPlayers||{};
   e.innerHTML=`
-    <div class="card">
-      <div class="card-title">👥 Players <span class="tag tag-purple">${players.length}</span></div>
-      <div class="alert alert-info" style="font-size:11px">Add players from the global database below, or they can join via the join code.</div>
-      <div id="player-list"></div>
-    </div>
     <div class="card">
       <div class="card-title">🔍 Add from global database</div>
       <input type="text" id="global-search" placeholder="Search players..." oninput="loadGlobalPlayers(this.value)" style="margin-bottom:8px">
       <div id="global-player-list"></div>
     </div>
-`;
+    <div class="card">
+      <div class="card-title">👥 Players <span class="tag tag-purple">${players.length}</span></div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px">Join link: ${APP_DOMAIN}/?join=${S.joinCode} <button class="btn btn-sm btn-primary" onclick="copyJoinLink()" style="width:auto;margin-left:4px">📋</button></div>
+      <div id="player-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🛡 Tournament admins</div>
+      <button class="btn btn-sm" onclick="manageTourneyAdmins()" style="width:auto;border-color:#e0ddd6;color:#888">👥 Manage tournament admins</button>
+    </div>`;
   renderPlayerList();
   loadGlobalPlayers('');
 }
@@ -2291,6 +2293,20 @@ window.toggleRoundsOption = ()=>{
     if(defaults[fmt]) rulesEl.value=defaults[fmt];
   }
 };
+window.autoRuleBullet = (e, ta)=>{
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const pos=ta.selectionStart;
+    const val=ta.value;
+    const lineStart=val.lastIndexOf('\n',pos-1)+1;
+    const line=val.substring(lineStart,pos);
+    const bm=line.match(/^([•\-\*])\s/);
+    const bullet=bm?bm[0]:'• ';
+    ta.value=val.substring(0,pos)+'\n'+bullet+val.substring(pos);
+    ta.selectionStart=ta.selectionEnd=pos+1+bullet.length;
+  }
+};
+
 window.addGame = async ()=>{
   if(S.tournamentStarted){ alert('Tournament started — games locked.'); return; }
   const name=el('game-name-input').value.trim();
@@ -3351,15 +3367,6 @@ function renderLeaderboard(){
   html+=`<div class="card"><div class="card-title">📊 Points per game</div><div id="game-pts-breakdown"></div></div>`;
   html+=`<div class="card" id="tiebreaker-card"><div class="card-title">🏓 Overall tiebreaker</div><div id="tiebreaker-panel"></div></div>`;
   html+=`<div class="card"><div class="card-title">🏆 Declare champion</div><div class="alert alert-warn" style="font-size:11px">Do at end of day. Saves to history and awards all badges.</div>
-      <div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">Overall tiebreaker game</div>
-      <div style="font-size:10px;color:#aaa;margin-bottom:6px">If there is an overall points tie, set the tiebreaker game here so players know what to play. Admin enters the score.</div>
-      <input type="text" id="tb-game-name" placeholder="Game name (e.g. 3 Cup Beer Pong)" style="margin-bottom:4px">
-      <input type="text" id="tb-game-desc" placeholder="Description (e.g. First to 3 cups wins)" style="margin-bottom:4px">
-      <div id="tb-teams-wrap"></div>
-      <button class="btn btn-sm" onclick="addTiebreakerTeam()" style="margin-bottom:6px">+ Add team</button>
-      <button class="btn btn-primary" onclick="saveTiebreakerGame()" style="margin-bottom:6px">📢 Announce tiebreaker</button>
-      <button class="btn btn-sm" onclick="clearTiebreakerGame()" style="color:#c0392b;border-color:#f0a0a0">✕ Clear tiebreaker</button>
-      <div style="margin-top:10px;border-top:1px solid #f0ede6;padding-top:10px"></div>
       <button class="btn btn-primary" onclick="declareTournamentWinner()">🏆 Finalize &amp; save to history</button><div id="declare-status"></div></div>`;
   html+=`<div class="card"><div class="card-title">👥 Tournament admins</div><div class="alert alert-info" style="font-size:11px;margin-bottom:8px">Add others who can approve scores and manage this tournament.</div><button class="btn" onclick="manageTourneyAdmins()">👥 Manage tournament admins</button></div>`;
   e.innerHTML=html;
@@ -3396,6 +3403,21 @@ function renderTiebreakerPanel(){
       ${res?`<div style="font-size:11px;color:#27500A;margin-top:5px;font-weight:600">✓ Winner: ${res.winner}</div>`:''}
       <button class="btn btn-success btn-sm" style="width:100%;margin-top:6px" onclick="saveTBMatch('${esc(key)}','${esc(p1)}','${esc(p2)}')">✓ Save</button>
     </div>`;
+  }
+  // Tiebreaker game section (when all games finalized)
+  const allFin=lockedGames.length>0&&lockedGames.every(g=>S.scores&&S.scores[g.id]&&S.scores[g.id]._fin);
+  if(allFin){
+    const tbGame=S.tiebreakerGame;
+    html+='<div class="card" style="border-color:#E4B400">'
+      +'<div class="card-title">🏆 Overall Tiebreaker</div>'
+      +'<div style="font-size:10px;color:#aaa;margin-bottom:8px">Announce the tiebreaker game so players see it on Now Playing.</div>'
+      +'<input type="text" id="tb-game-name" placeholder="Game name (e.g. 3 Cup Beer Pong)" value="'+(tbGame&&tbGame.name||'')+'" style="margin-bottom:4px">'
+      +'<input type="text" id="tb-game-desc" placeholder="Description" value="'+(tbGame&&tbGame.description||'')+'" style="margin-bottom:4px">'
+      +'<div id="tb-teams-wrap"></div>'
+      +'<button class="btn btn-sm" onclick="addTiebreakerTeam()" style="margin-bottom:6px">+ Add team</button>'
+      +'<button class="btn btn-primary" onclick="saveTiebreakerGame()" style="margin-bottom:4px">📢 Announce tiebreaker</button>'
+      +(tbGame?'<button class="btn btn-sm" onclick="clearTiebreakerGame()" style="color:#c0392b;border-color:#f0a0a0;display:block;margin-top:4px">Clear</button>':'')
+      +'</div>';
   }
   e.innerHTML=html;
 }
@@ -3931,13 +3953,32 @@ function renderPlayerGames(myName){
     html+='<div class="card">';
     html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
     html+='<div style="font-size:15px;font-weight:700">'+g.name+'</div>';
-    html+='<span class="tag" style="background:'+(isDone?'#EAF3DE':'#FEF3E2')+';color:'+(isDone?'#27500A':'#7a4f00')+'">'+(isDone?'✅ Done':'▶ In progress')+'</span>';
+    const isAct=g.active||S.activeGameId===g.id;
+    const stLabel=isDone?'✅ Done':isAct?'▶ In progress':'⏸ Not started';
+    const stBg=isDone?'#EAF3DE':isAct?'#FEF3E2':'#f0ede6';
+    const stCol=isDone?'#27500A':isAct?'#7a4f00':'#888';
+    html+='<span class="tag" style="background:'+stBg+';color:'+stCol+'">'+stLabel+'</span>';
     html+='</div>';
 
     if(mt){
       html+='<div style="background:#EEEDFE;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px">';
       html+='<span style="color:#534AB7;font-weight:600">Your team: </span>'+teamLabel(mt);
       html+='</div>';
+    }
+
+    // ── Not started yet ─────────────────────────────────
+    if(!isDone && !b && !isScore){
+      html+='<div style="font-size:12px;color:#aaa;text-align:center;padding:8px">Game has not started yet — check back once teams are set.</div>';
+      html+='</div>'; return;
+    }
+    if(!isDone && b){
+      // Count remaining matches
+      const allM=getAllMatchesFromBracket(b,g.format);
+      const remaining2=allM.filter(m=>!m.winner&&m.t1&&m.t2).length;
+      const done2=allM.filter(m=>m.winner).length;
+      if(remaining2>0&&!g.active&&S.activeGameId!==g.id){
+        html+='<div style="font-size:12px;color:#aaa;padding:4px 0">'+done2+' of '+allM.length+' matches complete · '+remaining2+' remaining</div>';
+      }
     }
 
     // ── Score-type games ────────────────────────────────
