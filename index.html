@@ -4114,7 +4114,7 @@ function renderPlayerGames(myName){
     // ── H2H / Bracket games ─────────────────────────────
     else if(b){
       const matchList=b.matches||[];
-      const played=matchList.filter(m=>m.score1!==null&&m.score2!==null);
+      const played=matchList.filter(m=>m.winner&&m.t1&&m.t2);
       const pending=matchList.filter(m=>m.score1===null||m.score2===null);
 
       if(!isDone && pending.length){
@@ -4134,13 +4134,15 @@ function renderPlayerGames(myName){
         html+='<div style="font-size:11px;font-weight:700;color:#888;margin:'+(pending.length?'8':'0')+'px 0 6px">RESULTS SO FAR</div>';
         played.forEach(m=>{
           const w=m.score1>m.score2?m.t1:m.t2;
-          const wScore=m.score1>m.score2?m.score1:m.score2;
-          const lScore=m.score1>m.score2?m.score2:m.score1;
-          const l=m.score1>m.score2?m.t2:m.t1;
+          const _s1=Number(m.score1),_s2=Number(m.score2);
+          const _hasS=!isNaN(_s1)&&!isNaN(_s2)&&m.score1!==undefined&&m.score2!==undefined;
+          const wScore=_s1>_s2?_s1:_s2;
+          const lScore=_s1>_s2?_s2:_s1;
+          const l=_s1>_s2?m.t2:m.t1;
           const isMine=mt&&(m.t1.id===mt.id||m.t2.id===mt.id);
           html+='<div style="padding:5px 8px;font-size:11px;color:#444;border-bottom:1px solid #f0ede6;'+(isMine?'background:#EAF3DE;border-radius:6px;margin-bottom:2px':'')+'">'
             +'<span style="font-weight:600;color:#27500A">✓ '+teamLabel(w)+'</span>'
-            +' '+wScore+'–'+lScore+' def. '+teamLabel(l)
+            +(_hasS?' '+wScore+'–'+lScore+' def. ':' beat ')+teamLabel(l)
             +'</div>';
         });
       }
@@ -4777,10 +4779,12 @@ async function renderActiveGameTab(myName){
       html+='<div style="font-size:10px;font-weight:700;color:#888;margin:'+(playing.length||onDeck.length?'10':'0')+'px 0 6px">✓ COMPLETED</div>';
       done2.slice().reverse().forEach(m=>{
         const isMyMatch=myTeam&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id);
-        const wScore=m.score1>m.score2?m.score1:m.score2;
-        const lScore=m.score1>m.score2?m.score2:m.score1;
+        const _bS1=Number(m.score1),_bS2=Number(m.score2);
+        const _bHas=!isNaN(_bS1)&&!isNaN(_bS2)&&m.score1!==undefined&&m.score2!==undefined;
+        const wScore=_bS1>_bS2?_bS1:_bS2;
+        const lScore=_bS1>_bS2?_bS2:_bS1;
         html+='<div style="padding:6px 8px;font-size:11px;color:#444;border-bottom:1px solid #f0ede6;'+(isMyMatch?'background:#EAF3DE;border-radius:6px;margin-bottom:2px':'')+'">';
-        html+='<span style="font-weight:600;color:#27500A">✓ '+tLabel(m.winner)+'</span> '+wScore+'–'+lScore+' def. '+tLabel(m.t1.id===m.winner.id?m.t2:m.t1);
+        html+='<span style="font-weight:600;color:#27500A">✓ '+tLabel(m.winner)+'</span>'+(_bHas?' '+wScore+'–'+lScore+' def. ':' beat ')+tLabel(m.t1.id===m.winner.id?m.t2:m.t1);
         html+='</div>';
       });
     }
