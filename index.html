@@ -2396,10 +2396,8 @@ async function advanceMatchScheduler(gameId){
   const b=S.bs&&S.bs[gameId]; if(!b) return;
   const allM=getAllMatchesFromBracket(b,game.format);
   const unplayed=allM.filter(m=>!m.winner&&m.t1&&m.t1.p1&&m.t2&&m.t2.p1); // ensure team objects
-  const currentActive=new Set(Object.keys((S.activeMatchIds&&S.activeMatchIds[gameId])||{}));
-
-  // Remove completed matches from active set
-  allM.filter(m=>m.winner).forEach(m=>currentActive.delete(m.id));
+  // Always start fresh — stale IDs from previous bracket builds cause mismatches
+  const currentActive=new Set();
 
   // Count games played per player
   const done=allM.filter(m=>m.winner&&m.t1&&m.t2);
@@ -2444,7 +2442,10 @@ window.activateGame = async (btnOrId)=>{
     ...g,
     active: g.id===gameId ? true : false
   }));
-  await update(ref(db,'tournaments/'+currentTourneyId),{games, activeGameId:gameId});
+  // Clear stale activeMatchIds for this game before reinitializing
+  const clearedActive={...(S.activeMatchIds||{})};
+  delete clearedActive[gameId];
+  await update(ref(db,'tournaments/'+currentTourneyId),{games, activeGameId:gameId, activeMatchIds:clearedActive});
   await initMatchScheduler(gameId);
 };
 window.deactivateGame = async (btnOrId)=>{
@@ -4618,7 +4619,6 @@ async function renderActiveGameTab(myName){
     const myPlayers=[myTeam.p1,myTeam.p2,myTeam.p3].filter(Boolean);
     const myTeamOnCourt=myPlayers.some(p=>playersOnCourt.has(p));
     oppBusy=!myTeamOnCourt&&oppPlayerNames.some(p=>playersOnCourt.has(p));
-    console.log('DEBUG: myNextMatch=',myNextMatch?.id, 'activeMatchIds=',Array.from(activeMatchIds), 'match=',myNextMatch&&activeMatchIds.has(myNextMatch.id));
     myMatchIsPlaying=myNextMatch&&activeMatchIds.has(myNextMatch.id)?true:false;
     const cpAll=new Set(); // populated later when board computes
 
