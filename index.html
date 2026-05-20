@@ -303,7 +303,7 @@ body { background: var(--bg); color: var(--text); }
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v18.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v20.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -377,7 +377,7 @@ body { background: var(--bg); color: var(--text); }
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v18.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v20.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3292,19 +3292,42 @@ function renderMatchFeed(){
   Object.entries(pending).forEach(([gid,matches])=>{
     const game=(S.games||[]).find(g=>g.id===gid);
     if(!game)return;
+    const b=S.bs&&S.bs[gid];
     Object.entries(matches||{}).forEach(([mid,subs])=>{
       if(!subs)return;
-      const sub=subs.t1||subs.t2;
-      if(!sub)return;
-      const b=S.bs&&S.bs[gid];
+      // Find the match object to get team names
+      const allM=b?getAllMatchesFromBracket(b,game.format):[];
+      const matchObj=allM.find(m=>m.id===mid);
+      const t1Label=matchObj&&matchObj.t1?[matchObj.t1.p1,matchObj.t1.p2,matchObj.t1.p3].filter(Boolean).join(' & '):'Team 1';
+      const t2Label=matchObj&&matchObj.t2?[matchObj.t2.p1,matchObj.t2.p2,matchObj.t2.p3].filter(Boolean).join(' & '):'Team 2';
       const {type,poolKey,ri}=findMatchMeta(b,mid,gid);
-      pendingHtml+=`<div style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:10px;padding:10px;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px">⏳ Pending approval — ${game.name}</div>
-        <div style="font-size:12px;margin-bottom:6px">Submitted by <strong>${sub.submittedBy}</strong>: ${sub.s1}–${sub.s2}</div>
-        ${subs.t1&&subs.t2?'<div style="font-size:11px;color:#888;margin-bottom:6px">Both teams submitted different scores.</div>':'<div style="font-size:11px;color:#888;margin-bottom:6px">Only one team has submitted.</div>'}
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-success btn-sm" style="flex:1" onclick="approveMatchScore('${gid}','${mid}','${type}','${poolKey}',${ri})">✓ Approve ${sub.s1}–${sub.s2}</button>
-          <button class="btn btn-sm btn-danger" style="flex:1" onclick="rejectMatchScore('${gid}','${mid}')">✕ Reject</button>
+      const bothSubmitted=subs.t1&&subs.t2;
+      const disputed=subs._disputed;
+      const sub1=subs.t1, sub2=subs.t2;
+      // Determine what each side claims
+      function scoreStr(sub,side){ if(!sub) return null; const s1=side==='t1'?sub.s1:sub.s2, s2=side==='t1'?sub.s2:sub.s1; const winLabel=s1>s2?t1Label:t2Label; return {s1:sub.s1,s2:sub.s2,winner:s1>s2?t1Label:t2Label,score:sub.s1+'–'+sub.s2,by:sub.submittedBy}; }
+      const claim1=sub1?scoreStr(sub1,'t1'):null;
+      const claim2=sub2?scoreStr(sub2,'t2'):null;
+      const primaryClaim=claim1||claim2;
+      if(!primaryClaim)return;
+      pendingHtml+=`<div style="background:#FEF3E2;border:2px solid #f5cc80;border-radius:12px;padding:12px;margin-bottom:10px">
+        <div style="font-size:10px;font-weight:700;color:#7a4f00;letter-spacing:.5px;margin-bottom:8px">${disputed?'⚠️ DISPUTED':'⏳ PENDING APPROVAL'} — ${game.name}</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:6px;text-align:center">${t1Label} vs ${t2Label}</div>
+        ${disputed&&claim1&&claim2&&claim1.score!==claim2.score?`
+        <div style="background:#FEE2E2;border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:#991b1b">⚠️ Scores don't match!<br>${t1Label} said: ${claim1.score} (${claim1.winner} wins)<br>${t2Label} said: ${claim2.score} (${claim2.winner} wins)</div>`:`
+        <div style="text-align:center;margin-bottom:8px">
+          <div style="font-size:11px;color:#888;margin-bottom:4px">Submitted by ${primaryClaim.by}</div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:12px">
+            <div style="text-align:center"><div style="font-size:10px;color:#888">${t1Label}</div><div style="font-size:32px;font-weight:800;color:${claim1&&claim1.s1>claim1.s2?'#27500A':'#888'}">${primaryClaim.s1}</div></div>
+            <div style="font-size:16px;color:#aaa">–</div>
+            <div style="text-align:center"><div style="font-size:10px;color:#888">${t2Label}</div><div style="font-size:32px;font-weight:800;color:${claim1&&claim1.s2>claim1.s1?'#27500A':'#888'}">${primaryClaim.s2}</div></div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:#27500A;margin-top:6px">🏆 ${primaryClaim.winner} wins</div>
+          <div style="font-size:10px;color:#888;margin-top:2px">${bothSubmitted?'✓ Both teams submitted matching scores':'Only one team has submitted'}</div>
+        </div>`}
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <button class="btn btn-success btn-sm" style="flex:1" onclick="approveMatchScore('${gid}','${mid}','${type}','${poolKey}',${ri})">✓ Approve — ${primaryClaim.winner} wins</button>
+          <button class="btn btn-sm" style="flex:0 0 auto;border-color:#f0a0a0;color:#c0392b" onclick="rejectMatchScore('${gid}','${mid}')">✕ Reject</button>
         </div>
       </div>`;
     });
@@ -4963,42 +4986,52 @@ async function renderActiveGameTab(myName){
   const unplayedAll=b?getAllMatchesFromBracket(b,activeGame.format).filter(m=>!m.winner&&m.t1&&m.t2):[];
   const pendingAnyGame=S.pendingScores&&S.pendingScores[activeGame.id]||{};
 
-  // Compute active courts locally — deterministic, sorted by match ID so all players agree
+  // Compute active courts — once a match is "now playing" it stays until scored
   const allMatchesForGame=b?getAllMatchesFromBracket(b,activeGame.format):[];
   const unplayedForSchedule=allMatchesForGame.filter(m=>!m.winner&&m.t1&&m.t2);
   
+  // Session-locked match IDs — persist across re-renders until a winner is set
+  const sessionKey='lockedMatches_'+activeGame.id;
+  if(!window._lockedMatchSessions) window._lockedMatchSessions={};
+  let lockedIds=window._lockedMatchSessions[sessionKey]||new Set();
+  
+  // Remove any locked matches that now have winners (they completed)
+  lockedIds=new Set([...lockedIds].filter(id=>unplayedForSchedule.some(m=>m.id===id)));
+  
+  // Also always keep pending-score matches locked
+  const pendingMatchIds=new Set(Object.keys(pendingAnyGame));
+  pendingMatchIds.forEach(id=>{ if(unplayedForSchedule.some(m=>m.id===id)) lockedIds.add(id); });
+
   // Count matches played per player for priority
   const doneForSched=allMatchesForGame.filter(m=>m.winner&&m.t1&&m.t2);
   const mpSched={};(S.players||[]).forEach(p=>{mpSched[p]=0;});
   doneForSched.forEach(m=>pipAll(m).forEach(p=>{mpSched[p]=(mpSched[p]||0)+1;}));
 
-  // Sort unplayed by (fewest total games played, then by match ID for tiebreak consistency)
-  const sortedForSched=[...unplayedForSchedule].sort((a,b2)=>{
-    const pa=pipAll(a).reduce((s,p)=>s+(mpSched[p]||0),0);
-    const pb=pipAll(b2).reduce((s,p)=>s+(mpSched[p]||0),0);
-    if(pa!==pb) return pa-pb;
-    return a.id<b2.id?-1:1; // deterministic tiebreak
-  });
-
-  // Pick up to 4 with no player conflicts — same algorithm, same result for everyone
-  const activeMatchIds=new Set();
+  // Fill locked set up to 4 — only add NEW matches to empty courts
   const busySched=new Set();
-  for(const m of sortedForSched){
-    if(activeMatchIds.size>=4) break;
-    const pl=pipAll(m);
-    if(pl.some(p=>busySched.has(p))) continue;
-    activeMatchIds.add(m.id);
-    pl.forEach(p=>busySched.add(p));
-  }
-  // Keep matches with pending scores active regardless (in-progress)
-  const pendingMatchIds=Object.keys(pendingAnyGame);
-  pendingMatchIds.forEach(mid=>{
-    const m=unplayedForSchedule.find(x=>x.id===mid);
-    if(m&&!activeMatchIds.has(mid)){
-      // A pending match not in active set — add it (override)
-      activeMatchIds.add(mid);
+  lockedIds.forEach(id=>{ const m=unplayedForSchedule.find(x=>x.id===id); if(m) pipAll(m).forEach(p=>busySched.add(p)); });
+
+  if(lockedIds.size<4){
+    // Sort waiting matches by fairness for filling open courts
+    const waitingMatches=unplayedForSchedule.filter(m=>!lockedIds.has(m.id));
+    const sortedWaiting=[...waitingMatches].sort((a,b2)=>{
+      const pa=pipAll(a).reduce((s,p)=>s+(mpSched[p]||0),0);
+      const pb=pipAll(b2).reduce((s,p)=>s+(mpSched[p]||0),0);
+      if(pa!==pb) return pa-pb;
+      return a.id<b2.id?-1:1;
+    });
+    for(const m of sortedWaiting){
+      if(lockedIds.size>=4) break;
+      const pl=pipAll(m);
+      if(pl.some(p=>busySched.has(p))) continue;
+      lockedIds.add(m.id);
+      pl.forEach(p=>busySched.add(p));
     }
-  });
+  }
+
+  // Persist locked set for this session
+  window._lockedMatchSessions[sessionKey]=lockedIds;
+  const activeMatchIds=lockedIds;
   const activeMatches=allMatchesForGame.filter(m=>activeMatchIds.has(m.id));
   const playersOnCourt=new Set(activeMatches.flatMap(m=>pipAll(m)));
 
@@ -5101,13 +5134,23 @@ async function renderActiveGameTab(myName){
         const theirS1=theirSubmission.s1, theirS2=theirSubmission.s2;
         const theirTeamScore=myTeamSide==='t1'?theirS2:theirS1;
         const myTeamScore=myTeamSide==='t1'?theirS1:theirS2;
-        html+='<div style="background:#FEF3E2;border:2px solid #f5cc80;border-radius:12px;padding:14px;margin-bottom:12px;text-align:center">';
-        html+='<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:8px">OPPONENTS SUBMITTED A SCORE</div>';
-        html+='<div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px">';
-        html+='<div style="text-align:center"><div style="font-size:11px;color:#888">Your team</div><div style="font-size:32px;font-weight:800;color:#1a1a1a">'+myTeamScore+'</div></div>';
-        html+='<div style="font-size:20px;color:#aaa">–</div>';
-        html+='<div style="text-align:center"><div style="font-size:11px;color:#888">Opponents</div><div style="font-size:32px;font-weight:800;color:#1a1a1a">'+theirTeamScore+'</div></div>';
+        const theirWon=theirTeamScore>myTeamScore;
+        const approvalWinner=theirWon?tLabel(oppTeam):tLabel(myTeam);
+        const approvalLoser=theirWon?tLabel(myTeam):tLabel(oppTeam);
+        const approvalWScore=Math.max(myTeamScore,theirTeamScore);
+        const approvalLScore=Math.min(myTeamScore,theirTeamScore);
+        html+='<div style="background:#FEF3E2;border:2px solid #f5cc80;border-radius:12px;padding:14px;margin-bottom:12px">';
+        html+='<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:10px;text-align:center">⚠️ OPPONENT SUBMITTED A SCORE — CONFIRM?</div>';
+        // Match context
+        html+='<div style="font-size:11px;color:#888;text-align:center;margin-bottom:8px">'+tLabel(myTeam)+' vs '+tLabel(oppTeam)+'</div>';
+        // Score display
+        html+='<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px">';
+        html+='<div style="text-align:center"><div style="font-size:10px;color:#7a4f00;margin-bottom:2px">'+tLabel(myTeam)+'</div><div style="font-size:36px;font-weight:800;color:'+(theirWon?'#888':'#27500A')+'">'+myTeamScore+'</div></div>';
+        html+='<div style="font-size:18px;color:#aaa">–</div>';
+        html+='<div style="text-align:center"><div style="font-size:10px;color:#7a4f00;margin-bottom:2px">'+tLabel(oppTeam)+'</div><div style="font-size:36px;font-weight:800;color:'+(theirWon?'#27500A':'#888')+'">'+theirTeamScore+'</div></div>';
         html+='</div>';
+        // Who wins
+        html+='<div style="font-size:12px;font-weight:700;color:#27500A;text-align:center;background:#EAF3DE;border-radius:8px;padding:6px;margin-bottom:8px">🏆 '+approvalWinner+' wins '+approvalWScore+'–'+approvalLScore+' (according to '+theirSubmission.submittedBy+')</div>';
         html+='<div style="display:flex;gap:8px">';
         html+='<button class="btn btn-primary" onclick="approveScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" data-s1="'+theirS1+'" data-s2="'+theirS2+'" style="flex:1;background:#27500A;border-color:#27500A">✓ Approve</button>';
         html+='<button class="btn" onclick="disputeScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" data-s1="'+theirS1+'" data-s2="'+theirS2+'" style="flex:1;background:#FEE2E2;border-color:#f87171;color:#991b1b">✗ Dispute</button>';
