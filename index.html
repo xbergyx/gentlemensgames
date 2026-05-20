@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v67.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v68.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v67.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v68.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4287,6 +4287,20 @@ function renderLeaderboard(){
   html+=`<div class="card"><div class="two-col"><div class="stat-card"><div class="stat-val" id="stat-games">0</div><div class="stat-label">Games done</div></div><div class="stat-card"><div class="stat-val" id="stat-players">0</div><div class="stat-label">Players</div></div></div></div>`;
   html+=`<div class="card"><div class="card-title">📊 Points per game</div><div id="game-pts-breakdown"></div></div>`;
   html+=`<div class="card" id="tiebreaker-card"><div class="card-title">🏓 Overall tiebreaker</div><div id="tiebreaker-panel"></div></div>`;
+  html+=(isAdmin?`<div class="card" style="border-color:#f0a0a0">
+    <div class="card-title">⚡ Point adjustments <span style="font-size:10px;font-weight:400;color:#888">(super admin only)</span></div>
+    <div style="font-size:11px;color:#888;margin-bottom:10px">Add or subtract points for any player on the fly.</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      <select id="adj-player" style="flex:2;margin:0;font-size:13px">
+        <option value="">— select player —</option>
+        ${(S.players||[]).map(p=>`<option value="${esc(p)}">${p} (${getTotalPts(p)} pts)</option>`).join('')}
+      </select>
+      <input type="number" id="adj-amount" placeholder="±pts" style="width:70px;margin:0;font-size:14px;text-align:center">
+    </div>
+    <input type="text" id="adj-reason" placeholder="Reason (e.g. score correction, penalty)" style="font-size:12px;margin-bottom:8px">
+    <button class="btn" onclick="applyPointAdjustment()" style="width:100%;background:#FEF2F2;border-color:#f0a0a0;color:#c0392b;font-weight:700">⚡ Apply adjustment</button>
+    ${Object.entries(S.points?.adjustments||{}).length?'<div style="margin-top:10px"><div style="font-size:10px;font-weight:700;color:#888;margin-bottom:6px">APPLIED ADJUSTMENTS</div>'+Object.entries(S.points?.adjustments||{}).map(([aid,a])=>'<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0ede6;font-size:11px"><span style="flex:1"><strong>'+a.player+'</strong> '+(a.amount>0?'+'+a.amount:a.amount)+' pts — '+(a.reason||'no reason')+'</span><button onclick="removePointAdjustment(\''+aid+'\')" style="font-size:10px;color:#c0392b;background:none;border:none;cursor:pointer">✕</button></div>').join('')+'</div>':''}
+  </div>`:'');
   html+=`<div class="card"><div class="card-title">🏆 Declare champion</div><div class="alert alert-warn" style="font-size:11px">Do at end of day. Saves to history and awards all badges.</div>
       <button class="btn btn-primary" onclick="declareTournamentWinner()">🏆 Finalize &amp; save to history</button><div id="declare-status"></div></div>`;
   html+=`<div class="card"><div class="card-title">👥 Tournament admins</div><div class="alert alert-info" style="font-size:11px;margin-bottom:8px">Add others who can approve scores and manage this tournament.</div><button class="btn" onclick="manageTourneyAdmins()">👥 Manage tournament admins</button></div>`;
@@ -4354,6 +4368,9 @@ function renderTiebreakerPanel(){
         +'<div style="font-size:14px;font-weight:700;margin-bottom:4px">'+tbGame.name+'</div>'
         +(tbGame.description?'<div style="font-size:12px;color:#888;margin-bottom:8px">'+tbGame.description+'</div>':'')
         +'<div style="font-size:11px;color:#27500A;margin-bottom:10px">✓ Players can see this on their Now Playing tab</div>'
+        +(tbGame.winner?'<div style="background:#EAF3DE;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:13px;font-weight:700;color:#27500A">🏆 Winner: '+tbGame.winner+' (+1 pt)</div>':'')
+        +'<div class="sec-label">Record winner (+1 point to standings)</div>'
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+(S.players||[]).map(p=>'<button class="btn btn-sm" onclick="recordTiebreakerWinner(\''+esc(p)+'\')" style="width:auto;'+(tbGame.winner===p?'background:#EAF3DE;border-color:#97C459;color:#27500A;font-weight:700':'')+'">'+p+'</button>').join('')+'</div>'
         +'<button class="btn btn-sm" onclick="openTiebreakerSetup()" style="width:auto;margin-bottom:4px">✏️ Edit</button> '
         +'<button class="btn btn-sm" onclick="clearTiebreakerGame()" style="width:auto;border-color:#f0a0a0;color:#c0392b">✕ Clear</button>'
         +'</div>';
@@ -4507,6 +4524,22 @@ window.openTiebreakerSetup = ()=>{
     renderTbTeams();
   }
   buildModal();
+};
+
+window.recordTiebreakerWinner = async (playerName)=>{
+  if(!confirm('Record '+playerName+' as the tiebreaker winner? They get +1 point added to the standings.')) return;
+  // Update tiebreakerGame with winner
+  const tbGame={...(S.tiebreakerGame||{}), winner:playerName, winnedAt:Date.now()};
+  // Award +1 point under special 'tiebreaker' key in points
+  const tbPoints={...(S.points?.tiebreaker||{})};
+  // Clear any previous tiebreaker points first
+  (S.players||[]).forEach(p=>{ tbPoints[p]=0; });
+  tbPoints[playerName]=1;
+  await update(ref(db,'tournaments/'+currentTourneyId),{
+    tiebreakerGame: tbGame,
+    ['points/tiebreaker']: tbPoints
+  });
+  alert('✓ '+playerName+' wins the tiebreaker! +1 point added to standings.');
 };
 
 window.clearTiebreakerGame = async ()=>{
