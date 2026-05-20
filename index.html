@@ -1805,7 +1805,12 @@ window.deleteTournament = async (tid, name)=>{
   if(!confirm(`Delete "${name}"? This permanently removes all players, rankings, scores and history. This cannot be undone.`)) return;
   if(!confirm(`Are you absolutely sure? "${name}" will be gone forever.`)) return;
   await set(ref(db,'tournaments/'+tid), null);
+  // If we were viewing this tournament, clean up
+  if(currentTourneyId===tid){
+    currentTourneyId=null; S=null; _globalProfiles={};
+  }
   alert('✓ Tournament deleted.');
+  showView('admin-panel');
   loadTournamentList();
 };
 
@@ -2605,9 +2610,13 @@ function renderAdminPlayers(){
   const players=S.players||[];
   e.innerHTML=`
     <div class="card">
-      <div class="card-title">🔍 Add from global database</div>
-      <input type="text" id="global-search" placeholder="Search players..." oninput="loadGlobalPlayers(this.value)" style="margin-bottom:8px">
-      <div id="global-player-list"></div>
+      <div class="card-title">🔍 Add players</div>
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="player-search-input" placeholder="Search by name, phone or email..."
+          oninput="searchPlayersToAdd(this.value)" style="padding-left:32px;margin:0">
+      </div>
+      <div id="player-search-results" style="margin-top:6px"></div>
     </div>
     <div class="card">
       <div class="card-title">👥 Players <span class="tag tag-purple">${players.length}</span></div>
@@ -2619,7 +2628,6 @@ function renderAdminPlayers(){
       <button class="btn btn-sm" onclick="manageTourneyAdmins()" style="width:auto;border-color:#e0ddd6;color:#888">👥 Manage tournament admins</button>
     </div>`;
   renderPlayerList();
-  loadGlobalPlayers('');
 }
 
 function renderAdminTesting(){
