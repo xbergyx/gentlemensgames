@@ -303,7 +303,7 @@ body { background: var(--bg); color: var(--text); }
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v23.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v24.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -377,7 +377,7 @@ body { background: var(--bg); color: var(--text); }
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v23.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v24.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3017,13 +3017,12 @@ function updSt(st,m){
   if(m.score1>m.score2){st[m.t1.id].w++;st[m.t2.id].l++;}else{st[m.t2.id].w++;st[m.t1.id].l++;}
 }
 function stayOnSort(teams,st,matches){
-  // Sort entire group by each criterion in order; no restarting after a winner is found
   function calcSubSt(subset,matchList){
     const ids=new Set(subset.map(t=>t.id));
     const sub={};
     subset.forEach(t=>{sub[t.id]={w:0,l:0,pf:0,pa:0};});
     (matchList||[]).forEach(m=>{
-      if(m.score1===null||m.score2===null) return;
+      if(m.score1==null||m.score2==null) return;
       if(!ids.has(m.t1.id)||!ids.has(m.t2.id)) return;
       sub[m.t1.id].pf+=m.score1; sub[m.t1.id].pa+=m.score2;
       sub[m.t2.id].pf+=m.score2; sub[m.t2.id].pa+=m.score1;
@@ -3032,22 +3031,36 @@ function stayOnSort(teams,st,matches){
     });
     return sub;
   }
-  return teams.slice().sort((a,b)=>{
+
+  // Group teams by win count so H2H is computed only within tied groups
+  const winGroups={};
+  teams.forEach(t=>{ const w=(st[t.id]||{w:0}).w; if(!winGroups[w])winGroups[w]=[]; winGroups[w].push(t); });
+
+  // For each pair, compute their comparison score using H2H within their win group
+  const h2hCache={};
+  function getH2H(team,winCount){
+    if(!h2hCache[winCount]) h2hCache[winCount]=calcSubSt(winGroups[winCount]||[],matches);
+    return h2hCache[winCount][team.id]||{w:0,l:0,pf:0,pa:0};
+  }
+
+  return teams.slice().sort((a,b2)=>{
+    const wa=(st[a.id]||{w:0}).w, wb=(st[b2.id]||{w:0}).w;
     // 1. Overall wins
-    const wa=(st[a.id]||{w:0}).w, wb=(st[b.id]||{w:0}).w;
     if(wb!==wa) return wb-wa;
-    // 2. H2H wins among all tied teams (just these two)
-    const h2h=calcSubSt([...teams],matches);
-    const ha=h2h[a.id]||{w:0,pf:0,pa:0}, hb=h2h[b.id]||{w:0,pf:0,pa:0};
+    // Same win count — use H2H within that win group
+    const ha=getH2H(a,wa), hb=getH2H(b2,wa);
+    // 2. H2H wins within tied group
     if(hb.w!==ha.w) return hb.w-ha.w;
-    // 3. H2H point diff
+    // 3. H2H point diff within tied group
     const da=ha.pf-ha.pa, db=hb.pf-hb.pa;
     if(db!==da) return db-da;
-    // 4. Overall point diff
-    const oa=st[a.id]||{pf:0,pa:0}, ob=st[b.id]||{pf:0,pa:0};
+    // 4. H2H points scored
+    if(hb.pf!==ha.pf) return hb.pf-ha.pf;
+    // 5. Overall point diff
+    const oa=st[a.id]||{pf:0,pa:0}, ob=st[b2.id]||{pf:0,pa:0};
     const ovA=oa.pf-oa.pa, ovB=ob.pf-ob.pa;
     if(ovB!==ovA) return ovB-ovA;
-    // 5. Overall points scored
+    // 6. Overall points scored
     return ob.pf-oa.pf;
   });
 }
