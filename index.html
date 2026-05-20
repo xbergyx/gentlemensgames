@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v42.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v43.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v42.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v43.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4931,7 +4931,7 @@ function renderPlayerGames(myName){
           html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:'+bg+';border-radius:8px;margin-bottom:3px">'
             +'<span style="font-size:16px;width:24px">'+(icon||place+'.')+'</span>'
             +'<span style="flex:1;font-size:13px;font-weight:'+(i<3?'600':'400')+'">'+teamLabel(t)+'</span>'
-            +'<span style="font-size:12px;color:#888">'+score+(g.format.includes('low')?' (low wins)':'')+' pts</span>'
+            +'<span style="font-size:12px;color:#888">'+score+(g.format==='score-high'||g.format==='multi-round-high'?' pins':g.format.includes('low')?' (low wins)':' pts')+'</span>'
             +'</div>';
         });
       } else {
@@ -5637,7 +5637,7 @@ async function renderActiveGameTab(myName){
         html+='<div style="font-size:11px;color:#888;text-align:center;margin-bottom:8px">'+tLabel(myTeam)+' vs '+tLabel(oppTeam)+'</div>';
         // Score display
         html+='<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px">';
-        html+='<div style="text-align:center"><div style="font-size:10px;color:#7a4f00;margin-bottom:2px">'+tLabel(myTeam)+'</div><div style="font-size:36px;font-weight:800;color:'+(theirWon?'#888':'#27500A')+'">'+myTeamScore+'</div></div>';
+        html+='<div style="text-align:center"><div style="font-size:10px;color:#7a4f00;margin-bottom:2px">'+tLabel(myTeam)+' <span style="background:#534AB7;color:#fff;border-radius:4px;padding:1px 4px;font-size:9px">YOU</span></div><div style="font-size:36px;font-weight:800;color:'+(theirWon?'#888':'#27500A')+'">'+myTeamScore+'</div></div>';
         html+='<div style="font-size:18px;color:#aaa">–</div>';
         html+='<div style="text-align:center"><div style="font-size:10px;color:#7a4f00;margin-bottom:2px">'+tLabel(oppTeam)+'</div><div style="font-size:36px;font-weight:800;color:'+(theirWon?'#27500A':'#888')+'">'+theirTeamScore+'</div></div>';
         html+='</div>';
