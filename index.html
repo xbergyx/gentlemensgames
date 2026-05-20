@@ -134,7 +134,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v9.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v10.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -208,7 +208,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v9.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v10.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2085,6 +2085,8 @@ function renderAdminGames(){
         <option value="host-score">Host enters tiebreaker score</option>
         <option value="host-pick">Host manually picks winner</option>
       </select>
+      <div class="sec-label">Tiebreaker description (shown in results)</div>
+      <input type="text" id="game-tb-desc" placeholder="e.g. Closest putt to the pin, Longest drive, etc." style="font-size:12px">
       <div class="sec-label">Team size</div>
       <select id="game-teamsize">
         <option value="2">2 players per team</option>
@@ -2372,7 +2374,8 @@ window.addGame = async ()=>{
   const teamSize=parseInt(el('game-teamsize')?.value||'2');
   const tbMode=el('game-tbmode')?.value||'stayon';
   const rules=(el('game-rules')?.value||'').trim();
-  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize,tbMode,rules};
+  const tbDesc=(el('game-tb-desc')?.value||'').trim();
+  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize,tbMode,rules,tbDesc};
   const games=[...(S.games||[]),g];
   await update(ref(db,'tournaments/'+currentTourneyId),{games});
   el('game-name-input').value='';
@@ -2995,7 +2998,22 @@ function renderMatchFeed(){
         +'</div></div>';
     }
   }
-  lockedGames.forEach(game=>{
+  // Only show active game fully, others as collapsed cards
+  const gamesToShow=lockedGames.filter(g=>g.id===(activeGame?.id));
+  const inactiveGames=lockedGames.filter(g=>g.id!==(activeGame?.id));
+  // Show inactive games as mini activate-able cards first (if no active game)
+  if(!activeGame&&inactiveGames.length){
+    html+='<div class="card"><div style="font-size:11px;font-weight:700;color:#888;margin-bottom:8px">Games ready to activate:</div>';
+    inactiveGames.forEach(g2=>{
+      const fin=(S.scores&&S.scores[g2.id]&&S.scores[g2.id]._fin);
+      if(!fin) html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ede6">'
+        +'<span style="font-size:13px;font-weight:600">'+g2.name+'</span>'
+        +'<button class="btn btn-sm btn-primary" onclick="activateGame(this)" data-gid="'+g2.id+'" style="width:auto">▶ Activate</button></div>';
+    });
+    html+='</div>';
+  }
+  const scoresToShow=activeGame?gamesToShow:lockedGames;
+  scoresToShow.forEach(game=>{
     const teams=(S.teams&&S.teams[game.id])||[];
     const b=S.bs&&S.bs[game.id];
     const scores=(S.scores&&S.scores[game.id])||{};
@@ -3540,7 +3558,11 @@ function renderTiebreakerPanel(){
   if(!sorted.length){e.innerHTML='';return;}
   const topScore=getTotalPts(sorted[0]),tied=sorted.filter(p=>getTotalPts(p)===topScore),tb=S.tiebreaker||{};
   if(tied.length<=1){e.innerHTML='<p style="font-size:12px;color:#27500A;font-weight:600">✓ No tie — clear winner!</p>';return;}
-  let html=`<div class="alert alert-warn" style="font-size:11px;margin-bottom:10px"><strong>${tied.length} players tied at ${topScore}pts:</strong> ${tied.join(', ')}<br>Tiebreaker: 1v1 beer pong.</div>`;
+  const existingTbNote=tb.note||'';
+  let html=`<div class="alert alert-warn" style="font-size:11px;margin-bottom:10px"><strong>${tied.length} players tied at ${topScore}pts:</strong> ${tied.join(', ')}</div>
+  <div class="sec-label">Tiebreaker description (shown in results)</div>
+  <input type="text" id="tb-note-input" placeholder="e.g. Closest putt to the pin" value="${esc(existingTbNote)}" style="margin-bottom:8px">
+  <button class="btn btn-sm" onclick="saveTbNote()" style="width:auto;margin-bottom:10px">💾 Save description</button>`;
   for(let i=0;i<tied.length;i++)for(let j=i+1;j<tied.length;j++){
     const p1=tied[i],p2=tied[j],key=p1+'___'+p2,res=tb[key];
     html+=`<div style="background:#fff;border:1px solid #e8e6df;border-radius:10px;padding:10px;margin-bottom:8px">
@@ -3573,6 +3595,13 @@ function renderTiebreakerPanel(){
   }
   e.innerHTML=html;
 }
+window.saveTbNote = async ()=>{
+  const note=el('tb-note-input')?.value.trim()||'';
+  const tiebreaker=JSON.parse(JSON.stringify(S.tiebreaker||{}));
+  tiebreaker.note=note;
+  await update(ref(db,'tournaments/'+currentTourneyId),{tiebreaker});
+  alert('✓ Description saved!');
+};
 window.saveTBMatch = async (key,p1,p2)=>{
   const s1=parseFloat(el('tb-'+key+'-1')?.value),s2=parseFloat(el('tb-'+key+'-2')?.value);
   if(isNaN(s1)||isNaN(s2)){alert('Enter cups for both.');return;}
@@ -4043,8 +4072,10 @@ function renderGameInfo(){
   games.forEach(g=>{
     const steps=tbSteps[g.tiebreak||'auto']||tbSteps['auto'];
     const rulesLines=(g.rules||'').split('\n').filter(Boolean);
-    html+='<div class="card">'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+    const isExpanded=window._expandedGames&&window._expandedGames.has(g.id);
+    const cardId='results-card-'+g.id;
+    html+='<div class="card" id="'+cardId+'" style="padding:0">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer" onclick="toggleResultsCard(this)" data-gid="'+g.id+'">'
       +'<div style="font-size:15px;font-weight:700">'+g.name+'</div>'
       +'<span class="tag" style="background:#EEEDFE;color:#3C3489">'+(fmtFull[g.format]||g.format)+'</span>'
       +'</div>';
@@ -4070,6 +4101,12 @@ function renderGameInfo(){
 
 function renderPlayerGames(myName){
   const e=el('pview-games'); if(!e) return;
+  if(!window._expandedGames){
+    // Default: expand the active/in-progress game
+    window._expandedGames=new Set();
+    const activeGId=(S.games||[]).find(g=>g.active||S.activeGameId===g.id)?.id;
+    if(activeGId) window._expandedGames.add(activeGId);
+  }
   const allGames=S.games||[];
   const activeGames=allGames.filter(g=>g.status!=='pending');
   if(!allGames.length){
@@ -4126,7 +4163,10 @@ function renderPlayerGames(myName){
     const stBg=isDone?'#EAF3DE':isAct?'#FEF3E2':'#f0ede6';
     const stCol=isDone?'#27500A':isAct?'#7a4f00':'#888';
     html+='<span class="tag" style="background:'+stBg+';color:'+stCol+'">'+stLabel+'</span>';
-    html+='</div>';
+    html+='<span style="font-size:16px;color:#ccc;margin-left:8px">'+(isExpanded?'▲':'▼')+'</span>';
+    html+='</div>'; // close header row
+
+    html+='<div id="results-body-'+g.id+'" style="display:'+(isExpanded?'block':'none')+';padding:0 2px 4px">';
 
     if(mt){
       html+='<div style="background:#EEEDFE;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px">';
@@ -4300,7 +4340,8 @@ function renderPlayerGames(myName){
           }
         }
 
-        html+='</div>'; // close card
+        html+='</div>'; // close collapsible body
+      html+='</div>'; // close card
         return; // done with this game
       }
 
@@ -4531,8 +4572,10 @@ function renderPlayerGames(myName){
         }
 
         if(explanations.length){
+          const tbNote=(S.tiebreaker&&S.tiebreaker.note)||g.tbDesc||'';
           html+='<div style="margin-top:8px;padding:8px;background:#FFFBEB;border-radius:8px;border:1px solid #fcd34d">';
-          html+='<div style="font-size:10px;font-weight:700;color:#7a4f00;margin-bottom:6px">🔍 How ties were broken</div>';
+          html+='<div style="font-size:10px;font-weight:700;color:#7a4f00;margin-bottom:4px">🔍 How ties were broken</div>';
+          if(tbNote) html+='<div style="font-size:11px;color:#7a4f00;margin-bottom:6px;font-style:italic">Method: '+tbNote+'</div>';
           explanations.forEach(ex=>{
             html+='<div style="font-size:10px;color:#7a4f00;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid #fde68a">• '+ex+'</div>';
           });
@@ -5119,6 +5162,15 @@ function renderMyTeams(myName){
   html+='</div>';
   e.innerHTML=html;
 }
+
+window.toggleResultsCard=function(btn){
+  const gid=btn&&btn.dataset?btn.dataset.gid:btn;
+  if(!window._expandedGames) window._expandedGames=new Set();
+  if(window._expandedGames.has(gid)) window._expandedGames.delete(gid);
+  else window._expandedGames.add(gid);
+  const myName=actingAsName||(userProfile?.name)||'';
+  renderPlayerGames(myName);
+};
 
 function getAllMatchesFromBracket(b,fmt){
   const all=[];
