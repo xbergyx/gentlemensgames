@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v49.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v53.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v49.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v53.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2493,8 +2493,8 @@ function renderAdminGames(){
         Rebuttal rule (tied score → overtime)
       </label>
       <label style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;cursor:pointer">
-        <input type="checkbox" id="game-has-dinger" style="width:16px!important;height:16px;margin:0;flex-shrink:0">
-        Instant-win / dinger rule
+        <input type="checkbox" id="game-has-instawin" style="width:16px!important;height:16px;margin:0;flex-shrink:0">
+        InstaWin rule
       </label>
 
       <div class="sec-label" id="tbmode-label" style="display:none">Tiebreaker method</div>
@@ -2749,54 +2749,54 @@ window.startTournament = async ()=>{
 const GAME_PRESETS = {
   cornhole: {
     name:'Cornhole', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
-    winScore:21, exactScore:false, hasRebuttal:true, hasDinger:false, tbDesc:'',
+    winScore:21, exactScore:false, hasRebuttal:true, hasInstaWin:false, tbDesc:'',
     rules:'• First to or above 21 wins (can go over)\n• Bags in hole = 3 pts, on board = 1 pt\n• Bags cancel — only net score counts each round\n• Bag must land and stay on board to count\n• Foul line: front edge of board — no stepping over\n• Knocked-off bags score nothing'
   },
   kanjam: {
     name:'KanJam', format:'', teamSize:'2', tiebreak:'host-pick', tbMode:'stayon',
-    winScore:21, exactScore:true, hasRebuttal:true, hasDinger:true, tbDesc:'',
-    rules:'• Play to exactly 21 — going over resets to 11\n• 3 pts = partner deflects your throw into the can, 2 pts = you hit the can yourself (unassisted), 1 pt = partner deflects your throw to hit the outside of the can\n• Dinger: throw it unassisted into the kan — through the front slot or the top — instant win regardless of score\n• Rebuttal only applies if you went second — if team 2 hits 21 after team 1, sudden death\n• Sudden death: each team throws one round, most points wins\n• Both players must throw each round\n• Can must stay upright to count points'
+    winScore:21, exactScore:true, hasRebuttal:true, hasInstaWin:true, tbDesc:'',
+    rules:'• Play to exactly 21 — going over resets to 11\n• 3 pts = partner deflects your throw into the can, 2 pts = you hit the can yourself (unassisted), 1 pt = partner deflects your throw to hit the outside of the can\n• InstaWin: throw it unassisted into the kan — through the front slot or the top — InstaWin regardless of score\n• Rebuttal only applies if you went second — if team 2 hits 21 after team 1, sudden death\n• Sudden death: each team throws one round, most points wins\n• Both players must throw each round\n• Can must stay upright to count points'
   },
   beerdie: {
     name:'Beer Die', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
-    winScore:7, exactScore:false, winBy2:true, hasRebuttal:false, hasDinger:false, tbDesc:'',
+    winScore:7, exactScore:false, winBy2:true, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• Play to 7, must win by 2\n• In cup = 3 pts, off cup = 2 pts, off table = 1 pt\n• Die must break table plane before catch — one hand, no trap\n• Must make it past the tape in the middle\n• Die must be thrown above head height of all players\n• No gripping the die\n• Must drink after every point your opponent scores'
   },
   beerdarts: {
     name:'Beer Darts', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
-    winScore:6, exactScore:true, hasRebuttal:false, hasDinger:false, tbDesc:'',
+    winScore:6, exactScore:true, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• Exactly 6 pierces to win\n• Each team member has their own can — 2 cans per team, 3 pierces per can\n• First hole in top of can = can eliminated (counts as 3 pierces)\n• Any hole in bottom silver ring = can eliminated (counts as 3 pierces)\n• Drink when your can is pierced'
   },
   bowling: {
     name:'Bowling', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'stayon',
-    winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasDinger:false,
+    winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasInstaWin:false,
     tbDesc:'Tiebreaker game — highest combined score wins',
     rules:'• Two games each teammate — total team pins\n• Alternate frames on second game\n• Team with highest combined pin total wins\n• Standard 10-pin bowling rules apply'
   },
   golf: {
     name:'Golf', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'stayon',
-    winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasDinger:false,
+    winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasInstaWin:false,
     tbDesc:'Closest putt to the pin',
     rules:'• Two man scramble — both hit from each spot, pick best ball and continue\n• One club length to improve lie, no improvement to rough\n• Two mulligans per team per round\n• Lowest total score wins\n• Each teammate must have at least one shot per hole'
   },
   spikeball: {
     name:'Spikeball', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
-    winScore:21, exactScore:false, winBy2:true, hasRebuttal:false, hasDinger:false, tbDesc:'',
+    winScore:21, exactScore:false, winBy2:true, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• Gentleman\'s serve to start — both teams agree on who goes first\n• Play to 21, must win by 2\n• Max 3 touches per team before hitting net, must alternate players\n• Serve must be hit cleanly — no spinning serves\n• Rim shots are replayed (let)\n• Scoring team serves next point\n• Switch sides after first team hits 11\n• No carrying or catching the ball\n• Body shots count if ball stays in play'
   },
   cocaine: {
     name:'Cocaine', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
-    winScore:7, exactScore:true, hasRebuttal:false, hasDinger:false, tbDesc:'',
+    winScore:7, exactScore:true, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• 6 cups per team — line up 3 in a row across table from partner\n• Shoot ball into cup — on a make, pass cup to other team who must drink and flip before continuing\n• Once all 6 cups are cleared, double bounce (or 17) to center bowl to win\n• Winning score = exactly 7 (6 cups and one bowl)\n• Flip must be completed before next throw can happen'
   },
   bucketball: {
     name:'Bucketball', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
-    winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasDinger:false, tbDesc:'',
+    winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• Standard Bucketball rules\n• Eliminate all opponent buckets to win\n• Each ball scored stays out of play'
   },
   custom: {
     name:'', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
-    winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasDinger:false, tbDesc:'', rules:''
+    winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasInstaWin:false, tbDesc:'', rules:''
   }
 };
 
@@ -2817,7 +2817,7 @@ window.applyGamePreset = (key)=>{
   // Clear both radios if scoreType is null (e.g. golf/bowling)
   if(p.scoreType===null){ if(rex) rex.checked=false; if(rmi) rmi.checked=false; }
   const hr=el('game-has-rebuttal'); if(hr) hr.checked=!!p.hasRebuttal;
-  const hd=el('game-has-dinger'); if(hd) hd.checked=!!p.hasDinger;
+  const hd=el('game-has-instawin'); if(hd) hd.checked=!!p.hasInstaWin;
   const gr=el('game-rules'); if(gr) gr.value=p.rules||'';
   // Update team-size aware rules for golf
   if(key==='golf') updateGolfRulesForTeamSize();
@@ -2903,8 +2903,8 @@ window.addGame = async ()=>{
   const exactScore=el('score-type-exact')?.checked||false;
   const winBy2=el('score-type-winby2')?.checked||false;
   const hasRebuttal=el('game-has-rebuttal')?.checked||false;
-  const hasDinger=el('game-has-dinger')?.checked||false;
-  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize,tbMode,rules,tbDesc,winScore,exactScore,winBy2,hasRebuttal,hasDinger};
+  const hasInstaWin=el('game-has-instawin')?.checked||false;
+  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize,tbMode,rules,tbDesc,winScore,exactScore,winBy2,hasRebuttal,hasInstaWin};
   const games=[...(S.games||[]),g];
   await update(ref(db,'tournaments/'+currentTourneyId),{games});
   el('game-name-input').value='';
@@ -3363,7 +3363,7 @@ function setResult(m,s1,s2){
   if(isNaN(s1)||isNaN(s2)){alert('Enter scores for both teams.');return false;}
   if(s1===s2){alert('No draws allowed.');return false;}
   m.score1=s1;m.score2=s2;
-  if(dingerWinner){ m.winner=dingerWinner==='t1'?m.t1:m.t2; m.isDinger=true; }
+  if(instaWinWinner){ m.winner=instaWinWinner==='t1'?m.t1:m.t2; m.isInstaWin=true; }
   else if(otWinner){ m.winner=otWinner==='t1'?m.t1:m.t2; m.wasOT=true; }
   else m.winner=s1>s2?m.t1:m.t2;
   // Schedule next matches async after save
@@ -3934,20 +3934,20 @@ window.approveMatchScore = async (gameId,matchId,type,poolKey,ri)=>{
   if(!pending){alert('No pending score found.');return;}
   const sub=pending.t1||pending.t2;
   if(!sub){alert('No score submitted yet.');return;}
-  const dingerWinner=(pending.t1?.isDinger?pending.t1:pending.t2?.isDinger?pending.t2:null)?.dingerWinner||null;
+  const instaWinWinner=(pending.t1?.isInstaWin?pending.t1:pending.t2?.isInstaWin?pending.t2:null)?.instaWinWinner||null;
   const otWinner2=(pending.t1?.wasOT?pending.t1:pending.t2?.wasOT?pending.t2:null)?.otWinner||null;
   await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:null});
-  await saveMFMatch(gameId,matchId,type,poolKey,ri,sub.s1,sub.s2,true,dingerWinner,otWinner2);
+  await saveMFMatch(gameId,matchId,type,poolKey,ri,sub.s1,sub.s2,true,instaWinWinner,otWinner2);
 };
 
-window.adminDinger = async (gameId,matchId)=>{
+window.adminInstaWin = async (gameId,matchId)=>{
   const b=S.bs&&S.bs[gameId]; const game=(S.games||[]).find(g=>g.id===gameId);
   if(!b||!game) return;
   const allM=getAllMatchesFromBracket(b,game.format);
   const m=allM.find(x=>x.id===matchId); if(!m) return;
   const t1n=[m.t1?.p1,m.t1?.p2,m.t1?.p3].filter(Boolean).join(' & ')||'Team 1';
   const t2n=[m.t2?.p1,m.t2?.p2,m.t2?.p3].filter(Boolean).join(' & ')||'Team 2';
-  const choice=confirm(t1n+' got the dinger? (Cancel = '+t2n+')');
+  const choice=confirm(t1n+' got the InstaWin? (Cancel = '+t2n+')');
   const winSide=choice?'t1':'t2';
   const target=game.minScore||21;
   const s1=winSide==='t1'?target:0; const s2=winSide==='t2'?target:0;
@@ -3955,7 +3955,7 @@ window.adminDinger = async (gameId,matchId)=>{
   await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
 };
 
-window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override,approved,dingerWinner,otWinner)=>{
+window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override,approved,instaWinWinner,otWinner)=>{
   const pfx=`mf-${gameId}-${matchId}`;
   const game=(S.games||[]).find(g=>g.id===gameId);
   let s1=s1override!==undefined?s1override:parseFloat(el(pfx+'-1')?.value);
@@ -3966,7 +3966,7 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
     const winScore=Math.max(s1,s2);
     if(winScore<activeGame3.minScore){alert('Winning score must be at least '+activeGame3.minScore+'.');return;}
   }
-  if(s1===s2&&!dingerWinner&&!otWinner&&!approved){alert('No draws allowed — enter the final score after overtime.');return;}
+  if(s1===s2&&!instaWinWinner&&!otWinner&&!approved){alert('No draws allowed — enter the final score after overtime.');return;}
   // approved path with equal scores + no flags: silently use t2 as winner (shouldn't normally happen)
   // Check if this game is active (admin bypass)
   const isAdminAction=approved||isAdmin||actingAsUid;
@@ -4002,7 +4002,7 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
     }
   }
   m.score1=s1;m.score2=s2;
-  if(dingerWinner){ m.winner=dingerWinner==='t1'?m.t1:m.t2; m.isDinger=true; }
+  if(instaWinWinner){ m.winner=instaWinWinner==='t1'?m.t1:m.t2; m.isInstaWin=true; }
   else if(otWinner){ m.winner=otWinner==='t1'?m.t1:m.t2; m.wasOT=true; }
   else m.winner=s1>s2?m.t1:m.t2;
   if(type==='rr')        updSt(b.standings,m);
@@ -5636,24 +5636,38 @@ async function renderActiveGameTab(myName){
         const theirS1=theirSubmission.s1, theirS2=theirSubmission.s2;
         const theirTeamScore=myTeamSide==='t1'?theirS2:theirS1;
         const myTeamScore=myTeamSide==='t1'?theirS1:theirS2;
-        const theirWon=theirTeamScore>myTeamScore;
+        const _isOT=!!theirSubmission.wasOT;
+        const _isInstaWin=!!theirSubmission.isInstaWin;
+        const _flagWinner=theirSubmission.otWinner||(theirSubmission.isInstaWin?theirSubmission.instaWinWinner:null)||null;
+        const theirWon=_flagWinner?(_flagWinner!==myTeamSide):(theirTeamScore>myTeamScore);
         const approvalWinner=theirWon?tLabel(oppTeam):tLabel(myTeam);
-        const approvalLoser=theirWon?tLabel(myTeam):tLabel(oppTeam);
-        const approvalWScore=Math.max(myTeamScore,theirTeamScore);
-        const approvalLScore=Math.min(myTeamScore,theirTeamScore);
         html+='<div style="background:#FEF3E2;border:2px solid #f5cc80;border-radius:12px;padding:14px;margin-bottom:12px">';
-        html+='<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:10px;text-align:center">'+(theirSubmission?.isDinger?'🎯 OPPONENT CLAIMS A DINGER — CONFIRM?':theirSubmission?.wasOT?'⚡ OPPONENT SUBMITTED OVERTIME RESULT — CONFIRM?':'⚠️ OPPONENT SUBMITTED A SCORE — CONFIRM?')+'</div>';
-        // Match context
-        html+='<div style="font-size:11px;color:#888;text-align:center;margin-bottom:8px">'+tLabel(myTeam)+' vs '+tLabel(oppTeam)+'</div>';
-        // Score display
-        html+='<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px">';
-        html+='<div style="text-align:center"><div style="font-size:10px;color:#7a4f00;margin-bottom:2px">'+tLabel(myTeam)+' <span style="background:#534AB7;color:#fff;border-radius:4px;padding:1px 4px;font-size:9px">YOU</span></div><div style="font-size:36px;font-weight:800;color:'+(theirWon?'#888':'#27500A')+'">'+myTeamScore+'</div></div>';
-        html+='<div style="font-size:18px;color:#aaa">–</div>';
-        html+='<div style="text-align:center"><div style="font-size:10px;color:#7a4f00;margin-bottom:2px">'+tLabel(oppTeam)+'</div><div style="font-size:36px;font-weight:800;color:'+(theirWon?'#27500A':'#888')+'">'+theirTeamScore+'</div></div>';
-        html+='</div>';
-        // Who wins
-        const _winNote=_isOT?' (overtime)':_isDinger?' (🎯 dinger)':'';
-        html+='<div style="font-size:12px;font-weight:700;color:#27500A;text-align:center;background:#EAF3DE;border-radius:8px;padding:6px;margin-bottom:8px">🏆 '+approvalWinner+' wins'+_winNote+' (according to '+theirSubmission.submittedBy+')</div>';
+        html+='<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:10px;text-align:center">'+(_isInstaWin?'🎯 INSTAWIN CLAIMED — CONFIRM?':_isOT?'⚡ OVERTIME RESULT — CONFIRM?':'⚠️ OPPONENT SUBMITTED A SCORE — CONFIRM?')+'</div>';
+        html+='<div style="font-size:11px;color:#888;text-align:center;margin-bottom:10px">'+tLabel(myTeam)+' vs '+tLabel(oppTeam)+'</div>';
+        if(_isInstaWin){
+          // InstaWin: show winner with 🎯 and actual scores for point diff
+          html+='<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px">';
+          html+='<div style="text-align:center"><div style="font-size:10px;color:#7a4f00;margin-bottom:2px">'+tLabel(myTeam)+' <span style="background:#534AB7;color:#fff;border-radius:4px;padding:1px 4px;font-size:9px">YOU</span></div><div style="font-size:36px;font-weight:800;color:'+(theirWon?'#888':'#27500A')+'">'+myTeamScore+'</div></div>';
+          html+='<div style="font-size:18px;color:#aaa">–</div>';
+          html+='<div style="text-align:center"><div style="font-size:10px;color:#7a4f00;margin-bottom:2px">'+tLabel(oppTeam)+'</div><div style="font-size:36px;font-weight:800;color:'+(theirWon?'#27500A':'#888')+'">'+theirTeamScore+'</div></div>';
+          html+='</div>';
+          html+='<div style="font-size:12px;font-weight:700;color:#27500A;text-align:center;background:#EAF3DE;border-radius:8px;padding:6px;margin-bottom:8px">🎯 '+approvalWinner+' wins by InstaWin!</div>';
+        } else if(_isOT){
+          // OT: show tied score + who won OT
+          html+='<div style="text-align:center;padding:8px 0;margin-bottom:10px">';
+          html+='<div style="font-size:28px;font-weight:800;color:#888;margin-bottom:6px">'+theirS1+' – '+theirS2+'</div>';
+          html+='<div style="font-size:13px;font-weight:700;color:#27500A">⚡ '+approvalWinner+' won overtime</div>';
+          html+='</div>';
+        } else {
+          // Normal score: show both scores
+          html+='<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px">';
+          html+='<div style="text-align:center"><div style="font-size:10px;color:#7a4f00;margin-bottom:2px">'+tLabel(myTeam)+' <span style="background:#534AB7;color:#fff;border-radius:4px;padding:1px 4px;font-size:9px">YOU</span></div><div style="font-size:36px;font-weight:800;color:'+(theirWon?'#888':'#27500A')+'">'+myTeamScore+'</div></div>';
+          html+='<div style="font-size:18px;color:#aaa">–</div>';
+          html+='<div style="text-align:center"><div style="font-size:10px;color:#7a4f00;margin-bottom:2px">'+tLabel(oppTeam)+'</div><div style="font-size:36px;font-weight:800;color:'+(theirWon?'#27500A':'#888')+'">'+theirTeamScore+'</div></div>';
+          html+='</div>';
+          html+='<div style="font-size:12px;font-weight:700;color:#27500A;text-align:center;background:#EAF3DE;border-radius:8px;padding:6px;margin-bottom:8px">🏆 '+approvalWinner+' wins (according to '+theirSubmission.submittedBy+')</div>';
+        }
+        html+='<div style="font-size:10px;color:#888;text-align:center;margin-bottom:10px">Submitted by '+theirSubmission.submittedBy+'</div>';
         html+='<div style="display:flex;gap:8px">';
         html+='<button class="btn btn-primary" onclick="approveScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" data-s1="'+theirS1+'" data-s2="'+theirS2+'" style="flex:1;background:#27500A;border-color:#27500A">✓ Approve</button>';
         html+='<button class="btn" onclick="disputeScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" data-s1="'+theirS1+'" data-s2="'+theirS2+'" style="flex:1;background:#FEE2E2;border-color:#f87171;color:#991b1b">✗ Dispute</button>';
@@ -5683,8 +5697,8 @@ async function renderActiveGameTab(myName){
         html+='<input type="number" id="ps-'+myMatch.id+'-'+(myTeamSide==='t1'?2:1)+'" placeholder="0" min="0" style="width:80px;padding:10px;border:1px solid #ddd;border-radius:12px;font-size:24px;text-align:center;font-weight:700;margin:0">';
         html+='</div></div>';
         html+='<button class="btn btn-primary" onclick="playerSubmitScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" style="font-size:14px;padding:12px">Submit score</button>';
-        if(activeGame.hasDinger){
-          html+='<button class="btn btn-sm" onclick="playerSubmitDinger(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" style="width:100%;margin-top:6px;background:#FEF3E2;border-color:#f5cc80;color:#7a4f00;font-size:13px">🎯 Dinger! (instant win)</button>';
+        if(activeGame.hasInstaWin){
+          html+='<button class="btn btn-sm" onclick="playerSubmitInstaWin(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" style="width:100%;margin-top:6px;background:#FEF3E2;border-color:#f5cc80;color:#7a4f00;font-size:13px">🎯 InstaWin!</button>';
         }
         html+='<div id="ps-'+myMatch.id+'-status"></div>';
       }
@@ -6096,18 +6110,18 @@ window.approveScore = async (btn)=>{
   const gameId=btn.dataset.gid, matchId=btn.dataset.mid, teamSide=btn.dataset.side;
   let s1=parseFloat(btn.dataset.s1), s2=parseFloat(btn.dataset.s2);
   const myName=actingAsName||(userProfile?.name)||'';
-  // Check if this is a dinger submission
+  // Check if this is a InstaWin submission
   const pendSnap=await get(ref(db,'tournaments/'+currentTourneyId+'/pendingScores/'+gameId+'/'+matchId));
   const pendData=pendSnap.exists()?pendSnap.val():{};
-  const dingerSub=pendData.t1?.isDinger?pendData.t1:pendData.t2?.isDinger?pendData.t2:null;
-  const dingerWinner=dingerSub?.dingerWinner||null;
+  const InstaWinSub=pendData.t1?.isInstaWin?pendData.t1:pendData.t2?.isInstaWin?pendData.t2:null;
+  const instaWinWinner=InstaWinSub?.instaWinWinner||null;
   const otSub=pendData.t1?.wasOT?pendData.t1:pendData.t2?.wasOT?pendData.t2:null;
   const otWinner=otSub?.otWinner||null;
   await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:null});
   const freshBSnap2=await get(ref(db,'tournaments/'+currentTourneyId+'/bs/'+gameId));
   const b=freshBSnap2.exists()?freshBSnap2.val():(S.bs&&S.bs[gameId]);
   const {type,poolKey,ri}=findMatchMeta(b,matchId,gameId);
-  await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true,dingerWinner,otWinner);
+  await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true,instaWinWinner,otWinner);
   setTimeout(()=>{ if(el('pview-active')&&!el('pview-active').classList.contains('hidden')) renderActiveGameTab(myName); },500);
 };
 
@@ -6860,8 +6874,8 @@ window.toggleDarkMode=()=>{
   try{const t=localStorage.getItem('gg-theme');if(t)applyTheme(t);}catch(e){}
 })();
 
-// Dinger — instant win, no score needed
-window.playerSubmitDinger = async (btn)=>{
+// InstaWin — InstaWin, no score needed
+window.playerSubmitInstaWin = async (btn)=>{
   const gameId=btn.dataset.gid, matchId=btn.dataset.mid;
   const myName=actingAsName||(userProfile?.name)||'';
   const b=S.bs&&S.bs[gameId];
@@ -6874,54 +6888,55 @@ window.playerSubmitDinger = async (btn)=>{
   const t2n=[matchObj.t2?.p1,matchObj.t2?.p2,matchObj.t2?.p3].filter(Boolean).join(' & ')||'Team 2';
   const target=game.winScore||game.minScore||21;
   const statusEl=el('ps-'+matchId+'-status');
-  window._dingerGid=gameId; window._dingerMid=matchId; window._dingerName=myName;
-  window._dingerT1n=t1n; window._dingerT2n=t2n; window._dingerTarget=target;
+  window._instaWinGid=gameId; window._instaWinMid=matchId; window._instaWinName=myName;
+  window._instaWinT1n=t1n; window._instaWinT2n=t2n; window._instaWinTarget=target;
   if(statusEl) statusEl.innerHTML=
     '<div style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:10px;padding:10px;margin-top:6px">'
-    +'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:8px">🎯 Dinger! — Who got it?</div>'
+    +'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:8px">🎯 InstaWin! — Who got it?</div>'
     +'<div style="display:flex;gap:6px;margin-bottom:8px">'
-    +'<button class="btn btn-sm" onclick="showDingerScore(1)" style="flex:1;background:#EEEDFE;border-color:#7F77DD;color:#534AB7;font-weight:700">🎯 '+t1n+'</button>'
-    +'<button class="btn btn-sm" onclick="showDingerScore(2)" style="flex:1;background:#EEEDFE;border-color:#7F77DD;color:#534AB7;font-weight:700">🎯 '+t2n+'</button>'
+    +'<button class="btn btn-sm" onclick="showInstaWinScore(1)" style="flex:1;background:#EEEDFE;border-color:#7F77DD;color:#534AB7;font-weight:700">🎯 '+t1n+'</button>'
+    +'<button class="btn btn-sm" onclick="showInstaWinScore(2)" style="flex:1;background:#EEEDFE;border-color:#7F77DD;color:#534AB7;font-weight:700">🎯 '+t2n+'</button>'
     +'</div>'
-    +'<div id="dinger-score-prompt" style="display:none"></div>'
+    +'<div id="instawin-score-prompt" style="display:none"></div>'
     +'</div>';
 };
 
-window.showDingerScore=(winner)=>{
-  window._dingerWinner=winner;
-  const loserName=winner===1?window._dingerT2n:window._dingerT1n;
-  const d=el('dinger-score-prompt'); if(!d) return;
+window.showInstaWinScore=(winner)=>{
+  window._instaWinWinner=winner;
+  const loserName=winner===1?window._instaWinT2n:window._instaWinT1n;
+  const d=el('instawin-score-prompt'); if(!d) return;
   d.style.display='block';
   d.innerHTML='<div style="font-size:11px;color:#7a4f00;margin-bottom:6px">What was <strong>'+loserName+'</strong> score?</div>'
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-    +'<input type="number" id="dinger-opp-score" placeholder="0" min="0" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;font-size:16px;text-align:center;margin:0">'
+    +'<input type="number" id="instawin-opp-score" placeholder="0" min="0" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;font-size:16px;text-align:center;margin:0">'
     +'<span style="font-size:12px;color:#888">pts for '+loserName+'</span>'
     +'</div>'
-    +'<button class="btn btn-primary btn-sm" onclick="confirmDingerP()" style="width:100%">✓ Confirm dinger</button>';
+    +'<button class="btn btn-primary btn-sm" onclick="confirmInstaWinP()" style="width:100%">✓ Confirm InstaWin</button>';
 };
 
-window.confirmDingerP = async ()=>{
-  const gameId=window._dingerGid, matchId=window._dingerMid, myName=window._dingerName;
-  const winner=window._dingerWinner||1;
+window.confirmInstaWinP = async ()=>{
+  const gameId=window._instaWinGid, matchId=window._instaWinMid, myName=window._instaWinName;
+  const winner=window._instaWinWinner||1;
   const winnerSide=winner===1?'t1':'t2';
-  const oppScore=parseFloat(el('dinger-opp-score')?.value)||0;
-  return confirmDinger(gameId,matchId,winnerSide,myName,oppScore);
+  const oppScore=parseFloat(el('instawin-opp-score')?.value)||0;
+  return confirmInstaWin(gameId,matchId,winnerSide,myName,oppScore);
 };
 
-window.confirmDinger = async (gameId,matchId,winnerSide,myName)=>{
-  const freshBSnap=await get(ref(db,'tournaments/'+currentTourneyId+'/bs/'+gameId));
-  const freshB=freshBSnap.exists()?freshBSnap.val():(S.bs&&S.bs[gameId]);
-  const {type,poolKey,ri}=findMatchMeta(freshB,matchId,gameId);
-  // Dinger: winning team gets target score, loser gets 0, mark as dinger
+window.confirmInstaWin = async (gameId,matchId,winnerSide,myName)=>{
+  // InstaWin goes into pending — opponent must confirm, just like a regular score
   const game=(S.games||[]).find(g=>g.id===gameId);
-  const target=game?.minScore||21;
-  const s1=winnerSide==='t1'?target:0;
-  const s2=winnerSide==='t2'?target:0;
-  // Clear any pending scores so opponent doesn't see a confirm prompt
-  await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:null});
-  await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
+  const oppScore=parseFloat(el('instawin-opp-score')?.value)||0;
+  const target=game?.winScore||game?.minScore||21;
+  const s1=winnerSide==='t1'?target:oppScore;
+  const s2=winnerSide==='t2'?target:oppScore;
+  const otherSide=winnerSide==='t1'?'t2':'t1';
+  const freshSnap=await get(ref(db,'tournaments/'+currentTourneyId+'/pendingScores/'+gameId+'/'+matchId));
+  const existing=freshSnap.exists()?freshSnap.val():{};
+  const submission={s1,s2,submittedBy:myName,at:Date.now(),isInstaWin:true,instaWinWinner:winnerSide};
+  const newPending={...existing,[winnerSide]:submission};
+  await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:newPending});
   const statusEl=el('ps-'+matchId+'-status');
-  if(statusEl) statusEl.innerHTML='<div class="alert alert-success" style="margin-top:6px">🎯 Dinger confirmed!</div>';
+  if(statusEl) statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px;margin-top:6px">🎯 InstaWin submitted — waiting for opponent to confirm.</div>';
 };
 
 window.submitOTWinner = async (btn)=>{
