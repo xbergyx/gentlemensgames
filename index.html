@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v63.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v64.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v63.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v64.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4290,6 +4290,14 @@ function renderLeaderboard(){
   html+=`<div class="card"><div class="card-title">🏆 Declare champion</div><div class="alert alert-warn" style="font-size:11px">Do at end of day. Saves to history and awards all badges.</div>
       <button class="btn btn-primary" onclick="declareTournamentWinner()">🏆 Finalize &amp; save to history</button><div id="declare-status"></div></div>`;
   html+=`<div class="card"><div class="card-title">👥 Tournament admins</div><div class="alert alert-info" style="font-size:11px;margin-bottom:8px">Add others who can approve scores and manage this tournament.</div><button class="btn" onclick="manageTourneyAdmins()">👥 Manage tournament admins</button></div>`;
+  // Act as player — available to all tournament admins
+  const _players=S.players||[];
+  html+=`<div class="card"><div class="card-title">🎭 View as player</div>
+    <div class="alert alert-info" style="font-size:11px;margin-bottom:8px">See the tournament from any player's perspective. Tap Stop to return to admin view.</div>
+    ${actingAsName?`<div class="alert alert-warn" style="font-size:11px;margin-bottom:8px">Currently viewing as: <strong>${actingAsName}</strong></div>`:''}
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${_players.map(p=>`<button class="btn btn-sm" onclick="tourneyActAs('${esc(p)}')" style="width:auto;${actingAsName===p?'background:#EEEDFE;border-color:#7F77DD;color:#534AB7;font-weight:700':''}">👤 ${p}</button>`).join('')}</div>
+    ${actingAsName?`<button class="btn btn-sm btn-danger" onclick="tourneyStopActAs()" style="width:100%;margin-top:8px">✕ Stop viewing as ${actingAsName}</button>`:''}
+  </div>`;
   e.innerHTML=html;
   renderGPB(); updateStats(); renderTiebreakerPanel();
 }
@@ -4361,6 +4369,44 @@ window.saveTBMatch = async (key,p1,p2)=>{
   tiebreaker[key]={s1,s2,winner:s1>s2?p1:p2};
   await update(ref(db,'tournaments/'+currentTourneyId),{tiebreaker});
 };
+window.tourneyActAs = (playerName)=>{
+  actingAsName=playerName;
+  actingAsUid=null;
+  // Find UID for this player if possible
+  const uids=S.playerUids||{};
+  const uid2=Object.keys(uids).find(k=>uids[k]===playerName)||null;
+  if(uid2) actingAsUid=uid2;
+  _viewingAsPlayer=true;
+  // Show floating pill so admin can get back
+  let pill=el('admin-role-pill');
+  if(pill) pill.remove();
+  pill=document.createElement('div');
+  pill.id='admin-role-pill';
+  pill.style.cssText='position:fixed;bottom:20px;right:16px;z-index:9999;'
+    +'background:#534AB7;color:#fff;border-radius:20px;padding:10px 16px;'
+    +'font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(83,74,183,.4);'
+    +'display:flex;align-items:center;gap:6px';
+  pill.innerHTML='🛡 Stop viewing as '+playerName;
+  pill.onclick=()=>tourneyStopActAs();
+  document.body.appendChild(pill);
+  hide('admin-area');
+  el('btn-admin-view')?.classList.remove('hidden');
+  el('btn-player-view')?.classList.add('hidden');
+  el('btn-manage-admins')?.classList.add('hidden');
+  renderPlayerView(playerName);
+};
+
+window.tourneyStopActAs = ()=>{
+  actingAsName=''; actingAsUid='';
+  _viewingAsPlayer=false;
+  el('admin-role-pill')?.remove();
+  el('btn-admin-view')?.classList.add('hidden');
+  el('btn-manage-admins')?.classList.remove('hidden');
+  const myName=(userProfile?.preferredName||userProfile?.name)||'';
+  el('btn-player-view')?.classList.toggle('hidden',!(S.players||[]).includes(myName));
+  showAdminPhase(_phase||'board'); // return to leaderboard tab
+};
+
 window.manageTourneyAdmins=()=>{
   get(ref(db,'players')).then(snap=>{
     const all=snap.exists()?snap.val():{},ta=S.tourneyAdmins||{},myUid=currentUser?.uid;
