@@ -134,7 +134,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v12.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v14.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -208,7 +208,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v12.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v14.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4170,18 +4170,19 @@ function renderPlayerGames(myName){
     function myTeam(){ return teams.find(t=>t.p1===myName||t.p2===myName||t.p3===myName); }
     const mt=myTeam();
 
-    html+='<div class="card">';
-    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    const isExpanded2=window._expandedGames&&window._expandedGames.has(g.id);
+    html+='<div class="card" style="padding:0">';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer" onclick="toggleResultsCard(this)" data-gid="'+g.id+'">';
     html+='<div style="font-size:15px;font-weight:700">'+g.name+'</div>';
     const isAct=g.active||S.activeGameId===g.id;
     const stLabel=isDone?'✅ Done':isAct?'▶ In progress':'⏸ Not started';
     const stBg=isDone?'#EAF3DE':isAct?'#FEF3E2':'#f0ede6';
     const stCol=isDone?'#27500A':isAct?'#7a4f00':'#888';
     html+='<span class="tag" style="background:'+stBg+';color:'+stCol+'">'+stLabel+'</span>';
-    html+='<span style="font-size:16px;color:#ccc;margin-left:8px">'+(isExpanded?'▲':'▼')+'</span>';
+    html+='<span style="font-size:16px;color:#ccc;margin-left:8px">'+(isExpanded2?'▲':'▼')+'</span>';
     html+='</div>'; // close header row
 
-    html+='<div id="results-body-'+g.id+'" style="display:'+(isExpanded?'block':'none')+';padding:0 2px 4px">';
+    html+='<div id="results-body-'+g.id+'" style="display:'+(isExpanded2?'block':'none')+';padding:0 12px 12px">';
 
     if(mt){
       html+='<div style="background:#EEEDFE;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px">';
@@ -4985,6 +4986,12 @@ async function renderActiveGameTab(myName){
     const myPending=pendScores[myTeam.id];
 
     html+='<div class="card">';
+    // Show team info for score games
+    const scorePartners=[myTeam.p1,myTeam.p2,myTeam.p3].filter(p=>p&&p!==myName);
+    html+='<div style="background:#EEEDFE;border-radius:10px;padding:10px;margin-bottom:10px">';
+    html+='<div style="font-size:11px;color:#534AB7;font-weight:700;margin-bottom:4px">YOUR TEAM</div>';
+    html+='<div style="font-size:16px;font-weight:700">'+nameSpan(myName)+(scorePartners.length?' & '+scorePartners.map(p=>nameSpan(p)).join(' & '):'')+'</div>';
+    html+='</div>';
     if(isDone){
       // Final scores already saved
       const myScore=scores[myTeam.id];
