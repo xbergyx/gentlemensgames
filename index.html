@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v47.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v49.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v47.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v49.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2634,6 +2634,7 @@ function renderAdminTesting(){
       <div class="card-title">🔄 Reset</div>
       <button class="btn btn-sm" onclick="resetTournament()" style="width:auto;border-color:#f0a0a0;color:#c0392b;margin-bottom:5px">🔄 Full reset (keep players &amp; games)</button>
       <button class="btn btn-sm" onclick="resetKeepRankings()" style="width:auto;border-color:#f5cc80;color:#7a4f00;margin-bottom:5px">↩️ Reset but keep rankings (unlock all)</button>
+      <button class="btn btn-sm" onclick="relockAllGames()" style="width:auto;border-color:#AFA9EC;color:#3C3489;background:#EEEDFE;margin-bottom:5px">🔒 Re-lock all games (restore teams view)</button>
       <div class="divider"></div>
       <div style="font-size:11px;font-weight:700;color:#888;margin-bottom:5px">📦 Rankings backup</div>
       <div style="font-size:11px;color:#aaa;margin-bottom:6px">Export before a reset, reload after to restore everyone's rankings.</div>
@@ -5641,7 +5642,7 @@ async function renderActiveGameTab(myName){
         const approvalWScore=Math.max(myTeamScore,theirTeamScore);
         const approvalLScore=Math.min(myTeamScore,theirTeamScore);
         html+='<div style="background:#FEF3E2;border:2px solid #f5cc80;border-radius:12px;padding:14px;margin-bottom:12px">';
-        html+='<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:10px;text-align:center">⚠️ OPPONENT SUBMITTED A SCORE — CONFIRM?</div>';
+        html+='<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:10px;text-align:center">'+(theirSubmission?.isDinger?'🎯 OPPONENT CLAIMS A DINGER — CONFIRM?':theirSubmission?.wasOT?'⚡ OPPONENT SUBMITTED OVERTIME RESULT — CONFIRM?':'⚠️ OPPONENT SUBMITTED A SCORE — CONFIRM?')+'</div>';
         // Match context
         html+='<div style="font-size:11px;color:#888;text-align:center;margin-bottom:8px">'+tLabel(myTeam)+' vs '+tLabel(oppTeam)+'</div>';
         // Score display
@@ -5651,7 +5652,8 @@ async function renderActiveGameTab(myName){
         html+='<div style="text-align:center"><div style="font-size:10px;color:#7a4f00;margin-bottom:2px">'+tLabel(oppTeam)+'</div><div style="font-size:36px;font-weight:800;color:'+(theirWon?'#27500A':'#888')+'">'+theirTeamScore+'</div></div>';
         html+='</div>';
         // Who wins
-        html+='<div style="font-size:12px;font-weight:700;color:#27500A;text-align:center;background:#EAF3DE;border-radius:8px;padding:6px;margin-bottom:8px">🏆 '+approvalWinner+' wins '+approvalWScore+'–'+approvalLScore+' (according to '+theirSubmission.submittedBy+')</div>';
+        const _winNote=_isOT?' (overtime)':_isDinger?' (🎯 dinger)':'';
+        html+='<div style="font-size:12px;font-weight:700;color:#27500A;text-align:center;background:#EAF3DE;border-radius:8px;padding:6px;margin-bottom:8px">🏆 '+approvalWinner+' wins'+_winNote+' (according to '+theirSubmission.submittedBy+')</div>';
         html+='<div style="display:flex;gap:8px">';
         html+='<button class="btn btn-primary" onclick="approveScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" data-s1="'+theirS1+'" data-s2="'+theirS2+'" style="flex:1;background:#27500A;border-color:#27500A">✓ Approve</button>';
         html+='<button class="btn" onclick="disputeScore(this)" data-gid="'+activeGame.id+'" data-mid="'+myMatch.id+'" data-side="'+myTeamSide+'" data-s1="'+theirS1+'" data-s2="'+theirS2+'" style="flex:1;background:#FEE2E2;border-color:#f87171;color:#991b1b">✗ Dispute</button>';
@@ -6461,6 +6463,22 @@ window.resetTournament = async ()=>{
   const games=(S.games||[]).map(g=>({...g,status:'pending'}));
   await update(ref(db,'tournaments/'+currentTourneyId),{rankings:{},gameRankings:{},teams:{},scores:{},points:{},bs:{},tiebreaker:{},rankingsLocked:false,rankingsFinalized:{},activeGameId:null,activeMatchIds:{},pendingScores:{},crossoverAck:{},tournamentStarted:false,tournamentFinalized:false,games});
 };
+window.relockAllGames = async ()=>{
+  // Re-lock any game that has teams assigned — restores the teams/scores view without touching data
+  const teams=S.teams||{};
+  const games=(S.games||[]).map(g=>{
+    if(teams[g.id]&&Object.keys(teams[g.id]).length>0){
+      // Has teams — lock it
+      return {...g, status:'locked'};
+    }
+    return g;
+  });
+  const lockedCount=games.filter(g=>g.status==='locked').length;
+  if(!lockedCount){ alert('No games have teams assigned yet.'); return; }
+  await update(ref(db,'tournaments/'+currentTourneyId),{games, tournamentStarted:true});
+  alert('✓ Re-locked '+lockedCount+' game'+(lockedCount!==1?'s':'')+'. Teams and scores should now be visible.');
+};
+
 window.resetKeepRankings = async ()=>{
   if(!confirm('Reset teams, scores and brackets but keep all player rankings?\nPlayers will be able to edit their rankings again.')) return;
   const games=(S.games||[]).map(g=>({...g,status:'ranking'}));
