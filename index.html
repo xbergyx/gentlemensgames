@@ -134,7 +134,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v4.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v5.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -208,7 +208,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v4.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v5.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4661,7 +4661,13 @@ async function renderActiveGameTab(myName){
       allMatchesForGame.find(m=>activeMatchIds.has(m.id)&&!m.winner&&
         (myPlayerNames.some(p=>m.t1&&(m.t1.p1===p||m.t1.p2===p||m.t1.p3===p))||
          myPlayerNames.some(p=>m.t2&&(m.t2.p1===p||m.t2.p2===p||m.t2.p3===p)))));
-    myMatchIsPlaying=!!myActiveMatch;
+    // Don't show score entry for crossover matches if pool play JUST finished
+    // (give players a moment to see the crossover bracket announcement)
+    const isCrossoverMatch=myActiveMatch&&b.crossover&&b.crossover.some(x=>x.id===myActiveMatch.id);
+    const poolJustFinished=isCrossoverMatch&&b.crossoverBuilt&&
+      b.crossover&&b.crossover.every(x=>!x.winner)&&
+      !pendingAnyGame[myActiveMatch.id]; // no pending scores yet
+    myMatchIsPlaying=!!myActiveMatch&&!poolJustFinished;
     // Use the actual active match for score entry (might differ from myNextMatch by ID)
     if(myActiveMatch&&myNextMatch&&myActiveMatch.id!==myNextMatch.id){
       // Sync: the active match IS our next match, just found it by player name
@@ -4747,6 +4753,19 @@ async function renderActiveGameTab(myName){
       const allMyDone=allMyMatches.every(m=>m.winner);
       if(allMyDone){
         html+='<div class="alert alert-success" style="text-align:center">🎉 All your matches in this game are done!</div>';
+      } else if(poolJustFinished&&b.crossover&&b.crossover.length){
+        // Show crossover bracket announcement
+        html+='<div style="background:#EEEDFE;border-radius:12px;padding:12px;margin-bottom:8px">';
+        html+='<div style="font-size:13px;font-weight:700;color:#3C3489;margin-bottom:8px">🏆 Pool play complete! Crossover bracket:</div>';
+        b.crossover.forEach(m=>{
+          const isMyX=myPlayerNames.some(p=>m.t1&&(m.t1.p1===p||m.t1.p2===p||m.t1.p3===p)||m.t2&&(m.t2.p1===p||m.t2.p2===p||m.t2.p3===p));
+          html+='<div style="padding:8px 10px;background:'+(isMyX?'#fff':'rgba(255,255,255,.5)')+';border-radius:8px;margin-bottom:4px;'+(isMyX?'border:2px solid #7F77DD':'border:1px solid #ddd')+'">';
+          html+='<div style="font-size:10px;color:#888;margin-bottom:2px">'+(m.label||'')+'</div>';
+          html+='<div style="font-size:13px;font-weight:700">'+tLabel(m.t1)+' vs '+tLabel(m.t2)+'</div>';
+          html+='</div>';
+        });
+        html+='<div style="font-size:11px;color:#7a4f00;margin-top:6px">Your match will appear above when it is your turn.</div>';
+        html+='</div>';
       } else if(myNextMatch&&oppBusy){
         html+='<div class="alert alert-info" style="font-size:12px">⏳ Your next match is against <strong>'
           +oppPlayerNames.join(' & ')
