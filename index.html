@@ -303,7 +303,7 @@ body { background: var(--bg); color: var(--text); }
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v24.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v25.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -377,7 +377,7 @@ body { background: var(--bg); color: var(--text); }
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v24.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v25.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4662,7 +4662,7 @@ function renderPlayerGames(myName){
             function placeStr(i){ return ['1st','2nd','3rd','4th','5th'][i]||(i+1)+'th'; }
             const tieGroups={};
             sorted3.forEach((t,i)=>{ const s=pSt[t.id]||{w:0,l:0}; const k=s.w+'-'+s.l; if(!tieGroups[k])tieGroups[k]=[]; tieGroups[k].push({t,i}); });
-            Object.values(tieGroups).forEach(group=>{
+            Object.values(tieGroups).sort((a,b2)=>Math.min(...a.map(x=>x.i))-Math.min(...b2.map(x=>x.i))).forEach(group=>{
               if(group.length<2) return;
               const s0=pSt[group[0].t.id]||{w:0,l:0};
               tbExps.push('Pool '+pKey+' '+group.length+'-way tie ('+s0.w+'W–'+s0.l+'L) broken by point differential: '
@@ -4766,7 +4766,7 @@ function renderPlayerGames(myName){
             if(!winGroups[w]) winGroups[w]=[];
             winGroups[w].push({t,i});
           });
-          Object.values(winGroups).forEach(group=>{
+          Object.values(winGroups).sort((a,b2)=>Math.min(...a.map(x=>x.i))-Math.min(...b2.map(x=>x.i))).forEach(group=>{
             if(group.length<2) return;
             const s0=allSt[group[0].t.id]||{w:0,l:0};
             const record=s0.w+'W–'+s0.l+'L';
@@ -4902,7 +4902,7 @@ function renderPlayerGames(myName){
             if(!tieGroups[key])tieGroups[key]=[];
             tieGroups[key].push({t,i});
           });
-          Object.values(tieGroups).forEach(group=>{
+          Object.values(tieGroups).sort((a,b2)=>Math.min(...a.map(x=>x.i))-Math.min(...b2.map(x=>x.i))).forEach(group=>{
             if(group.length<2) return;
             explainGroup(group);
           });
