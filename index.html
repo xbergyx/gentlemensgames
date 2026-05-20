@@ -134,7 +134,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v5.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v6.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -208,7 +208,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v5.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v6.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3320,6 +3320,7 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
       b.crossover=[];const len=Math.min(rA.length,rB.length);
       for(let i=0;i<len;i++) b.crossover.push({id:uid(),t1:rA[i],t2:rB[i],winner:null,score1:null,score2:null,label:`🏆 ${ordinal(i*2+1)}/${ordinal(i*2+2)} — Pool A ${ordinal(i+1)} vs Pool B ${ordinal(i+1)}`,winPlace:i*2+1,losePlace:i*2+2});
       b.crossoverBuilt=true;
+      b.crossoverBuiltAt=Date.now();
     }
   }
   if(type==='pppool'){
@@ -4664,9 +4665,14 @@ async function renderActiveGameTab(myName){
     // Don't show score entry for crossover matches if pool play JUST finished
     // (give players a moment to see the crossover bracket announcement)
     const isCrossoverMatch=myActiveMatch&&b.crossover&&b.crossover.some(x=>x.id===myActiveMatch.id);
+    // Pool just finished = crossover built, player hasn't acknowledged it yet
+    // OR no crossover matches have any scores yet AND it was just built
+    const ackKey='crossoverAck_'+activeGame.id;
+    const crossoverAcked=S.crossoverAck&&S.crossoverAck[activeGame.id]&&S.crossoverAck[activeGame.id][myName];
     const poolJustFinished=isCrossoverMatch&&b.crossoverBuilt&&
       b.crossover&&b.crossover.every(x=>!x.winner)&&
-      !pendingAnyGame[myActiveMatch.id]; // no pending scores yet
+      b.crossover.every(x=>!pendingAnyGame[x.id])&&
+      !crossoverAcked;
     myMatchIsPlaying=!!myActiveMatch&&!poolJustFinished;
     // Use the actual active match for score entry (might differ from myNextMatch by ID)
     if(myActiveMatch&&myNextMatch&&myActiveMatch.id!==myNextMatch.id){
@@ -4764,7 +4770,7 @@ async function renderActiveGameTab(myName){
           html+='<div style="font-size:13px;font-weight:700">'+tLabel(m.t1)+' vs '+tLabel(m.t2)+'</div>';
           html+='</div>';
         });
-        html+='<div style="font-size:11px;color:#7a4f00;margin-top:6px">Your match will appear above when it is your turn.</div>';
+        html+='<button class="btn btn-primary" onclick="acknowledgeCrossover(this)" data-gid="'+activeGame.id+'" data-name="'+esc(myName)+'" style="margin-top:8px;width:100%">✓ Got it — ready to play!</button>';
         html+='</div>';
       } else if(myNextMatch&&oppBusy){
         html+='<div class="alert alert-info" style="font-size:12px">⏳ Your next match is against <strong>'
@@ -5729,6 +5735,11 @@ window.deleteVote = async (btn)=>{
   if(!confirm('Delete this vote?')) return;
   await update(ref(db,'tournaments/'+currentTourneyId),{['votes/'+vid]:null});
   renderAdminVotes();
+};
+
+window.acknowledgeCrossover = async (btn)=>{
+  const gid=btn.dataset.gid, name=btn.dataset.name;
+  await update(ref(db,'tournaments/'+currentTourneyId+'/crossoverAck/'+gid),{[name]:true});
 };
 
 window.closeModal = ()=>{ const e=el('modal-area'); if(e)e.innerHTML=''; };
