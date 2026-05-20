@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v43.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v46.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v43.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v46.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3361,7 +3361,10 @@ function buildBracket(game,teams){
 function setResult(m,s1,s2){
   if(isNaN(s1)||isNaN(s2)){alert('Enter scores for both teams.');return false;}
   if(s1===s2){alert('No draws allowed.');return false;}
-  m.score1=s1;m.score2=s2;m.winner=s1>s2?m.t1:m.t2;
+  m.score1=s1;m.score2=s2;
+  if(dingerWinner){ m.winner=dingerWinner==='t1'?m.t1:m.t2; m.isDinger=true; }
+  else if(otWinner){ m.winner=otWinner==='t1'?m.t1:m.t2; m.wasOT=true; }
+  else m.winner=s1>s2?m.t1:m.t2;
   // Schedule next matches async after save
   setTimeout(()=>advanceMatchScheduler(gameId),500);
   return true;
@@ -3930,8 +3933,10 @@ window.approveMatchScore = async (gameId,matchId,type,poolKey,ri)=>{
   if(!pending){alert('No pending score found.');return;}
   const sub=pending.t1||pending.t2;
   if(!sub){alert('No score submitted yet.');return;}
+  const dingerWinner=(pending.t1?.isDinger?pending.t1:pending.t2?.isDinger?pending.t2:null)?.dingerWinner||null;
+  const otWinner2=(pending.t1?.wasOT?pending.t1:pending.t2?.wasOT?pending.t2:null)?.otWinner||null;
   await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:null});
-  await saveMFMatch(gameId,matchId,type,poolKey,ri,sub.s1,sub.s2,true);
+  await saveMFMatch(gameId,matchId,type,poolKey,ri,sub.s1,sub.s2,true,dingerWinner,otWinner2);
 };
 
 window.adminDinger = async (gameId,matchId)=>{
@@ -3949,7 +3954,7 @@ window.adminDinger = async (gameId,matchId)=>{
   await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
 };
 
-window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override,approved)=>{
+window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override,approved,dingerWinner,otWinner)=>{
   const pfx=`mf-${gameId}-${matchId}`;
   const game=(S.games||[]).find(g=>g.id===gameId);
   let s1=s1override!==undefined?s1override:parseFloat(el(pfx+'-1')?.value);
@@ -3960,7 +3965,8 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
     const winScore=Math.max(s1,s2);
     if(winScore<activeGame3.minScore){alert('Winning score must be at least '+activeGame3.minScore+'.');return;}
   }
-  if(s1===s2&&!activeGame3?.hasRebuttal&&!approved){alert('No draws allowed.');return;}
+  if(s1===s2&&!dingerWinner&&!otWinner&&!approved){alert('No draws allowed — enter the final score after overtime.');return;}
+  if(s1===s2&&!dingerWinner&&!otWinner&&approved){alert('Cannot save a tied score. Use the overtime buttons to record who won.');return;}
   // Check if this game is active (admin bypass)
   const isAdminAction=approved||isAdmin||actingAsUid;
   const activeGameId=S.activeGameId;
@@ -3994,7 +4000,10 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
       }
     }
   }
-  m.score1=s1;m.score2=s2;m.winner=s1>s2?m.t1:m.t2;
+  m.score1=s1;m.score2=s2;
+  if(dingerWinner){ m.winner=dingerWinner==='t1'?m.t1:m.t2; m.isDinger=true; }
+  else if(otWinner){ m.winner=otWinner==='t1'?m.t1:m.t2; m.wasOT=true; }
+  else m.winner=s1>s2?m.t1:m.t2;
   if(type==='rr')        updSt(b.standings,m);
   else if(type==='pool') updSt(poolKey==='A'?b.poolASt:b.poolBSt,m);
   else if(type==='pppool')updSt(b.pools[ri].standings,m);
@@ -6067,14 +6076,20 @@ window.withdrawScoreSubmission = async (btn)=>{
 
 window.approveScore = async (btn)=>{
   const gameId=btn.dataset.gid, matchId=btn.dataset.mid, teamSide=btn.dataset.side;
-  const s1=parseFloat(btn.dataset.s1), s2=parseFloat(btn.dataset.s2);
+  let s1=parseFloat(btn.dataset.s1), s2=parseFloat(btn.dataset.s2);
   const myName=actingAsName||(userProfile?.name)||'';
-  // Scores agreed — confirm
+  // Check if this is a dinger submission
+  const pendSnap=await get(ref(db,'tournaments/'+currentTourneyId+'/pendingScores/'+gameId+'/'+matchId));
+  const pendData=pendSnap.exists()?pendSnap.val():{};
+  const dingerSub=pendData.t1?.isDinger?pendData.t1:pendData.t2?.isDinger?pendData.t2:null;
+  const dingerWinner=dingerSub?.dingerWinner||null;
+  const otSub=pendData.t1?.wasOT?pendData.t1:pendData.t2?.wasOT?pendData.t2:null;
+  const otWinner=otSub?.otWinner||null;
   await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:null});
   const freshBSnap2=await get(ref(db,'tournaments/'+currentTourneyId+'/bs/'+gameId));
   const b=freshBSnap2.exists()?freshBSnap2.val():(S.bs&&S.bs[gameId]);
   const {type,poolKey,ri}=findMatchMeta(b,matchId,gameId);
-  await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
+  await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true,dingerWinner,otWinner);
   setTimeout(()=>{ if(el('pview-active')&&!el('pview-active').classList.contains('hidden')) renderActiveGameTab(myName); },500);
 };
 
@@ -6868,11 +6883,37 @@ window.confirmDinger = async (gameId,matchId,winnerSide,myName)=>{
   const target=game?.minScore||21;
   const s1=winnerSide==='t1'?target:0;
   const s2=winnerSide==='t2'?target:0;
+  // Clear any pending scores so opponent doesn't see a confirm prompt
   await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:null});
   await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
-  // Show confirmation
   const statusEl=el('ps-'+matchId+'-status');
   if(statusEl) statusEl.innerHTML='<div class="alert alert-success" style="margin-top:6px">🎯 Dinger confirmed!</div>';
+};
+
+window.submitOTWinner = async (btn)=>{
+  const gameId=btn.dataset.gid, matchId=btn.dataset.mid, teamSide=btn.dataset.side;
+  const otWinner=btn.dataset.winner; // 't1' or 't2'
+  const baseS=parseFloat(btn.dataset.s1); // tied score
+  // Keep scores tied — winner determined by OT selection, no point differential
+  const s1=baseS, s2=baseS;
+  const myName=actingAsName||(userProfile?.name)||'';
+  const otherSide=teamSide==='t1'?'t2':'t1';
+  const freshSnap=await get(ref(db,'tournaments/'+currentTourneyId+'/pendingScores/'+gameId+'/'+matchId));
+  const existing=freshSnap.exists()?freshSnap.val():{};
+  const submission={s1,s2,submittedBy:myName,at:Date.now(),wasOT:true,otWinner};
+  // Check if other team already submitted matching OT result
+  if(existing[otherSide]&&existing[otherSide].wasOT&&existing[otherSide].otWinner===otWinner){
+    await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:null});
+    const freshBSnap=await get(ref(db,'tournaments/'+currentTourneyId+'/bs/'+gameId));
+    const b=freshBSnap.exists()?freshBSnap.val():(S.bs&&S.bs[gameId]);
+    const {type,poolKey,ri}=findMatchMeta(b,matchId,gameId);
+    await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true,null,otWinner);
+    return;
+  }
+  const newPending={...existing,[teamSide]:submission};
+  await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:newPending});
+  const statusEl=el('ps-'+matchId+'-status');
+  if(statusEl) statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px;margin-top:6px">✓ OT result submitted — waiting for opponent to confirm.</div>';
 };
 
 window.toggleMatchEdit=(editId)=>{
