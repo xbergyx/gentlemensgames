@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v55.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v58.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v55.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v58.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3513,7 +3513,7 @@ function mHTML(gid,m,pfx,onSave){
   return`<div class="match-block">
     <div class="match-team ${w===m.t1.id?'winner':w?'loser':''}">${teamLabel(m.t1)}<input type="number" class="si-sm" id="${pfx}-${m.id}-1" value="${m.score1!==null?m.score1:''}" placeholder="Score"></div>
     <div class="match-team ${w===t2.id?'winner':w?'loser':''}">${teamLabel(t2)}<input type="number" class="si-sm" id="${pfx}-${m.id}-2" value="${m.score2!==null?m.score2:''}" placeholder="Score"></div>
-    ${m.winner?`<div style="font-size:10px;color:#27500A;margin-top:3px;font-weight:600">✓ ${teamLabel(m.winner)} (${m.score1}–${m.score2})</div>`:`<button class="btn btn-sm btn-success" style="margin-top:6px;width:100%" onclick="${onSave}">✓ Set result</button>`}
+    ${m.winner?`<div style="font-size:10px;color:#27500A;margin-top:3px;font-weight:600">✓ ${teamLabel(m.winner)} (${winnerScore}–${loserScore})</div>`:`<button class="btn btn-sm btn-success" style="margin-top:6px;width:100%" onclick="${onSave}">✓ Set result</button>`}
   </div>`;
 }
 
@@ -3782,6 +3782,9 @@ function matchRowPending(game,m,fmt,num,label,type,poolKey,ri){
 function matchRowDone(game,m,num,label,isEditable){
   if(!m.winner)return'';
   const loser=m.winner.id===m.t1.id?m.t2:m.t1;
+  const winnerScore=m.winner.id===m.t1.id?m.score1:m.score2;
+  const loserScore=m.winner.id===m.t1.id?m.score2:m.score1;
+  const isSuspicious=winnerScore!==null&&loserScore!==null&&winnerScore<=loserScore&&!m.wasOT&&!m.isInstaWin&&!m.isDinger;
   const pfx=`mf-${game.id}-${m.id}`;
   const {type,poolKey,ri}=findMatchMeta(S.bs&&S.bs[game.id],m.id,game.id);
   let saveCall='';
@@ -3799,16 +3802,17 @@ function matchRowDone(game,m,num,label,isEditable){
     // Read-only display
     return`<div style="background:#f8f7f4;border:1px solid #eee;border-radius:10px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       ${label?`<span style="font-size:10px;color:#aaa;font-weight:700">${label}</span>`:''}
+      ${isSuspicious?'<span style="font-size:10px;background:#FEF2F2;color:#991b1b;border:1px solid #fca5a5;border-radius:4px;padding:1px 5px;font-weight:700">⚠️ CHECK</span>':''}
       <span style="font-size:12px;font-weight:600;color:#27500A">✓ ${teamLabel(m.winner)}</span>
-      <span style="font-size:11px;color:#aaa">${m.score1}–${m.score2}</span>
+      <span style="font-size:11px;color:#aaa">${winnerScore}–${loserScore}${m.wasOT?' ⚡ OT':m.isInstaWin||m.isDinger?' 🎯':''}</span>
       <span style="font-size:11px;color:#aaa">def. ${teamLabel(loser)}</span>
     </div>`;
   }
   return`<div style="background:#f8f7f4;border:1px solid #e0ddd6;border-radius:10px;padding:8px 10px;margin-bottom:6px" id="${editId}-wrap">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer" onclick="toggleMatchEdit('${editId}')">
       ${label?`<span style="font-size:10px;color:#aaa;font-weight:700">${label}</span>`:''}
-      <span style="font-size:12px;font-weight:600;color:#27500A">✓ ${teamLabel(m.winner)}</span>
-      <span style="font-size:11px;color:#aaa">${m.score1}–${m.score2}</span>
+      ${isSuspicious?'<span style="font-size:10px;background:#FEF2F2;color:#991b1b;border:1px solid #fca5a5;border-radius:4px;padding:1px 5px;font-weight:700">⚠️ CHECK</span>':''}<span style="font-size:12px;font-weight:600;color:#27500A">✓ ${teamLabel(m.winner)}</span>
+      <span style="font-size:11px;color:#aaa">${winnerScore}–${loserScore}${m.wasOT?' ⚡ OT':m.isInstaWin||m.isDinger?' 🎯':''}</span>
       <span style="font-size:11px;color:#aaa">def. ${teamLabel(loser)}</span>
       <span style="margin-left:auto;font-size:11px;color:#7F77DD;font-weight:600">✏️ Edit</span>
     </div>
@@ -4987,8 +4991,8 @@ function renderPlayerGames(myName){
             const w=m.winner,l=m.t1.id===m.winner.id?m.t2:m.t1;
             const wS=s1>s2?s1:s2,lS=s1>s2?s2:s1;
             h+='<div style="padding:5px 8px;font-size:11px;border-bottom:1px solid #f0ede6;'+(isMine?'background:#EAF3DE;border-radius:6px;margin-bottom:2px':'')+'">';
-            h+='<span style="font-weight:600;color:#27500A">✓ '+teamLabel(w)+'</span>';
-            h+=(hasS?' '+wS+'–'+lS+' def. ':' beat ')+teamLabel(l);
+            h+='<span style="font-weight:600;color:#27500A">✓ '+teamLabel(w)+(m.wasOT?' ⚡':m.isInstaWin||m.isDinger?' 🎯':'')+'</span>';
+            h+=(hasS?' '+wS+'–'+lS+(m.wasOT?' (OT)':m.isInstaWin||m.isDinger?' 🎯':'')+' def. ':' beat ')+teamLabel(l);
             h+='</div>';
           });
           h+='</div>';
@@ -5019,8 +5023,8 @@ function renderPlayerGames(myName){
             if(played){
               const w=m.winner,l=m.t1.id===m.winner.id?m.t2:m.t1;
               const wS=s1>s2?s1:s2,lS=s1>s2?s2:s1;
-              html+='<span style="font-weight:600;color:#27500A">✓ '+teamLabel(w)+'</span>';
-              html+=(hasS?' '+wS+'–'+lS+' def. ':' beat ')+teamLabel(l);
+              html+='<span style="font-weight:600;color:#27500A">✓ '+teamLabel(w)+(m.wasOT?' ⚡':m.isInstaWin||m.isDinger?' 🎯':'')+'</span>';
+              html+=(hasS?' '+wS+'–'+lS+(m.wasOT?' (OT)':m.isInstaWin||m.isDinger?' 🎯':'')+' def. ':' beat ')+teamLabel(l);
             } else {
               html+=teamLabel(m.t1)+' vs '+teamLabel(m.t2)+' <span style="color:#aaa">(pending)</span>';
             }
@@ -5108,8 +5112,8 @@ function renderPlayerGames(myName){
           const l=_s1>_s2?m.t2:m.t1;
           const isMine=mt&&(m.t1.id===mt.id||m.t2.id===mt.id);
           html+='<div style="padding:5px 8px;font-size:11px;color:#444;border-bottom:1px solid #f0ede6;'+(isMine?'background:#EAF3DE;border-radius:6px;margin-bottom:2px':'')+'">'
-            +'<span style="font-weight:600;color:#27500A">✓ '+teamLabel(w)+'</span>'
-            +(_hasS?' '+wScore+'–'+lScore+' def. ':' beat ')+teamLabel(l)
+            +'<span style="font-weight:600;color:#27500A">✓ '+teamLabel(w)+(m.wasOT?' ⚡':m.isInstaWin||m.isDinger?' 🎯':'')+'</span>'
+            +(_hasS?' '+wScore+'–'+lScore+(m.wasOT?' (OT)':m.isInstaWin||m.isDinger?' 🎯':'')+' def. ':' beat ')+teamLabel(l)
             +'</div>';
         });
       }
