@@ -134,7 +134,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v10.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v12.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -208,7 +208,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v10.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v12.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4070,7 +4070,22 @@ function renderGameInfo(){
 
   let html='';
   games.forEach(g=>{
-    const steps=tbSteps[g.tiebreak||'auto']||tbSteps['auto'];
+    const isScoreGame=['score-low','score-high','multi-round-high','multi-round-low'].includes(g.format);
+    let steps=tbSteps[g.tiebreak||'auto']||tbSteps['auto'];
+    if(isScoreGame){
+      // Score games have no H2H — tiebreaker is just the custom rule
+      if(g.tbDesc){
+        steps=['Tiebreaker: '+g.tbDesc];
+      } else if(g.tiebreak==='host-score'){
+        steps=['Host enters a tiebreaker score for each tied player'];
+      } else if(g.tiebreak==='host-pick'){
+        steps=['Host manually selects the winner'];
+      } else {
+        steps=['Lowest total score wins','Ties broken by admin'];
+      }
+    } else if((g.tiebreak==='host-score'||g.tiebreak==='host-pick')&&g.tbDesc){
+      steps=['1. Most overall wins','2. Head-to-head record','3. Tiebreaker: '+g.tbDesc];
+    }
     const rulesLines=(g.rules||'').split('\n').filter(Boolean);
     const isExpanded=window._expandedGames&&window._expandedGames.has(g.id);
     const cardId='results-card-'+g.id;
