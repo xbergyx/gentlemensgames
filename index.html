@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/icon-192.png">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f4f0;color:#1a1a1a;min-height:100vh;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg,#f5f4f0);color:var(--text,#1a1a1a);min-height:100vh;-webkit-tap-highlight-color:transparent}
 .app{padding:1rem;max-width:440px;margin:0 auto}
 .logo{text-align:center;padding:1.5rem 0 1rem}
 .logo h1{font-size:24px;font-weight:600;color:#1a1a1a}
@@ -122,6 +122,100 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .player-search-result{padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:8px;border:1px solid #eee;margin-bottom:4px;background:#fff}
 .player-search-result:hover{background:#f8f7f4;border-color:#7F77DD}
 .invite-link-box{background:#f8f7f4;border:1px solid #e0ddd6;border-radius:9px;padding:8px 10px;font-size:11px;font-family:monospace;word-break:break-all;margin-bottom:6px;color:#534AB7}
+
+/* ── CSS VARIABLES ────────────────────────────────────── */
+:root {
+  --bg: #f5f4f0;
+  --bg2: #f8f7f4;
+  --bg3: #fff;
+  --surface: #fff;
+  --border: #e0ddd6;
+  --border2: #e8e6df;
+  --border3: #f0ede6;
+  --text: #1a1a1a;
+  --text2: #444;
+  --text3: #888;
+  --text4: #aaa;
+  --primary: #534AB7;
+  --primary-light: #EEEDFE;
+  --primary-mid: #7F77DD;
+  --green: #27500A;
+  --green-light: #EAF3DE;
+  --amber: #7a4f00;
+  --amber-light: #FFF3CD;
+  --red: #c0392b;
+  --red-light: #f0a0a0;
+}
+
+[data-theme="dark"] {
+  --bg: #0f0f10;
+  --bg2: #1a1a1c;
+  --bg3: #1a1a1c;
+  --surface: #222226;
+  --border: #2e2e34;
+  --border2: #38383e;
+  --border3: #2a2a30;
+  --text: #f0f0f2;
+  --text2: #c8c8cc;
+  --text3: #888890;
+  --text4: #55555e;
+  --primary: #7F77DD;
+  --primary-light: #2a2740;
+  --primary-mid: #9990e8;
+  --green: #5dcc4a;
+  --green-light: #1a2e16;
+  --amber: #e8b44a;
+  --amber-light: #2e2210;
+  --red: #e05050;
+  --red-light: #3a1a1a;
+}
+
+[data-theme="dark"] body { background: var(--bg); color: var(--text); }
+[data-theme="dark"] .card { background: var(--surface); border-color: var(--border); }
+[data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea {
+  background: var(--bg2); border-color: var(--border); color: var(--text);
+}
+[data-theme="dark"] .btn { background: var(--surface); border-color: var(--border); color: var(--text2); }
+[data-theme="dark"] .btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+[data-theme="dark"] .btn-success { background: #2a5a20; border-color: #3a7a2c; color: #9ddd8a; }
+[data-theme="dark"] .alert-info { background: #1a2030; border-color: #2a3a5a; color: #88aadd; }
+[data-theme="dark"] .alert-success { background: var(--green-light); border-color: #2a4a20; color: var(--green); }
+[data-theme="dark"] .alert-warn { background: var(--amber-light); border-color: #4a3a10; color: var(--amber); }
+[data-theme="dark"] .phase-tab { background: var(--bg2); border-color: var(--border); color: var(--text3); }
+[data-theme="dark"] .phase-tab.active { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+[data-theme="dark"] .ptab-btn { background: var(--bg2); border-color: var(--border); color: var(--text3); }
+[data-theme="dark"] .ptab-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+[data-theme="dark"] .tag { background: var(--bg3); border-color: var(--border); color: var(--text3); }
+[data-theme="dark"] .divider { border-color: var(--border3); }
+[data-theme="dark"] .player-row { border-color: var(--border3); }
+[data-theme="dark"] .lb-row { border-color: var(--border3); }
+[data-theme="dark"] .modal { background: var(--surface); }
+[data-theme="dark"] .modal-bg { background: rgba(0,0,0,.7); }
+[data-theme="dark"] .invite-link-box { background: var(--bg2); border-color: var(--border); color: var(--text2); }
+[data-theme="dark"] .sec-label { color: var(--text3); }
+[data-theme="dark"] .badge-admin { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+[data-theme="dark"] .name-link { color: var(--primary-mid); }
+
+/* Dark mode inline background overrides */
+[data-theme="dark"] [style*="background:#f5f4f0"],
+[data-theme="dark"] [style*="background:#f8f7f4"],
+[data-theme="dark"] [style*="background:#fff"],
+[data-theme="dark"] [style*="background: #fff"],
+[data-theme="dark"] [style*="background:#ffffff"] { background: var(--surface) !important; }
+[data-theme="dark"] [style*="background:#EEEDFE"] { background: var(--primary-light) !important; }
+[data-theme="dark"] [style*="background:#EAF3DE"] { background: var(--green-light) !important; }
+[data-theme="dark"] [style*="background:#FFF3CD"],
+[data-theme="dark"] [style*="background:#FFFBEB"] { background: var(--amber-light) !important; }
+[data-theme="dark"] [style*="border-color:#e0ddd6"],
+[data-theme="dark"] [style*="border-color:#e8e6df"],
+[data-theme="dark"] [style*="border-color:#f0ede6"] { border-color: var(--border) !important; }
+[data-theme="dark"] [style*="color:#1a1a1a"],
+[data-theme="dark"] [style*="color:#444"] { color: var(--text) !important; }
+[data-theme="dark"] [style*="color:#888"],
+[data-theme="dark"] [style*="color:#aaa"] { color: var(--text3) !important; }
+[data-theme="dark"] input:not([type=radio]):not([type=checkbox]) { 
+  color-scheme: dark;
+}
 </style>
 </head>
 <body>
@@ -134,7 +228,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v15.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v16.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -208,12 +302,13 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v15.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v16.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
         <button class="btn btn-sm" onclick="openEditProfile()" style="width:auto;color:#888">✏️ Profile</button>
         <button class="btn btn-sm" onclick="signOut()" style="width:auto;color:#888">Sign out</button>
+      <button class="btn btn-sm" onclick="toggleDarkMode()" id="dark-mode-btn" style="width:auto">🌙</button>
       </div>
     </div>
     <div id="install-prompt" class="hidden">
@@ -5971,6 +6066,22 @@ window.acknowledgeCrossover = async (btn)=>{
   const gid=btn.dataset.gid, name=btn.dataset.name;
   await update(ref(db,'tournaments/'+currentTourneyId+'/crossoverAck/'+gid),{[name]:true});
 };
+
+// ── DARK MODE ────────────────────────────────────────────
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme',theme);
+  const btn=el('dark-mode-btn');
+  if(btn) btn.textContent=theme==='dark'?'☀️':'🌙';
+  try{localStorage.setItem('gg-theme',theme);}catch(e){}
+}
+window.toggleDarkMode=()=>{
+  const cur=document.documentElement.getAttribute('data-theme')||'light';
+  applyTheme(cur==='dark'?'light':'dark');
+};
+// Init theme on load
+(()=>{
+  try{const t=localStorage.getItem('gg-theme');if(t)applyTheme(t);}catch(e){}
+})();
 
 window.closeModal = ()=>{ const e=el('modal-area'); if(e)e.innerHTML=''; };
 
