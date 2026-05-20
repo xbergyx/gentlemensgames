@@ -19,6 +19,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .logo p{font-size:12px;color:#888;margin-top:4px}
 .card{background:#fff;border:1px solid #e8e6df;border-radius:14px;padding:1rem 1.2rem;margin-bottom:1rem;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 .card-title{font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+input[type=radio],input[type=checkbox]{width:16px!important;height:16px!important;padding:0!important;border:none!important;flex-shrink:0;margin:0}
 input,select,textarea{width:100%;padding:9px 11px;border:1px solid #ddd;border-radius:9px;font-size:14px;font-family:inherit;color:#1a1a1a;background:#fff;margin-bottom:8px;transition:border .15s;-webkit-appearance:none}
 input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px rgba(127,119,221,.1)}
 .btn{width:100%;padding:10px;border:1px solid #ddd;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;background:#fff;color:#1a1a1a;transition:all .15s;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:7px;touch-action:manipulation}
@@ -303,7 +304,7 @@ body { background: var(--bg); color: var(--text); }
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v31.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v32.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -377,7 +378,7 @@ body { background: var(--bg); color: var(--text); }
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v31.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v32.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2290,24 +2291,24 @@ function renderAdminGames(){
       <input type="number" id="game-min-score" placeholder="Leave blank for no target score" style="font-size:12px">
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;flex:1;min-width:90px;padding:7px 8px;background:#f8f7f4;border-radius:8px;border:1px solid #e0ddd6">
-          <input type="radio" name="score-type" id="score-type-min" value="min" checked style="width:auto;margin:0">
+          <input type="radio" name="score-type" id="score-type-min" value="min" checked style="width:16px!important;height:16px;margin:0;flex-shrink:0">
           Can go over
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;flex:1;min-width:90px;padding:7px 8px;background:#f8f7f4;border-radius:8px;border:1px solid #e0ddd6">
-          <input type="radio" name="score-type" id="score-type-exact" value="exact" style="width:auto;margin:0">
+          <input type="radio" name="score-type" id="score-type-exact" value="exact" style="width:16px!important;height:16px;margin:0;flex-shrink:0">
           Must be exact
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;flex:1;min-width:90px;padding:7px 8px;background:#f8f7f4;border-radius:8px;border:1px solid #e0ddd6">
-          <input type="radio" name="score-type" id="score-type-winby2" value="winby2" style="width:auto;margin:0">
+          <input type="radio" name="score-type" id="score-type-winby2" value="winby2" style="width:16px!important;height:16px;margin:0;flex-shrink:0">
           Must win by 2
         </label>
       </div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer">
-        <input type="checkbox" id="game-has-rebuttal" style="width:auto;margin:0">
+        <input type="checkbox" id="game-has-rebuttal" style="width:16px!important;height:16px;margin:0;flex-shrink:0">
         Rebuttal rule (tied score → overtime)
       </label>
       <label style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;cursor:pointer">
-        <input type="checkbox" id="game-has-dinger" style="width:auto;margin:0">
+        <input type="checkbox" id="game-has-dinger" style="width:16px!important;height:16px;margin:0;flex-shrink:0">
         Instant-win / dinger rule
       </label>
 
@@ -2327,6 +2328,7 @@ function renderAdminGames(){
       <div id="games-list"><p class="empty">No games yet.</p></div>
     </div>`;
   renderGames();
+  setTimeout(()=>{ const gp=el('game-preset'); if(gp) applyGamePreset(gp.value||'cornhole'); },50);
 }
 
 // ── PLAYERS ───────────────────────────────────────────────
@@ -2638,8 +2640,6 @@ window.toggleRoundsOption = ()=>{
   if(el('game-preset')?.value==='golf') updateGolfRulesForTeamSize();
 };
 
-// Auto-apply first preset on load
-setTimeout(()=>{ if(el('game-preset')) applyGamePreset(el('game-preset').value); }, 100);
 
 window.toggleRoundsOption = ()=>{
   const fmt=el('game-format')?.value||'';
