@@ -303,7 +303,7 @@ body { background: var(--bg); color: var(--text); }
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v22.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v23.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -377,7 +377,7 @@ body { background: var(--bg); color: var(--text); }
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v22.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v23.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3202,13 +3202,15 @@ function renderMatchFeed(){
     const b=S.bs&&S.bs[game.id];
     const scores=(S.scores&&S.scores[game.id])||{};
     const fin=scores._fin;
+    // isEditMode: game is active OR points are cleared (unlocked)
+    const isEditMode=(game.active||S.activeGameId===game.id)||(!fin&&!S.points?.[game.id]);
     const fmt=game.format;
     let pendingHTML='',doneHTML='',totalMatches=0,doneMatches=0;
     if(fmt==='round-robin'&&b&&b.matches){
       const all=b.matches,order=b.matchOrder||all.map(m=>m.id);
       const ordered=order.map(id=>all.find(m=>m.id===id)).filter(Boolean);
       ordered.forEach((m,i)=>{
-        if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,i+1);}
+        if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,i+1,'',isEditMode);}
         else pendingHTML+=matchRowPending(game,m,fmt,i+1,'','rr');
       });
       totalMatches=all.length;
@@ -3218,33 +3220,33 @@ function renderMatchFeed(){
         const ordered=order.map(id=>pool.matches.find(m=>m.id===id)).filter(Boolean);
         totalMatches+=pool.matches.length;
         ordered.forEach((m,i)=>{
-          if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,i+1,'Pool '+pool.key);}
+          if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,i+1,'Pool '+pool.key,isEditMode);}
           else pendingHTML+=matchRowPending(game,m,fmt,i+1,'Pool '+pool.key,'pool',pool.key);
         });
       });
       (b.crossover||[]).forEach((m,i)=>{
         totalMatches++;
         const lbl=m.label||(ordinal(i*2+1)+'/'+ordinal(i*2+2)+' place');
-        if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,i+1,lbl);}
+        if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,i+1,lbl,isEditMode);}
         else pendingHTML+=matchRowPending(game,m,fmt,i+1,lbl,'cross');
       });
     } else if(fmt==='single-elim'&&b&&b.rounds){
       const rNames=['R1','R2','QF','SF','Final'];
       b.rounds.forEach((round,ri)=>round.forEach((m,mi)=>{
         if(m.bye)return;totalMatches++;
-        if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,mi+1,rNames[ri]||'R'+(ri+1));}
+        if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,mi+1,rNames[ri]||'R'+(ri+1),isEditMode);}
         else pendingHTML+=matchRowPending(game,m,fmt,mi+1,rNames[ri]||'R'+(ri+1),'se',null,ri);
       }));
     } else if(fmt==='double-elim'&&b){
-      (b.winners||[]).forEach((round,ri)=>round.forEach((m,mi)=>{if(m.bye)return;totalMatches++;if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,mi+1,'W-R'+(ri+1));}else pendingHTML+=matchRowPending(game,m,fmt,mi+1,'W-R'+(ri+1),'dew',null,ri);}));
-      (b.losers||[]).forEach((round,ri)=>round.forEach((m,mi)=>{totalMatches++;if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,mi+1,'L-R'+(ri+1));}else pendingHTML+=matchRowPending(game,m,fmt,mi+1,'L-R'+(ri+1),'del',null,ri);}));
-      if(b.grandFinal){totalMatches++;if(b.grandFinal.winner)doneHTML+=matchRowDone(game,b.grandFinal,1,'Grand Final');else pendingHTML+=matchRowPending(game,b.grandFinal,fmt,1,'Grand Final','degf');}
+      (b.winners||[]).forEach((round,ri)=>round.forEach((m,mi)=>{if(m.bye)return;totalMatches++;if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,mi+1,'W-R'+(ri+1),isEditMode);}else pendingHTML+=matchRowPending(game,m,fmt,mi+1,'W-R'+(ri+1),'dew',null,ri);}));
+      (b.losers||[]).forEach((round,ri)=>round.forEach((m,mi)=>{totalMatches++;if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,mi+1,'L-R'+(ri+1),isEditMode);}else pendingHTML+=matchRowPending(game,m,fmt,mi+1,'L-R'+(ri+1),'del',null,ri);}));
+      if(b.grandFinal){totalMatches++;if(b.grandFinal.winner)doneHTML+=matchRowDone(game,b.grandFinal,1,'Grand Final',isEditMode);else pendingHTML+=matchRowPending(game,b.grandFinal,fmt,1,'Grand Final','degf');}
     } else if(fmt==='pool-playoff'&&b&&b.pools){
       b.pools.forEach((pool,pi)=>{
         totalMatches+=pool.matches.length;
-        pool.matches.forEach((m,i)=>{if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,i+1,pool.name);}else pendingHTML+=matchRowPending(game,m,fmt,i+1,pool.name,'pppool',null,pi);});
+        pool.matches.forEach((m,i)=>{if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,i+1,pool.name,isEditMode);}else pendingHTML+=matchRowPending(game,m,fmt,i+1,pool.name,'pppool',null,pi);});
       });
-      (b.knockout||[]).forEach((m,i)=>{totalMatches++;if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,i+1,'KO');}else pendingHTML+=matchRowPending(game,m,fmt,i+1,m.label||'KO','ko');});
+      (b.knockout||[]).forEach((m,i)=>{totalMatches++;if(m.winner){doneMatches++;doneHTML+=matchRowDone(game,m,i+1,'KO',isEditMode);}else pendingHTML+=matchRowPending(game,m,fmt,i+1,m.label||'KO','ko');});
     } else {
       // score-based
       html+=renderScoreInputHTML(game,teams,scores);
@@ -3403,37 +3405,46 @@ function matchRowPending(game,m,fmt,num,label,type,poolKey,ri){
     <button class="btn btn-success btn-sm" style="width:100%" onclick="${saveCall}">✓ Save result</button>
   </div>`;
 }
-function matchRowDone(game,m,num,label){
+function matchRowDone(game,m,num,label,isEditable){
   if(!m.winner)return'';
   const loser=m.winner.id===m.t1.id?m.t2:m.t1;
   const pfx=`mf-${game.id}-${m.id}`;
   const {type,poolKey,ri}=findMatchMeta(S.bs&&S.bs[game.id],m.id,game.id);
   let saveCall='';
-  if(type==='rr')        saveCall=`saveMFMatch('${game.id}','${m.id}','rr')`;
-  else if(type==='pool') saveCall=`saveMFMatch('${game.id}','${m.id}','pool','${poolKey}')`;
-  else if(type==='cross')saveCall=`saveMFMatch('${game.id}','${m.id}','cross')`;
-  else if(type==='se')   saveCall=`saveMFMatch('${game.id}','${m.id}','se',null,${ri})`;
-  else if(type==='dew')  saveCall=`saveMFMatch('${game.id}','${m.id}','dew',null,${ri})`;
-  else if(type==='del')  saveCall=`saveMFMatch('${game.id}','${m.id}','del',null,${ri})`;
-  else if(type==='degf') saveCall=`saveMFMatch('${game.id}','${m.id}','degf')`;
-  else if(type==='pppool')saveCall=`saveMFMatch('${game.id}','${m.id}','pppool',null,${ri})`;
-  else if(type==='ko')   saveCall=`saveMFMatch('${game.id}','${m.id}','ko')`;
+  if(type==='rr')        saveCall=`saveMFMatch('${game.id}','${m.id}','rr',null,null,undefined,undefined,true)`;
+  else if(type==='pool') saveCall=`saveMFMatch('${game.id}','${m.id}','pool','${poolKey}',null,undefined,undefined,true)`;
+  else if(type==='cross')saveCall=`saveMFMatch('${game.id}','${m.id}','cross',null,null,undefined,undefined,true)`;
+  else if(type==='se')   saveCall=`saveMFMatch('${game.id}','${m.id}','se',null,${ri},undefined,undefined,true)`;
+  else if(type==='dew')  saveCall=`saveMFMatch('${game.id}','${m.id}','dew',null,${ri},undefined,undefined,true)`;
+  else if(type==='del')  saveCall=`saveMFMatch('${game.id}','${m.id}','del',null,${ri},undefined,undefined,true)`;
+  else if(type==='degf') saveCall=`saveMFMatch('${game.id}','${m.id}','degf',null,null,undefined,undefined,true)`;
+  else if(type==='pppool')saveCall=`saveMFMatch('${game.id}','${m.id}','pppool',null,${ri},undefined,undefined,true)`;
+  else if(type==='ko')   saveCall=`saveMFMatch('${game.id}','${m.id}','ko',null,null,undefined,undefined,true)`;
   const editId=`edit-${m.id}`;
-  return`<div style="background:#f8f7f4;border:1px solid #eee;border-radius:10px;padding:8px 10px;margin-bottom:6px" id="${editId}-wrap">
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap" onclick="toggleMatchEdit('${editId}')" style="cursor:pointer">
+  if(!isEditable){
+    // Read-only display
+    return`<div style="background:#f8f7f4;border:1px solid #eee;border-radius:10px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       ${label?`<span style="font-size:10px;color:#aaa;font-weight:700">${label}</span>`:''}
       <span style="font-size:12px;font-weight:600;color:#27500A">✓ ${teamLabel(m.winner)}</span>
       <span style="font-size:11px;color:#aaa">${m.score1}–${m.score2}</span>
       <span style="font-size:11px;color:#aaa">def. ${teamLabel(loser)}</span>
-      <span style="margin-left:auto;font-size:11px;color:#aaa;cursor:pointer" onclick="toggleMatchEdit('${editId}')">✏️ Edit</span>
+    </div>`;
+  }
+  return`<div style="background:#f8f7f4;border:1px solid #e0ddd6;border-radius:10px;padding:8px 10px;margin-bottom:6px" id="${editId}-wrap">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer" onclick="toggleMatchEdit('${editId}')">
+      ${label?`<span style="font-size:10px;color:#aaa;font-weight:700">${label}</span>`:''}
+      <span style="font-size:12px;font-weight:600;color:#27500A">✓ ${teamLabel(m.winner)}</span>
+      <span style="font-size:11px;color:#aaa">${m.score1}–${m.score2}</span>
+      <span style="font-size:11px;color:#aaa">def. ${teamLabel(loser)}</span>
+      <span style="margin-left:auto;font-size:11px;color:#7F77DD;font-weight:600">✏️ Edit</span>
     </div>
-    <div id="${editId}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid #eee">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <div style="flex:1;font-size:12px;font-weight:500">${teamLabel(m.t1)}</div>
-        <input type="number" id="${pfx}-1" value="${m.score1}" style="width:60px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center;margin:0">
-        <span style="color:#aaa">vs</span>
-        <input type="number" id="${pfx}-2" value="${m.score2}" style="width:60px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center;margin:0">
-        <div style="flex:1;font-size:12px;font-weight:500;text-align:right">${teamLabel(m.t2)}</div>
+    <div id="${editId}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid #e0ddd6">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="flex:1;font-size:12px;font-weight:600">${teamLabel(m.t1)}</div>
+        <input type="number" id="${pfx}-1" value="${m.score1}" placeholder="Score" style="width:60px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center;margin:0">
+        <span style="color:#aaa;font-size:12px">vs</span>
+        <input type="number" id="${pfx}-2" value="${m.score2}" placeholder="Score" style="width:60px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center;margin:0">
+        <div style="flex:1;font-size:12px;font-weight:600;text-align:right">${teamLabel(m.t2)}</div>
       </div>
       <button class="btn btn-primary btn-sm" style="width:100%" onclick="${saveCall}">✓ Update score</button>
     </div>
