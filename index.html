@@ -134,7 +134,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v6.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v8.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -208,7 +208,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v6.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v8.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3278,6 +3278,7 @@ window.approveMatchScore = async (gameId,matchId,type,poolKey,ri)=>{
 
 window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override,approved)=>{
   const pfx=`mf-${gameId}-${matchId}`;
+  const game=(S.games||[]).find(g=>g.id===gameId);
   let s1=s1override!==undefined?s1override:parseFloat(el(pfx+'-1')?.value);
   let s2=s2override!==undefined?s2override:parseFloat(el(pfx+'-2')?.value);
   if(isNaN(s1)||isNaN(s2)){alert('Enter scores for both teams.');return;}
@@ -3299,7 +3300,8 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
   else if(type==='degf')m=b.grandFinal;
   else if(type==='pppool')m=b.pools[ri].matches.find(x=>x.id===matchId);
   else if(type==='ko')  m=b.knockout.find(x=>x.id===matchId);
-  if(!m){alert('Match not found.');return;}
+  if(!m){alert('Match not found. (ID: '+matchId+')');return;}
+  if(m.winner&&!approved){alert('This match already has a result.');return;}
   m.score1=s1;m.score2=s2;m.winner=s1>s2?m.t1:m.t2;
   if(type==='rr')        updSt(b.standings,m);
   else if(type==='pool') updSt(poolKey==='A'?b.poolASt:b.poolBSt,m);
@@ -5102,7 +5104,8 @@ window.approveScore = async (btn)=>{
   const myName=actingAsName||(userProfile?.name)||'';
   // Scores agreed — confirm
   await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:null});
-  const b=S.bs&&S.bs[gameId];
+  const freshBSnap2=await get(ref(db,'tournaments/'+currentTourneyId+'/bs/'+gameId));
+  const b=freshBSnap2.exists()?freshBSnap2.val():(S.bs&&S.bs[gameId]);
   const {type,poolKey,ri}=findMatchMeta(b,matchId,gameId);
   await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
   setTimeout(()=>{ if(el('pview-active')&&!el('pview-active').classList.contains('hidden')) renderActiveGameTab(myName); },500);
