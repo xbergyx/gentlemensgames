@@ -304,7 +304,7 @@ body { background: var(--bg); color: var(--text); }
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v35.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v39.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -378,7 +378,7 @@ body { background: var(--bg); color: var(--text); }
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v35.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v39.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2228,6 +2228,7 @@ function renderAdminGames(){
       <div class="card-title">+ Add game</div>
       <div class="sec-label">Choose a game</div>
       <select id="game-preset" onchange="applyGamePreset(this.value)" style="font-size:14px;font-weight:600">
+        <option value="">— select a game —</option>
         <optgroup label="Your games">
           <option value="cornhole">🌽 Cornhole</option>
           <option value="kanjam">🎯 KanJam</option>
@@ -2249,6 +2250,7 @@ function renderAdminGames(){
 
       <div class="sec-label">Format</div>
       <select id="game-format" onchange="toggleRoundsOption()">
+        <option value="">— select format —</option>
         <optgroup label="Bracket">
           <option value="single-elim">Single elimination</option>
           <option value="double-elim">Double elimination</option>
@@ -2279,7 +2281,8 @@ function renderAdminGames(){
       </select>
 
       <div class="sec-label">Tiebreaker Rules</div>
-      <select id="game-tiebreak">
+      <select id="game-tiebreak" onchange="toggleTbModeVisibility(this.value)">
+        <option value="">— select tiebreaker —</option>
         <option value="auto">Auto Tiebreaker</option>
         <option value="host-score">Host enters tiebreaker score</option>
         <option value="host-pick">Host manually picks winner</option>
@@ -2291,18 +2294,18 @@ function renderAdminGames(){
       <input type="number" id="game-min-score" placeholder="Leave blank for no target score" style="font-size:12px">
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;flex:1;min-width:90px;padding:7px 8px;background:#f8f7f4;border-radius:8px;border:1px solid #e0ddd6">
-          <input type="radio" name="score-type" id="score-type-min" value="min" checked style="width:16px!important;height:16px;margin:0;flex-shrink:0">
+          <input type="radio" name="score-type" id="score-type-min" value="min" style="width:16px!important;height:16px;margin:0;flex-shrink:0">
           Can go over
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;flex:1;min-width:90px;padding:7px 8px;background:#f8f7f4;border-radius:8px;border:1px solid #e0ddd6">
           <input type="radio" name="score-type" id="score-type-exact" value="exact" style="width:16px!important;height:16px;margin:0;flex-shrink:0">
           Must be exact
         </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;flex:1;min-width:90px;padding:7px 8px;background:#f8f7f4;border-radius:8px;border:1px solid #e0ddd6">
-          <input type="radio" name="score-type" id="score-type-winby2" value="winby2" style="width:16px!important;height:16px;margin:0;flex-shrink:0">
-          Must win by 2
-        </label>
       </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="score-type-winby2" onchange="if(this.checked){var r=document.getElementById('score-type-min');if(r)r.checked=true;}" style="width:16px!important;height:16px;margin:0;flex-shrink:0">
+        Must win by 2 (auto-selects "Can go over")
+      </label>
       <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer">
         <input type="checkbox" id="game-has-rebuttal" style="width:16px!important;height:16px;margin:0;flex-shrink:0">
         Rebuttal rule (tied score → overtime)
@@ -2312,10 +2315,11 @@ function renderAdminGames(){
         Instant-win / dinger rule
       </label>
 
-      <div class="sec-label">Tiebreaker method</div>
-      <select id="game-tbmode">
-        <option value="stayon">Stay on step (rank all tied teams by one criterion)</option>
-        <option value="restart">Restart (pick one winner at a time, reset to step 1)</option>
+      <div class="sec-label" id="tbmode-label" style="display:none">Tiebreaker method</div>
+      <select id="game-tbmode" style="display:none">
+        <option value="">— select tiebreaker method —</option>
+        <option value="stayon">Straight Progression / Cascading Method</option>
+        <option value="restart">Re-sorting / Start-Over Method</option>
       </select>
 
       <div class="sec-label">Game rules <span style="font-size:10px;color:#aaa;font-weight:400">— edit as needed, each line = one bullet</span></div>
@@ -2328,7 +2332,7 @@ function renderAdminGames(){
       <div id="games-list"><p class="empty">No games yet.</p></div>
     </div>`;
   renderGames();
-  setTimeout(()=>{ const gp=el('game-preset'); if(gp) applyGamePreset(gp.value||'cornhole'); },50);
+  setTimeout(()=>{ const gp=el('game-preset'); if(gp&&gp.value) applyGamePreset(gp.value); },50);
 }
 
 // ── PLAYERS ───────────────────────────────────────────────
@@ -2559,7 +2563,7 @@ const GAME_PRESETS = {
   kanjam: {
     name:'KanJam', format:'', teamSize:'2', tiebreak:'host-pick', tbMode:'stayon',
     winScore:21, exactScore:true, hasRebuttal:true, hasDinger:true, tbDesc:'',
-    rules:'• Play to exactly 21 — going over resets to 11\n• 2 pts = you hit the can yourself (unassisted), 1 pt = partner deflects your throw into the can\n• Dinger: throw it unassisted into the kan — through the front slot or the top — instant win regardless of score\n• Rebuttal only applies if you went second — if team 2 hits 21 after team 1, sudden death\n• Sudden death: each team throws one round, most points wins\n• Both players must throw each round\n• Can must stay upright to count points'
+    rules:'• Play to exactly 21 — going over resets to 11\n• 3 pts = partner deflects your throw into the can, 2 pts = you hit the can yourself (unassisted), 1 pt = partner deflects your throw to hit the outside of the can\n• Dinger: throw it unassisted into the kan — through the front slot or the top — instant win regardless of score\n• Rebuttal only applies if you went second — if team 2 hits 21 after team 1, sudden death\n• Sudden death: each team throws one round, most points wins\n• Both players must throw each round\n• Can must stay upright to count points'
   },
   beerdie: {
     name:'Beer Die', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
@@ -2573,13 +2577,13 @@ const GAME_PRESETS = {
   },
   bowling: {
     name:'Bowling', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'stayon',
-    winScore:null, exactScore:false, hasRebuttal:false, hasDinger:false,
+    winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasDinger:false,
     tbDesc:'Tiebreaker game — highest combined score wins',
     rules:'• Two games each teammate — total team pins\n• Alternate frames on second game\n• Team with highest combined pin total wins\n• Standard 10-pin bowling rules apply'
   },
   golf: {
     name:'Golf', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'stayon',
-    winScore:null, exactScore:false, hasRebuttal:false, hasDinger:false,
+    winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasDinger:false,
     tbDesc:'Closest putt to the pin',
     rules:'• Two man scramble — both hit from each spot, pick best ball and continue\n• One club length to improve lie, no improvement to rough\n• Two mulligans per team per round\n• Lowest total score wins\n• Each teammate must have at least one shot per hole'
   },
@@ -2595,17 +2599,18 @@ const GAME_PRESETS = {
   },
   bucketball: {
     name:'Bucketball', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
-    winScore:null, exactScore:false, hasRebuttal:false, hasDinger:false, tbDesc:'',
+    winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasDinger:false, tbDesc:'',
     rules:'• Standard Bucketball rules\n• Eliminate all opponent buckets to win\n• Each ball scored stays out of play'
   },
   custom: {
     name:'', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
-    winScore:null, exactScore:false, hasRebuttal:false, hasDinger:false, tbDesc:'', rules:''
+    winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasDinger:false, tbDesc:'', rules:''
   }
 };
 
 
 window.applyGamePreset = (key)=>{
+  if(!key) return;
   const p=GAME_PRESETS[key]; if(!p) return;
   const ni=el('game-name-input'); if(ni) ni.value=p.name;
   // Don't override format — let user pick
@@ -2614,14 +2619,17 @@ window.applyGamePreset = (key)=>{
   const tm=el('game-tbmode'); if(tm) tm.value=p.tbMode;
   const td=el('game-tb-desc'); if(td) td.value=p.tbDesc||'';
   const ms=el('game-min-score'); if(ms) ms.value=p.winScore||'';
-  const rex=el('score-type-exact'); if(rex) rex.checked=!!p.exactScore&&!p.winBy2;
-  const rmi=el('score-type-min'); if(rmi) rmi.checked=!p.exactScore&&!p.winBy2;
+  const rex=el('score-type-exact'); if(rex) rex.checked=!!p.exactScore;
+  const rmi=el('score-type-min'); if(rmi) rmi.checked=p.scoreType==='min'||(!p.exactScore&&p.scoreType!==null&&!p.winBy2&&p.winScore);
   const rwb=el('score-type-winby2'); if(rwb) rwb.checked=!!p.winBy2;
+  // Clear both radios if scoreType is null (e.g. golf/bowling)
+  if(p.scoreType===null){ if(rex) rex.checked=false; if(rmi) rmi.checked=false; }
   const hr=el('game-has-rebuttal'); if(hr) hr.checked=!!p.hasRebuttal;
   const hd=el('game-has-dinger'); if(hd) hd.checked=!!p.hasDinger;
   const gr=el('game-rules'); if(gr) gr.value=p.rules||'';
   // Update team-size aware rules for golf
   if(key==='golf') updateGolfRulesForTeamSize();
+  toggleTbModeVisibility(p.tiebreak||'');
 };
 
 window.updateGolfRulesForTeamSize = ()=>{
@@ -2665,6 +2673,14 @@ window.toggleRoundsOption = ()=>{
     if(defaults[fmt]) rulesEl.value=defaults[fmt];
   }
 };
+window.toggleTbModeVisibility = (val)=>{
+  const show = val==='auto';
+  const lbl=el('tbmode-label'), sel=el('game-tbmode');
+  if(lbl) lbl.style.display=show?'':'none';
+  if(sel) sel.style.display=show?'':'none';
+  if(!show&&sel) sel.value=''; // clear value when hidden
+};
+
 window.autoRuleBullet = (e, ta)=>{
   if(e.key==='Enter'){
     e.preventDefault();
@@ -2685,6 +2701,8 @@ window.addGame = async ()=>{
   const format=el('game-format').value, tb=el('game-tiebreak').value;
   const rounds=(format==='multi-round-high'||format==='multi-round-low')?parseInt(el('game-rounds').value)||2:1;
   if(!name){ alert('Enter a game name.'); return; }
+  if(!format){ alert('Select a format.'); return; }
+  if(!tb){ alert('Select a tiebreaker.'); return; }
   const teamSize=parseInt(el('game-teamsize')?.value||'2');
   const tbMode=el('game-tbmode')?.value||'stayon';
   const rules=(el('game-rules')?.value||'').trim();
@@ -4563,8 +4581,8 @@ function renderGameInfo(){
     ]
   };
   const tbMethodFull={
-    'restart':'Restart after each winner — after picking a winner, restart from step 1 for remaining teams',
-    'stayon':'Stay on step — rank all tied teams by whichever step first separates them'
+    'restart':'Re-sorting / Start-Over Method — pick one winner at a time, restart tiebreaker from step 1 for remaining teams',
+    'stayon':'Straight Progression / Cascading Method — rank all tied teams by whichever step first separates them'
   };
 
   let html='';
@@ -4607,7 +4625,7 @@ function renderGameInfo(){
       html+='<div style="font-size:11px;padding:2px 0;color:#7a4f00">'+s+'</div>';
     });
     html+='</div>';
-    html+='<div style="font-size:10px;color:#aaa">Method: '+(tbMethodFull[g.tbMode||'stayon'])+'</div>';
+    if(g.tiebreak==='auto') html+='<div style="font-size:10px;color:#aaa">Method: '+(tbMethodFull[g.tbMode||'stayon'])+'</div>';
     html+='</div>';
   });
   e.innerHTML=html;
