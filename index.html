@@ -134,7 +134,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v14.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v15.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -208,7 +208,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v14.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v15.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3374,16 +3374,41 @@ window.lockGameScores = async (gameId)=>{
   await update(ref(db,'tournaments/'+currentTourneyId),{games});
 };
 window.unlockGameScores = async (gameId)=>{
-  if(!confirm('Unlock scores for this game? The finalized scores will be cleared so you can re-enter them.')) return;
-  const games=(S.games||[]).map(g=>g.id===gameId?{...g,scoresLocked:false,status:'locked'}:g);
-  // Clear the finalized scores so admin can re-enter
+  if(!confirm('Unlock this game? All scores, points and results will be cleared so you can re-enter them. This cannot be undone.')) return;
+  const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
+  const isScoreType=['score-low','score-high','multi-round-high','multi-round-low'].includes(game.format);
+  const games=(S.games||[]).map(g=>g.id===gameId?{...g,scoresLocked:false,status:'locked',active:false}:g);
   const updates={
     games,
     ['scores/'+gameId]:null,
     ['points/'+gameId]:null,
+    ['pendingScores/'+gameId]:null,
+    activeGameId:S.activeGameId===gameId?null:S.activeGameId,
   };
+  // For H2H bracket games: reset all match winners and scores in the bracket
+  if(!isScoreType && S.bs&&S.bs[gameId]){
+    const b=JSON.parse(JSON.stringify(S.bs[gameId]));
+    function clearMatches(matches){ if(matches) matches.forEach(m=>{m.winner=null;m.score1=null;m.score2=null;}); }
+    clearMatches(b.matches);
+    if(b.poolAM) clearMatches(b.poolAM);
+    if(b.poolBM) clearMatches(b.poolBM);
+    if(b.crossover) { clearMatches(b.crossover); b.crossoverBuilt=false; delete b.crossoverBuiltAt; }
+    if(b.rounds) b.rounds.forEach(r=>clearMatches(r));
+    if(b.winners) b.winners.forEach(r=>clearMatches(r));
+    if(b.losers) b.losers.forEach(r=>clearMatches(r));
+    if(b.grandFinal){b.grandFinal.winner=null;b.grandFinal.score1=null;b.grandFinal.score2=null;}
+    if(b.knockout) clearMatches(b.knockout);
+    // Reset standings
+    function resetSt(st){ if(st) Object.keys(st).forEach(k=>{st[k]={w:0,l:0,pf:0,pa:0};}); }
+    resetSt(b.standings); resetSt(b.poolASt); resetSt(b.poolBSt);
+    if(b.pools) b.pools.forEach(p=>resetSt(p.standings));
+    updates['bs/'+gameId]=b;
+  }
   await update(ref(db,'tournaments/'+currentTourneyId),updates);
+  // Recalculate overall standings (points cleared)
   renderMatchFeed();
+  renderLeaderboard();
+  alert('✓ Game unlocked. Re-enter scores and use Save & Award Points when done.');
 };
 
 window.adminApproveScoreSubmission = async (btn)=>{
@@ -4171,18 +4196,19 @@ function renderPlayerGames(myName){
     const mt=myTeam();
 
     const isExpanded2=window._expandedGames&&window._expandedGames.has(g.id);
-    html+='<div class="card" style="padding:0">';
-    html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer" onclick="toggleResultsCard(this)" data-gid="'+g.id+'">';
-    html+='<div style="font-size:15px;font-weight:700">'+g.name+'</div>';
+    html+='<div style="background:#fff;border:1px solid #e8e6df;border-radius:14px;margin-bottom:8px;overflow:hidden">';
+    html+='<div style="display:flex;align-items:center;gap:10px;padding:13px 16px;cursor:pointer;user-select:none" onclick="toggleResultsCard(this)" data-gid="'+g.id+'">';
+    html+='<div style="flex:1;font-size:15px;font-weight:700">'+g.name+'</div>';
     const isAct=g.active||S.activeGameId===g.id;
     const stLabel=isDone?'✅ Done':isAct?'▶ In progress':'⏸ Not started';
     const stBg=isDone?'#EAF3DE':isAct?'#FEF3E2':'#f0ede6';
     const stCol=isDone?'#27500A':isAct?'#7a4f00':'#888';
-    html+='<span class="tag" style="background:'+stBg+';color:'+stCol+'">'+stLabel+'</span>';
-    html+='<span style="font-size:16px;color:#ccc;margin-left:8px">'+(isExpanded2?'▲':'▼')+'</span>';
+    html+='<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:'+stBg+';color:'+stCol+'">'+stLabel+'</span>';
+    if(mt&&!isExpanded2) html+='<span style="font-size:11px;color:#aaa;margin-right:2px">'+tLabel(mt)+'</span>';
+    html+='<span style="font-size:13px;color:#ccc">'+(isExpanded2?'▲':'▼')+'</span>';
     html+='</div>'; // close header row
 
-    html+='<div id="results-body-'+g.id+'" style="display:'+(isExpanded2?'block':'none')+';padding:0 12px 12px">';
+    html+='<div id="results-body-'+g.id+'" style="display:'+(isExpanded2?'block':'none')+';padding:2px 16px 14px;border-top:'+(isExpanded2?'1px solid #f0ede6':'none')+'">';
 
     if(mt){
       html+='<div style="background:#EEEDFE;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px">';
@@ -4357,7 +4383,7 @@ function renderPlayerGames(myName){
         }
 
         html+='</div>'; // close collapsible body
-      html+='</div>'; // close card
+      html+='</div>'; // close game card
         return; // done with this game
       }
 
