@@ -303,7 +303,7 @@ body { background: var(--bg); color: var(--text); }
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v20.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v21.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -377,7 +377,7 @@ body { background: var(--bg); color: var(--text); }
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v20.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v21.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3183,6 +3183,19 @@ function renderMatchFeed(){
     });
     html+='</div>';
   }
+  // Save All button - lets admin enter multiple scores then save all at once
+  if(activeGame){
+    const ag=activeGame;
+    const fmt=ag.format;
+    const isH2H=!['score-low','score-high','multi-round-high','multi-round-low'].includes(fmt);
+    if(isH2H){
+      html+='<div class="card" style="border-color:#534AB7;background:#FAFAFE">'
+        +'<div style="font-size:13px;font-weight:700;color:#534AB7;margin-bottom:6px">💾 Save all entered scores at once</div>'
+        +'<div style="font-size:11px;color:#888;margin-bottom:8px">Enter scores for multiple matches below, then tap Save All. Only matches with both scores filled will be saved.</div>'
+        +'<button class="btn btn-primary" onclick="saveAllEnteredScores()" style="width:100%">💾 Save all entered scores</button>'
+        +'</div>';
+    }
+  }
   const scoresToShow=activeGame?gamesToShow:lockedGames;
   scoresToShow.forEach(game=>{
     const teams=(S.teams&&S.teams[game.id])||[];
@@ -3338,6 +3351,27 @@ function renderMatchFeed(){
 
   e.innerHTML=html||'<div class="card"><div class="alert alert-info">No pending matches.</div></div>';
 }
+
+window.saveAllEnteredScores = async ()=>{
+  const ag=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
+  if(!ag) return;
+  const b=S.bs&&S.bs[ag.id]; if(!b) return;
+  const allM=getAllMatchesFromBracket(b,ag.format);
+  const pending=allM.filter(m=>!m.winner&&m.t1&&m.t2);
+  let saved=0, skipped=0;
+  for(const m of pending){
+    const pfx='mf-'+ag.id+'-'+m.id;
+    const v1=parseFloat(el(pfx+'-1')?.value);
+    const v2=parseFloat(el(pfx+'-2')?.value);
+    if(isNaN(v1)||isNaN(v2)){ skipped++; continue; }
+    if(v1===v2){ skipped++; continue; } // no draws
+    const {type,poolKey,ri}=findMatchMeta(b,m.id,ag.id);
+    await saveMFMatch(ag.id,m.id,type,poolKey,ri,v1,v2,true);
+    saved++;
+  }
+  if(saved>0) alert('✓ Saved '+saved+' match'+(saved!==1?'es':'')+'. '+(skipped>0?skipped+' skipped (incomplete or draw).':''));
+  else alert('No complete scores found. Enter both scores for each match you want to save.');
+};
 
 window.rejectMatchScore = async (gameId,matchId)=>{
   await update(ref(db,'tournaments/'+currentTourneyId),{[`pendingScores/${gameId}/${matchId}`]:null});
@@ -3568,41 +3602,44 @@ window.lockGameScores = async (gameId)=>{
   await update(ref(db,'tournaments/'+currentTourneyId),{games});
 };
 window.unlockGameScores = async (gameId)=>{
-  if(!confirm('Unlock this game? All scores, points and results will be cleared so you can re-enter them. This cannot be undone.')) return;
+  if(!confirm('Unlock this game? Points will be removed from the leaderboard so you can edit individual match results. All match results will remain but will be editable.')) return;
   const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
   const isScoreType=['score-low','score-high','multi-round-high','multi-round-low'].includes(game.format);
-  const games=(S.games||[]).map(g=>g.id===gameId?{...g,scoresLocked:false,status:'locked',active:false}:g);
+  // Only remove points and the _fin flag — keep the bracket/results intact
+  const games=(S.games||[]).map(g=>g.id===gameId?{...g,scoresLocked:false}:g);
   const updates={
     games,
-    ['scores/'+gameId]:null,
-    ['points/'+gameId]:null,
-    ['pendingScores/'+gameId]:null,
-    activeGameId:S.activeGameId===gameId?null:S.activeGameId,
+    ['points/'+gameId]:null,           // remove from leaderboard
+    ['pendingScores/'+gameId]:null,     // clear any pending
   };
-  // For H2H bracket games: reset all match winners and scores in the bracket
-  if(!isScoreType && S.bs&&S.bs[gameId]){
-    const b=JSON.parse(JSON.stringify(S.bs[gameId]));
-    function clearMatches(matches){ if(matches) matches.forEach(m=>{m.winner=null;m.score1=null;m.score2=null;}); }
-    clearMatches(b.matches);
-    if(b.poolAM) clearMatches(b.poolAM);
-    if(b.poolBM) clearMatches(b.poolBM);
-    if(b.crossover) { clearMatches(b.crossover); b.crossoverBuilt=false; delete b.crossoverBuiltAt; }
-    if(b.rounds) b.rounds.forEach(r=>clearMatches(r));
-    if(b.winners) b.winners.forEach(r=>clearMatches(r));
-    if(b.losers) b.losers.forEach(r=>clearMatches(r));
-    if(b.grandFinal){b.grandFinal.winner=null;b.grandFinal.score1=null;b.grandFinal.score2=null;}
-    if(b.knockout) clearMatches(b.knockout);
-    // Reset standings
-    function resetSt(st){ if(st) Object.keys(st).forEach(k=>{st[k]={w:0,l:0,pf:0,pa:0};}); }
-    resetSt(b.standings); resetSt(b.poolASt); resetSt(b.poolBSt);
-    if(b.pools) b.pools.forEach(p=>resetSt(p.standings));
-    updates['bs/'+gameId]=b;
+  // Remove _fin flag so game shows as editable (keep scores data for score games)
+  if(isScoreType){
+    // For score games: keep individual scores but remove _fin so admin can edit
+    const existingScores=S.scores&&S.scores[gameId]?{...S.scores[gameId]}:{};
+    delete existingScores._fin;
+    updates['scores/'+gameId]=existingScores;
+  } else {
+    // For H2H: just remove _fin, keep bracket results
+    updates['scores/'+gameId]=null;
+    // Recalculate standings from existing match winners
+    if(S.bs&&S.bs[gameId]){
+      const b=JSON.parse(JSON.stringify(S.bs[gameId]));
+      // Re-derive standings from match results (in case they were lost)
+      function rebuildSt(teams,matches,st){
+        if(!teams||!matches||!st) return;
+        Object.keys(st).forEach(k=>{st[k]={w:0,l:0,pf:0,pa:0};});
+        matches.forEach(m=>{if(m.winner&&m.score1!=null&&m.score2!=null) updSt(st,m);});
+      }
+      if(b.matches) rebuildSt(b.poolA||[],b.matches,b.standings);
+      if(b.poolAM) rebuildSt(b.poolA||[],b.poolAM,b.poolASt||{});
+      if(b.poolBM) rebuildSt(b.poolB||[],b.poolBM,b.poolBSt||{});
+      updates['bs/'+gameId]=b;
+    }
   }
   await update(ref(db,'tournaments/'+currentTourneyId),updates);
-  // Recalculate overall standings (points cleared)
   renderMatchFeed();
   renderLeaderboard();
-  alert('✓ Game unlocked. Re-enter scores and use Save & Award Points when done.');
+  alert('✓ Game unlocked for editing. Points removed from leaderboard. Edit individual matches and hit Save & Award Points when done.');
 };
 
 window.adminApproveScoreSubmission = async (btn)=>{
