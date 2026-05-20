@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v58.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v61.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v58.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v61.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3375,7 +3375,8 @@ function updSt(st,m){
   if(!st[m.t2.id])st[m.t2.id]={w:0,l:0,pf:0,pa:0};
   st[m.t1.id].pf+=m.score1;st[m.t1.id].pa+=m.score2;
   st[m.t2.id].pf+=m.score2;st[m.t2.id].pa+=m.score1;
-  if(m.score1>m.score2){st[m.t1.id].w++;st[m.t2.id].l++;}else{st[m.t2.id].w++;st[m.t1.id].l++;}
+  const _t1w=m.winner?m.winner.id===m.t1.id:m.score1>m.score2;
+  if(_t1w){st[m.t1.id].w++;st[m.t2.id].l++;}else{st[m.t2.id].w++;st[m.t1.id].l++;}
 }
 function stayOnSort(teams,st,matches){
   function calcSubSt(subset,matchList){
@@ -3387,8 +3388,8 @@ function stayOnSort(teams,st,matches){
       if(!ids.has(m.t1.id)||!ids.has(m.t2.id)) return;
       sub[m.t1.id].pf+=m.score1; sub[m.t1.id].pa+=m.score2;
       sub[m.t2.id].pf+=m.score2; sub[m.t2.id].pa+=m.score1;
-      if(m.score1>m.score2){sub[m.t1.id].w++;sub[m.t2.id].l++;}
-      else{sub[m.t2.id].w++;sub[m.t1.id].l++;}
+      const _sw=m.winner?m.winner.id===m.t1.id:m.score1>m.score2;
+      if(_sw){sub[m.t1.id].w++;sub[m.t2.id].l++;}else{sub[m.t2.id].w++;sub[m.t1.id].l++;}
     });
     return sub;
   }
@@ -3442,8 +3443,8 @@ function sortBySt(teams,st,matches,tbMode){
       if(!ids.has(m.t1.id)||!ids.has(m.t2.id)) return;
       sub[m.t1.id].pf+=m.score1; sub[m.t1.id].pa+=m.score2;
       sub[m.t2.id].pf+=m.score2; sub[m.t2.id].pa+=m.score1;
-      if(m.score1>m.score2){sub[m.t1.id].w++;sub[m.t2.id].l++;}
-      else{sub[m.t2.id].w++;sub[m.t1.id].l++;}
+      const _sw=m.winner?m.winner.id===m.t1.id:m.score1>m.score2;
+      if(_sw){sub[m.t1.id].w++;sub[m.t2.id].l++;}else{sub[m.t2.id].w++;sub[m.t1.id].l++;}
     });
     return sub;
   }
@@ -3658,6 +3659,7 @@ function renderMatchFeed(){
       </div>`:''}
       ${fin?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <div class="alert alert-success" style="margin:0;flex:1">✓ Points awarded!</div>
+        <button class="btn btn-sm" onclick="recomputeStandings('${game.id}')" style="width:auto;border-color:#AFA9EC;color:#3C3489;background:#EEEDFE;font-size:10px">🔄 Recompute</button>
         <button class="btn btn-sm" onclick="unlockGameScores('${game.id}')" style="width:auto;border-color:#f0a0a0;color:#c0392b;font-size:10px">🔓 Unlock</button>
       </div>`:''}
       ${!fin&&isLocked?'<div class="alert alert-warn" style="margin-bottom:8px;font-size:11px">🔒 Scores locked — admin can still change but players cannot resubmit.</div>':''}
@@ -4061,6 +4063,39 @@ window.lockGameScores = async (gameId)=>{
   const games=(S.games||[]).map(g=>g.id===gameId?{...g,scoresLocked:true}:g);
   await update(ref(db,'tournaments/'+currentTourneyId),{games});
 };
+window.recomputeStandings = async (gameId)=>{
+  const game=(S.games||[]).find(g=>g.id===gameId);
+  const b=S.bs&&S.bs[gameId];
+  if(!b||!game) return;
+  const fmt=game.format;
+  // Rebuild standings from scratch using m.winner (not score comparison)
+  function rebuildSt(teams,matches){
+    const st={};
+    teams.forEach(t=>{ st[t.id]={w:0,l:0,pf:0,pa:0}; });
+    (matches||[]).forEach(m=>{
+      if(!m.winner||m.score1==null||m.score2==null) return;
+      if(!st[m.t1.id]||!st[m.t2.id]) return;
+      st[m.t1.id].pf+=m.score1; st[m.t1.id].pa+=m.score2;
+      st[m.t2.id].pf+=m.score2; st[m.t2.id].pa+=m.score1;
+      const t1wins=m.winner.id===m.t1.id;
+      if(t1wins){st[m.t1.id].w++;st[m.t2.id].l++;}
+      else{st[m.t2.id].w++;st[m.t1.id].l++;}
+    });
+    return st;
+  }
+  const newB=JSON.parse(JSON.stringify(b));
+  if(fmt==='round-robin'&&newB.matches){
+    newB.standings=rebuildSt(S.teams[gameId]||[],newB.matches);
+  } else if(fmt==='two-pool'){
+    if(newB.poolAM) newB.poolASt=rebuildSt(newB.poolA||[],newB.poolAM);
+    if(newB.poolBM) newB.poolBSt=rebuildSt(newB.poolB||[],newB.poolBM);
+  } else if(fmt==='pool-playoff'&&newB.pools){
+    newB.pools.forEach(p=>{ p.standings=rebuildSt(p.teams||[],p.matches||[]); });
+  }
+  await update(ref(db,'tournaments/'+currentTourneyId+'/bs'),{[gameId]:newB});
+  alert('✓ Standings recomputed from match winners. Refresh to see updated results.');
+};
+
 window.unlockGameScores = async (gameId)=>{
   if(!confirm('Unlock this game? Points will be removed from the leaderboard so you can edit individual match results. All match results will remain but will be editable.')) return;
   const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return;
@@ -5153,7 +5188,8 @@ function renderPlayerGames(myName){
             if(!ids.has(m.t1.id)||!ids.has(m.t2.id)) return;
             sub[m.t1.id].pf+=m.score1; sub[m.t1.id].pa+=m.score2;
             sub[m.t2.id].pf+=m.score2; sub[m.t2.id].pa+=m.score1;
-            if(m.score1>m.score2){sub[m.t1.id].w++;sub[m.t2.id].l++;}
+            const _tw=m.winner?m.winner.id===m.t1.id:m.score1>m.score2;
+            if(_tw){sub[m.t1.id].w++;sub[m.t2.id].l++;}
             else{sub[m.t2.id].w++;sub[m.t1.id].l++;}
           });
           return sub;
