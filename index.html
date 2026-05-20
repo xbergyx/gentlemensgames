@@ -19,7 +19,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .logo p{font-size:12px;color:#888;margin-top:4px}
 .card{background:#fff;border:1px solid #e8e6df;border-radius:14px;padding:1rem 1.2rem;margin-bottom:1rem;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 .card-title{font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-input[type=radio],input[type=checkbox]{width:16px!important;height:16px!important;padding:0!important;border:none!important;flex-shrink:0;margin:0}
+input[type=radio],input[type=checkbox]{width:16px!important;height:16px!important;padding:0!important;border:none!important;flex-shrink:0;margin:0;-webkit-appearance:auto!important;appearance:auto!important;cursor:pointer}
 input,select,textarea{width:100%;padding:9px 11px;border:1px solid #ddd;border-radius:9px;font-size:14px;font-family:inherit;color:#1a1a1a;background:#fff;margin-bottom:8px;transition:border .15s;-webkit-appearance:none}
 input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px rgba(127,119,221,.1)}
 .btn{width:100%;padding:10px;border:1px solid #ddd;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;background:#fff;color:#1a1a1a;transition:all .15s;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:7px;touch-action:manipulation}
@@ -304,7 +304,7 @@ body { background: var(--bg); color: var(--text); }
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v32.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v35.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -378,7 +378,7 @@ body { background: var(--bg); color: var(--text); }
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v32.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v35.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2554,22 +2554,22 @@ const GAME_PRESETS = {
   cornhole: {
     name:'Cornhole', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
     winScore:21, exactScore:false, hasRebuttal:true, hasDinger:false, tbDesc:'',
-    rules:'• First to or above 21 wins (can go over)\n• Bags in hole = 3 pts, on board = 1 pt\n• Bags cancel — only net score counts each round\n• Bag must land and stay on board to count\n• Rebuttal: if team 1 reaches 21+, team 2 gets one more round to tie\n• Sudden death if tied after rebuttal\n• Foul line: front edge of board — no stepping over\n• Knocked-off bags score nothing'
+    rules:'• First to or above 21 wins (can go over)\n• Bags in hole = 3 pts, on board = 1 pt\n• Bags cancel — only net score counts each round\n• Bag must land and stay on board to count\n• Foul line: front edge of board — no stepping over\n• Knocked-off bags score nothing'
   },
   kanjam: {
     name:'KanJam', format:'', teamSize:'2', tiebreak:'host-pick', tbMode:'stayon',
     winScore:21, exactScore:true, hasRebuttal:true, hasDinger:true, tbDesc:'',
-    rules:'• Play to exactly 21 — going over resets to 11\n• 3 pts = partner deflects into top of can, 2 pts = partner hits can, 1 pt = self-throw hits can\n• Dinger: direct slam into the can slot = instant win regardless of score\n• Dinger bypasses rebuttal — dinger team always wins\n• Rebuttal: if team 1 hits 21, team 2 gets one more round to also reach 21\n• If team 2 also hits 21, sudden death — first to score on next throw wins\n• Both players must throw each round\n• Can must stay upright to count points'
+    rules:'• Play to exactly 21 — going over resets to 11\n• 2 pts = you hit the can yourself (unassisted), 1 pt = partner deflects your throw into the can\n• Dinger: throw it unassisted into the kan — through the front slot or the top — instant win regardless of score\n• Rebuttal only applies if you went second — if team 2 hits 21 after team 1, sudden death\n• Sudden death: each team throws one round, most points wins\n• Both players must throw each round\n• Can must stay upright to count points'
   },
   beerdie: {
     name:'Beer Die', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
     winScore:7, exactScore:false, winBy2:true, hasRebuttal:false, hasDinger:false, tbDesc:'',
-    rules:'• Play to 7, must win by 2\n• In cup = 3 pts, off cup = 2 pts, off table = 1 pt\n• Die must break table plane before catch — one hand, no trap\n• Must make it past the tape in the middle\n• Die must be thrown above head height of all players\n• No gripping the die\n• Must travel in air and hit tape or further\n• No trapping the die\n• Sink the cup = 3 pts\n• Both partners drink if cup is sunk'
+    rules:'• Play to 7, must win by 2\n• In cup = 3 pts, off cup = 2 pts, off table = 1 pt\n• Die must break table plane before catch — one hand, no trap\n• Must make it past the tape in the middle\n• Die must be thrown above head height of all players\n• No gripping the die\n• Must drink after every point your opponent scores'
   },
   beerdarts: {
     name:'Beer Darts', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
-    winScore:6, exactScore:true, hasRebuttal:true, hasDinger:false, tbDesc:'',
-    rules:'• Exactly 6 pierces to win\n• 3 pierces per can — each team has one can\n• First hole in top of can = can eliminated (counts as 3 pierces)\n• Any hole in bottom silver ring = can eliminated (counts as 3 pierces)\n• Rebuttal: if team 1 reaches 6, team 2 gets one more throw\n• Drink when your can is pierced'
+    winScore:6, exactScore:true, hasRebuttal:false, hasDinger:false, tbDesc:'',
+    rules:'• Exactly 6 pierces to win\n• Each team member has their own can — 2 cans per team, 3 pierces per can\n• First hole in top of can = can eliminated (counts as 3 pierces)\n• Any hole in bottom silver ring = can eliminated (counts as 3 pierces)\n• Drink when your can is pierced'
   },
   bowling: {
     name:'Bowling', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'stayon',
@@ -2586,7 +2586,7 @@ const GAME_PRESETS = {
   spikeball: {
     name:'Spikeball', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
     winScore:21, exactScore:false, winBy2:true, hasRebuttal:false, hasDinger:false, tbDesc:'',
-    rules:'• Play to 21, must win by 2\n• 3 touches per team before hitting net (can be same player)\n• Serve must be hit cleanly — no spinning serves\n• Rim shots are replayed (let)\n• Ball must bounce off net cleanly — pocket shots are out\n• Serving team rotates each point\n• No carrying or catching the ball\n• Body shots count if ball stays in play'
+    rules:'• Gentleman\'s serve to start — both teams agree on who goes first\n• Play to 21, must win by 2\n• Max 3 touches per team before hitting net, must alternate players\n• Serve must be hit cleanly — no spinning serves\n• Rim shots are replayed (let)\n• Scoring team serves next point\n• Switch sides after first team hits 11\n• No carrying or catching the ball\n• Body shots count if ball stays in play'
   },
   cocaine: {
     name:'Cocaine', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
@@ -2603,6 +2603,7 @@ const GAME_PRESETS = {
     winScore:null, exactScore:false, hasRebuttal:false, hasDinger:false, tbDesc:'', rules:''
   }
 };
+
 
 window.applyGamePreset = (key)=>{
   const p=GAME_PRESETS[key]; if(!p) return;
