@@ -6343,10 +6343,51 @@ function findMatchMeta(b,matchId,gameId){
 function renderPlayerLB(myName){
   const e=el('pview-lb');if(!e)return;
   const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
+  const skip=getSkippedIds();
+  const finishedGames=(S.games||[]).filter(g=>!skip.has(g.id)&&S.scores&&S.scores[g.id]&&S.scores[g.id]._fin);
+  const hasTiebreaker=!!(S.points?.tiebreaker&&Object.values(S.points.tiebreaker).some(v=>v>0));
+  const hasAdjustments=!!(S.points?.adjustments&&Object.keys(S.points.adjustments).length);
   let html='<div class="card"><div class="card-title">🏅 Overall Standings</div>';
   if(!sorted.length)html+='<p class="empty">No data yet.</p>';
-  else html+=sorted.map((p,i)=>`<div class="lb-row"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div><div class="lb-name">${nameSpan(p)}${p===myName?' <span style="font-size:10px;color:#534AB7">(you)</span>':''}</div><div class="lb-pts">${getTotalPts(p)}</div></div>`).join('');
+  else html+=sorted.map((p,i)=>{
+    // Build breakdown of points per game
+    const gamePts=finishedGames.map(g=>{
+      const pts=S.points&&S.points[g.id]&&S.points[g.id][p];
+      if(!pts) return '';
+      return `<span style="font-size:10px;color:#888">${g.name}: <strong>${pts}</strong></span>`;
+    }).filter(Boolean);
+    // Tiebreaker points
+    const tbPts=S.points?.tiebreaker?.[p]||0;
+    if(tbPts) gamePts.push(`<span style="font-size:10px;color:#7a4f00">🏆 Tiebreaker: <strong>+${tbPts}</strong></span>`);
+    // Adjustments
+    const adjs=Object.values(S.points?.adjustments||{}).filter(a=>a.player===p);
+    adjs.forEach(a=>gamePts.push(`<span style="font-size:10px;color:${a.amount>0?'#27500A':'#c0392b'}">${a.amount>0?'⚡ Bonus':'⚡ Penalty'}: <strong>${a.amount>0?'+'+a.amount:a.amount}</strong>${a.reason?' — '+a.reason:''}</span>`));
+    const breakdown=gamePts.length?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:3px">${gamePts.join('')}</div>`:'';
+    return `<div class="lb-row"><div class="lb-pos ${i===0?'p1':i===1?'p2':i===2?'p3':'pn'}">${i+1}</div><div style="flex:1"><div class="lb-name">${nameSpan(p)}${p===myName?' <span style="font-size:10px;color:#534AB7">(you)</span>':''}</div>${breakdown}</div><div class="lb-pts">${getTotalPts(p)}</div></div>`;
+  }).join('');
   html+='</div>';
+  // Tiebreaker banner if active
+  const tbGame=S.tiebreakerGame;
+  if(tbGame&&!tbGame.winner){
+    html+=`<div class="card" style="border:2px solid #E4B400;background:#FFFBEB">
+      <div style="font-size:12px;font-weight:700;color:#7a4f00;margin-bottom:4px">🏆 Overall Tiebreaker in progress</div>
+      <div style="font-size:14px;font-weight:700">${tbGame.name}</div>
+      ${tbGame.description?`<div style="font-size:11px;color:#888;margin-top:2px">${tbGame.description}</div>`:''}
+    </div>`;
+  } else if(tbGame&&tbGame.winner){
+    html+=`<div class="card" style="background:#EAF3DE;border-color:#97C459">
+      <div style="font-size:12px;font-weight:700;color:#27500A;margin-bottom:4px">🏆 Tiebreaker result</div>
+      <div style="font-size:14px;font-weight:700;color:#27500A">${tbGame.winner} wins ${tbGame.name}! (+1 pt)</div>
+    </div>`;
+  }
+  // Adjustments banner
+  if(hasAdjustments){
+    const adjList=Object.values(S.points.adjustments);
+    html+=`<div class="card" style="border-color:#f0a0a0">
+      <div style="font-size:12px;font-weight:700;color:#c0392b;margin-bottom:6px">⚡ Point adjustments applied</div>
+      ${adjList.map(a=>`<div style="font-size:11px;padding:3px 0;border-bottom:1px solid #f0ede6"><strong>${a.player}</strong> ${a.amount>0?'+'+a.amount:a.amount} pts${a.reason?' — '+a.reason:''}</div>`).join('')}
+    </div>`;
+  }
   html+='<div class="card"><div class="card-title">🎖 Badges</div><div id="all-player-badges"></div></div>';
   e.innerHTML=html; renderAllPlayerBadges();
 }
