@@ -304,7 +304,7 @@ body { background: var(--bg); color: var(--text); }
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v39.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v41.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -378,7 +378,7 @@ body { background: var(--bg); color: var(--text); }
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v39.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v41.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2450,7 +2450,16 @@ function renderAdminTesting(){
   e.innerHTML=`
     <div class="card">
       <div class="card-title">🔄 Reset</div>
-      <button class="btn btn-sm" onclick="resetTournament()" style="width:auto;border-color:#f0a0a0;color:#c0392b;margin-bottom:5px">🔄 Reset (keep players &amp; games)</button>
+      <button class="btn btn-sm" onclick="resetTournament()" style="width:auto;border-color:#f0a0a0;color:#c0392b;margin-bottom:5px">🔄 Full reset (keep players &amp; games)</button>
+      <button class="btn btn-sm" onclick="resetKeepRankings()" style="width:auto;border-color:#f5cc80;color:#7a4f00;margin-bottom:5px">↩️ Reset but keep rankings (unlock all)</button>
+      <div class="divider"></div>
+      <div style="font-size:11px;font-weight:700;color:#888;margin-bottom:5px">📦 Rankings backup</div>
+      <div style="font-size:11px;color:#aaa;margin-bottom:6px">Export before a reset, reload after to restore everyone's rankings.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="exportRankings()" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">📤 Export rankings</button>
+        <button class="btn btn-sm" onclick="importRankingsFromFile()" style="width:auto;background:#EAF3DE;border-color:#97C459;color:#27500A">📥 Import rankings</button>
+      </div>
+      <div id="rankings-backup-status" style="margin-top:6px"></div>
       <button class="btn btn-sm" onclick="fillTestRankings()" style="width:auto;border-color:#ccc;color:#888">⚡ Fill random rankings</button>
     </div>
     <div class="card">
@@ -6237,8 +6246,78 @@ window.removeAllTestPlayers = async ()=>{
 window.resetTournament = async ()=>{
   if(!confirm('Reset? Clears rankings, teams, scores. Keeps players & games.'))return;
   const games=(S.games||[]).map(g=>({...g,status:'pending'}));
-  await update(ref(db,'tournaments/'+currentTourneyId),{rankings:{},gameRankings:{},teams:{},scores:{},points:{},bs:{},tiebreaker:{},rankingsLocked:false,tournamentStarted:false,tournamentFinalized:false,games});
+  await update(ref(db,'tournaments/'+currentTourneyId),{rankings:{},gameRankings:{},teams:{},scores:{},points:{},bs:{},tiebreaker:{},rankingsLocked:false,rankingsFinalized:{},activeGameId:null,activeMatchIds:{},pendingScores:{},crossoverAck:{},tournamentStarted:false,tournamentFinalized:false,games});
 };
+window.resetKeepRankings = async ()=>{
+  if(!confirm('Reset teams, scores and brackets but keep all player rankings?\nPlayers will be able to edit their rankings again.')) return;
+  const games=(S.games||[]).map(g=>({...g,status:'ranking'}));
+  await update(ref(db,'tournaments/'+currentTourneyId),{
+    teams:{},scores:{},points:{},bs:{},tiebreaker:{},
+    rankingsLocked:false,rankingsFinalized:{},
+    activeGameId:null,activeMatchIds:{},pendingScores:{},crossoverAck:{},
+    tournamentStarted:true, // keep started so rankings tab is visible
+    games
+  });
+  alert('✓ Reset! Teams and scores cleared.\nRankings kept — players can now edit them again.');
+};
+
+window.exportRankings = ()=>{
+  const gr=S.gameRankings||{};
+  const rf=S.rankingsFinalized||{};
+  const games=S.games||[];
+  const players=S.players||[];
+  // Build a readable export
+  const data={
+    exportedAt: new Date().toISOString(),
+    tournamentId: currentTourneyId,
+    tournamentName: S.tourneyName||'',
+    games: games.map(g=>({id:g.id,name:g.name})),
+    players,
+    gameRankings: gr,
+    rankingsFinalized: rf
+  };
+  const json=JSON.stringify(data,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='rankings_backup_'+(S.tourneyName||'tournament').replace(/\s+/g,'_')+'_'+new Date().toISOString().split('T')[0]+'.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  const st=el('rankings-backup-status');
+  if(st) st.innerHTML='<div class="alert alert-success" style="font-size:11px">✓ Exported '+players.length+' players\' rankings</div>';
+};
+
+window.importRankingsFromFile = ()=>{
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='.json';
+  inp.onchange=async(e)=>{
+    const file=e.target.files[0]; if(!file) return;
+    const st=el('rankings-backup-status');
+    try {
+      const text=await file.text();
+      const data=JSON.parse(text);
+      if(!data.gameRankings){
+        if(st) st.innerHTML='<div class="alert alert-warn" style="font-size:11px">Invalid file — no rankings found.</div>';
+        return;
+      }
+      // Show a preview modal before applying
+      const playerCount=Object.keys(data.gameRankings).reduce((s,gid)=>Math.max(s,Object.keys(data.gameRankings[gid]||{}).length),0);
+      const gameCount=Object.keys(data.gameRankings).length;
+      if(!confirm('Import rankings from '+file.name+'?\n\n'+gameCount+' game(s), '+playerCount+' player(s) have rankings.\n\nThis will overwrite current rankings. Proceed?')) return;
+      if(st) st.innerHTML='<div class="alert alert-info" style="font-size:11px">Importing...</div>';
+      await update(ref(db,'tournaments/'+currentTourneyId),{
+        gameRankings: data.gameRankings,
+        rankingsFinalized: data.rankingsFinalized||{}
+      });
+      if(st) st.innerHTML='<div class="alert alert-success" style="font-size:11px">✓ Rankings imported for '+playerCount+' player(s) across '+gameCount+' game(s).</div>';
+    } catch(err) {
+      if(st) st.innerHTML='<div class="alert alert-warn" style="font-size:11px">Error: '+err.message+'</div>';
+    }
+  };
+  inp.click();
+};
+
 window.fillTestRankings = async ()=>{
   const players=S.players||[],games=S.games||[];
   if(!players.length||!games.length){alert('Add players and games first.');return;}
