@@ -134,7 +134,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v8.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v9.19.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -208,7 +208,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v8.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v9.19.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4177,6 +4177,133 @@ function renderPlayerGames(myName){
 
     // ── H2H / Bracket games ─────────────────────────────
     else if(b){
+
+      // ── TWO-POOL format: show pools, standings, crossover ──
+      if(g.format==='two-pool'){
+        function poolStandingsHtml(poolTeams, poolSt, poolMatches, poolName, tbMode){
+          const sorted=sortBySt(poolTeams,poolSt,poolMatches,tbMode);
+          let h='<div style="margin-bottom:10px">';
+          h+='<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">'+poolName+'</div>';
+          sorted.forEach((t,i)=>{
+            const s=poolSt[t.id]||{w:0,l:0,pf:0,pa:0};
+            const diff=s.pf-s.pa;
+            const isMine=mt&&t.id===mt.id;
+            const bg=i===0?'#FFF3CD':i===1?'#EBF4FF':i===2?'#EAF3DE':'#f8f7f4';
+            h+='<div style="padding:7px 10px;background:'+(isMine?'#EEEDFE':bg)+';border-radius:8px;margin-bottom:4px;'+(isMine?'border:1px solid #7F77DD':'')+'">';
+            h+='<div style="display:flex;align-items:center;gap:8px">';
+            h+='<span style="font-size:13px">'+(i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1+'.')+'</span>';
+            h+='<div style="flex:1"><div style="font-size:13px;font-weight:700">'+teamLabel(t)+'</div>';
+            h+='<div style="font-size:10px;color:#888">'+s.w+'W–'+s.l+'L · point diff: '+(diff>=0?'+':'')+diff+'</div></div>';
+            h+='</div></div>';
+          });
+          h+='</div>';
+          return h;
+        }
+
+        function poolMatchesHtml(poolMatches, poolName){
+          const played=poolMatches.filter(m=>m.winner&&m.t1&&m.t2);
+          if(!played.length) return '';
+          let h='<div style="margin-bottom:10px">';
+          h+='<div style="font-size:10px;font-weight:700;color:#aaa;margin-bottom:4px">'+poolName+' RESULTS</div>';
+          played.forEach(m=>{
+            const isMine=mt&&(m.t1.id===mt.id||m.t2.id===mt.id);
+            const s1=Number(m.score1),s2=Number(m.score2);
+            const hasS=!isNaN(s1)&&!isNaN(s2)&&m.score1!==undefined&&m.score2!==undefined;
+            const w=m.winner,l=m.t1.id===m.winner.id?m.t2:m.t1;
+            const wS=s1>s2?s1:s2,lS=s1>s2?s2:s1;
+            h+='<div style="padding:5px 8px;font-size:11px;border-bottom:1px solid #f0ede6;'+(isMine?'background:#EAF3DE;border-radius:6px;margin-bottom:2px':'')+'">';
+            h+='<span style="font-weight:600;color:#27500A">✓ '+teamLabel(w)+'</span>';
+            h+=(hasS?' '+wS+'–'+lS+' def. ':' beat ')+teamLabel(l);
+            h+='</div>';
+          });
+          h+='</div>';
+          return h;
+        }
+
+        // Pool standings
+        html+='<div style="font-size:12px;font-weight:700;color:#534AB7;margin-bottom:8px">📊 Pool Standings</div>';
+        html+=poolStandingsHtml(b.poolA||[],b.poolASt||{},b.poolAM||[],'Pool A',g.tbMode);
+        html+=poolStandingsHtml(b.poolB||[],b.poolBSt||{},b.poolBM||[],'Pool B',g.tbMode);
+
+        // Pool results
+        html+='<div style="font-size:12px;font-weight:700;color:#888;margin:8px 0 6px">🏓 Match Results</div>';
+        html+=poolMatchesHtml(b.poolAM||[],'Pool A');
+        html+=poolMatchesHtml(b.poolBM||[],'Pool B');
+
+        // Crossover results
+        if(b.crossover&&b.crossover.length){
+          html+='<div style="font-size:12px;font-weight:700;color:#888;margin:8px 0 6px">🏆 Crossover</div>';
+          b.crossover.forEach(m=>{
+            if(!m.t1||!m.t2) return;
+            const isMine=mt&&(m.t1.id===mt.id||m.t2.id===mt.id);
+            const played=m.winner&&m.t1&&m.t2;
+            const s1=Number(m.score1),s2=Number(m.score2);
+            const hasS=played&&!isNaN(s1)&&!isNaN(s2)&&m.score1!==undefined;
+            html+='<div style="padding:8px 10px;background:'+(isMine?'#EEEDFE':'#f8f7f4')+';border-radius:8px;margin-bottom:4px;'+(isMine?'border:1px solid #7F77DD':'')+'">';
+            html+='<div style="font-size:10px;color:#888;margin-bottom:2px">'+(m.label||'')+'</div>';
+            if(played){
+              const w=m.winner,l=m.t1.id===m.winner.id?m.t2:m.t1;
+              const wS=s1>s2?s1:s2,lS=s1>s2?s2:s1;
+              html+='<span style="font-weight:600;color:#27500A">✓ '+teamLabel(w)+'</span>';
+              html+=(hasS?' '+wS+'–'+lS+' def. ':' beat ')+teamLabel(l);
+            } else {
+              html+=teamLabel(m.t1)+' vs '+teamLabel(m.t2)+' <span style="color:#aaa">(pending)</span>';
+            }
+            html+='</div>';
+          });
+
+          // Final standings after crossover
+          if(isDone){
+            html+='<div style="font-size:12px;font-weight:700;color:#888;margin:10px 0 6px">🏅 Final Standings</div>';
+            const places=[];
+            b.crossover.forEach(m=>{
+              if(m.winner&&m.t1&&m.t2){
+                const l=m.t1.id===m.winner.id?m.t2:m.t1;
+                places.push({team:m.winner,place:m.winPlace||(places.length*2+1)});
+                places.push({team:l,place:m.losePlace||(places.length*2+1)});
+              }
+            });
+            places.sort((a,b2)=>a.place-b2.place);
+            places.forEach(({team,place})=>{
+              const isMine=mt&&team.id===mt.id;
+              const icon=['🥇','🥈','🥉'][place-1]||place+'.';
+              html+='<div style="padding:7px 10px;background:'+(isMine?'#EEEDFE':'#f8f7f4')+';border-radius:8px;margin-bottom:4px;'+(isMine?'border:1px solid #7F77DD':'')+'">';
+              html+='<span style="font-size:13px">'+icon+'</span> <span style="font-weight:700">'+teamLabel(team)+'</span>';
+              html+='</div>';
+            });
+          }
+        }
+
+        // Tiebreaker explanation for pool standings
+        if(b.poolASt&&b.poolBSt){
+          const tbExps=[];
+          ['A','B'].forEach(pKey=>{
+            const pTeams=pKey==='A'?b.poolA:b.poolB;
+            const pSt=pKey==='A'?b.poolASt:b.poolBSt;
+            const pM=pKey==='A'?b.poolAM:b.poolBM;
+            const sorted3=sortBySt(pTeams,pSt,pM,g.tbMode);
+            function placeStr(i){ return ['1st','2nd','3rd','4th','5th'][i]||(i+1)+'th'; }
+            const tieGroups={};
+            sorted3.forEach((t,i)=>{ const s=pSt[t.id]||{w:0,l:0}; const k=s.w+'-'+s.l; if(!tieGroups[k])tieGroups[k]=[]; tieGroups[k].push({t,i}); });
+            Object.values(tieGroups).forEach(group=>{
+              if(group.length<2) return;
+              const s0=pSt[group[0].t.id]||{w:0,l:0};
+              tbExps.push('Pool '+pKey+' '+group.length+'-way tie ('+s0.w+'W–'+s0.l+'L) broken by point differential: '
+                +group.sort((a,b2)=>(pSt[b2.t.id]?.pf-pSt[b2.t.id]?.pa)-(pSt[a.t.id]?.pf-pSt[a.t.id]?.pa)).map(x=>{const d=(pSt[x.t.id]?.pf||0)-(pSt[x.t.id]?.pa||0);return teamLabel(x.t)+' ('+(d>=0?'+':'')+d+')'}).join(' > '));
+            });
+          });
+          if(tbExps.length){
+            html+='<div style="margin-top:8px;padding:8px;background:#FFFBEB;border-radius:8px;border:1px solid #fcd34d">';
+            html+='<div style="font-size:10px;font-weight:700;color:#7a4f00;margin-bottom:4px">🔍 Tiebreakers used</div>';
+            tbExps.forEach(ex=>{ html+='<div style="font-size:10px;color:#7a4f00;margin-bottom:3px">• '+ex+'</div>'; });
+            html+='</div>';
+          }
+        }
+
+        html+='</div>'; // close card
+        return; // done with this game
+      }
+
       const matchList=b.matches||[];
       const played=matchList.filter(m=>m.winner&&m.t1&&m.t2);
       const pending=matchList.filter(m=>m.score1===null||m.score2===null);
