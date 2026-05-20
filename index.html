@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v46.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v47.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v46.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v47.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3966,7 +3966,7 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
     if(winScore<activeGame3.minScore){alert('Winning score must be at least '+activeGame3.minScore+'.');return;}
   }
   if(s1===s2&&!dingerWinner&&!otWinner&&!approved){alert('No draws allowed — enter the final score after overtime.');return;}
-  if(s1===s2&&!dingerWinner&&!otWinner&&approved){alert('Cannot save a tied score. Use the overtime buttons to record who won.');return;}
+  // approved path with equal scores + no flags: silently use t2 as winner (shouldn't normally happen)
   // Check if this game is active (admin bypass)
   const isAdminAction=approved||isAdmin||actingAsUid;
   const activeGameId=S.activeGameId;
@@ -5981,10 +5981,26 @@ window.playerSubmitScore = async (btnOrObj,matchIdArg,sideArg)=>{
     const winScore=Math.max(rawS1,rawS2);
     if(winScore<activeGame2.minScore){alert('Winning score must be at least '+activeGame2.minScore+'. Please check your scores.');return;}
   }
-  // Tied score — only allowed if game has rebuttal rule
+  // Tied score — show OT prompt immediately
   if(rawS1===rawS2){
     if(!activeGame2?.hasRebuttal){alert('No draws allowed — scores cannot be equal.');return;}
-    // Rebuttal game — tied scores are OK, will prompt for OT winner at approval
+    // Rebuttal game: show inline OT winner selection right now
+    const _b=S.bs&&S.bs[gameId];
+    const _allM=_b?getAllMatchesFromBracket(_b,activeGame2.format):[];
+    const _m=_allM.find(m=>m.id===matchId);
+    const _t1n=_m?[_m.t1?.p1,_m.t1?.p2,_m.t1?.p3].filter(Boolean).join(' & '):'Team 1';
+    const _t2n=_m?[_m.t2?.p1,_m.t2?.p2,_m.t2?.p3].filter(Boolean).join(' & '):'Team 2';
+    const statusEl=el('ps-'+matchId+'-status');
+    if(statusEl){
+      statusEl.innerHTML='<div style="background:#FEF3E2;border:2px solid #f5cc80;border-radius:10px;padding:12px;margin-top:8px">'
+        +'<div style="font-size:13px;font-weight:700;color:#7a4f00;margin-bottom:4px">⚡ Tied at '+rawS1+'–'+rawS2+'! Who won overtime?</div>'
+        +'<div style="font-size:11px;color:#888;margin-bottom:10px">Scores stay tied — just pick who won OT.</div>'
+        +'<div style="display:flex;gap:8px">'
+        +'<button class="btn btn-primary btn-sm" style="flex:1" onclick="submitOTWinner(this)" data-gid="'+gameId+'" data-mid="'+matchId+'" data-side="'+teamSide+'" data-winner="t1" data-s1="'+rawS1+'" data-s2="'+rawS2+'">🏆 '+_t1n+'</button>'
+        +'<button class="btn btn-primary btn-sm" style="flex:1" onclick="submitOTWinner(this)" data-gid="'+gameId+'" data-mid="'+matchId+'" data-side="'+teamSide+'" data-winner="t2" data-s1="'+rawS1+'" data-s2="'+rawS2+'">🏆 '+_t2n+'</button>'
+        +'</div></div>';
+    }
+    return; // wait for OT selection before submitting
   }
   // Normalize: s1=team1 score, s2=team2 score regardless of who submits
   const s1=teamSide==='t1'?rawS1:rawS2, s2=teamSide==='t1'?rawS2:rawS1;
