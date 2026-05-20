@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v65.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v66.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v65.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v66.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4337,20 +4337,27 @@ function renderTiebreakerPanel(){
       <button class="btn btn-success btn-sm" style="width:100%;margin-top:6px" onclick="saveTBMatch('${esc(key)}','${esc(p1)}','${esc(p2)}')">✓ Save</button>
     </div>`;
   }
-  // Tiebreaker game section (when all games finalized)
-  const allFin=lockedGames.length>0&&lockedGames.every(g=>S.scores&&S.scores[g.id]&&S.scores[g.id]._fin);
-  if(allFin){
+  // Tiebreaker game section — always available
+  {
     const tbGame=S.tiebreakerGame;
-    html+='<div class="card" style="border-color:#E4B400">'
-      +'<div class="card-title">🏆 Overall Tiebreaker</div>'
-      +'<div style="font-size:10px;color:#aaa;margin-bottom:8px">Announce the tiebreaker game so players see it on Now Playing.</div>'
-      +'<input type="text" id="tb-game-name" placeholder="Game name (e.g. 3 Cup Beer Pong)" value="'+(tbGame&&tbGame.name||'')+'" style="margin-bottom:4px">'
-      +'<input type="text" id="tb-game-desc" placeholder="Description" value="'+(tbGame&&tbGame.description||'')+'" style="margin-bottom:4px">'
-      +'<div id="tb-teams-wrap"></div>'
-      +'<button class="btn btn-sm" onclick="addTiebreakerTeam()" style="margin-bottom:6px">+ Add team</button>'
-      +'<button class="btn btn-primary" onclick="saveTiebreakerGame()" style="margin-bottom:4px">📢 Announce tiebreaker</button>'
-      +(tbGame?'<button class="btn btn-sm" onclick="clearTiebreakerGame()" style="color:#c0392b;border-color:#f0a0a0;display:block;margin-top:4px">Clear</button>':'')
-      +'</div>';
+    if(!tbGame){
+      // Not yet announced — show a single button
+      html+='<div class="card" style="border-color:#E4B400">'
+        +'<div class="card-title">🏆 Overall Tiebreaker</div>'
+        +'<div style="font-size:11px;color:#888;margin-bottom:10px">Create and announce a tiebreaker game so players see it on their Now Playing tab.</div>'
+        +'<button class="btn btn-primary" onclick="openTiebreakerSetup()" style="background:#E4B400;border-color:#E4B400;color:#1a1a1a">🏆 Generate overall tiebreaker</button>'
+        +'</div>';
+    } else {
+      // Already announced — show summary + manage options
+      html+='<div class="card" style="border-color:#E4B400;background:#FFFBEB">'
+        +'<div class="card-title">🏆 Overall Tiebreaker — Active</div>'
+        +'<div style="font-size:14px;font-weight:700;margin-bottom:4px">'+tbGame.name+'</div>'
+        +(tbGame.description?'<div style="font-size:12px;color:#888;margin-bottom:8px">'+tbGame.description+'</div>':'')
+        +'<div style="font-size:11px;color:#27500A;margin-bottom:10px">✓ Players can see this on their Now Playing tab</div>'
+        +'<button class="btn btn-sm" onclick="openTiebreakerSetup()" style="width:auto;margin-bottom:4px">✏️ Edit</button> '
+        +'<button class="btn btn-sm" onclick="clearTiebreakerGame()" style="width:auto;border-color:#f0a0a0;color:#c0392b">✕ Clear</button>'
+        +'</div>';
+    }
   }
   e.innerHTML=html;
 }
@@ -4477,6 +4484,31 @@ window.saveTiebreakerGame = async ()=>{
   await update(ref(db,'tournaments/'+currentTourneyId),{tiebreakerGame:tbGame});
   alert('✓ Tiebreaker announced to players!');
 };
+window.openTiebreakerSetup = ()=>{
+  const tbGame=S.tiebreakerGame||{};
+  _tbTeams=tbGame.teams?JSON.parse(JSON.stringify(tbGame.teams)):[];
+  const players=S.players||[];
+  function buildModal(){
+    const allSelects=Array.from(document.querySelectorAll('.manual-team-slot'));
+    const taken=new Set(allSelects.map(s=>s.value).filter(Boolean));
+    let html='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
+      +'<div class="modal-handle"></div>'
+      +'<div class="modal-title"><span>🏆 Overall Tiebreaker</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
+      +'<div class="sec-label">Game name</div>'
+      +'<input type="text" id="tb-game-name" placeholder="e.g. 3 Cup Beer Pong" value="'+esc(tbGame.name||'')+'" style="margin-bottom:8px">'
+      +'<div class="sec-label">Description <span style="font-weight:400;color:#aaa">(optional)</span></div>'
+      +'<input type="text" id="tb-game-desc" placeholder="e.g. Closest cup wins" value="'+esc(tbGame.description||'')+'" style="margin-bottom:10px">'
+      +'<div class="sec-label">Players (optional — add who\'s playing)</div>'
+      +'<div id="tb-teams-wrap" style="margin-bottom:6px"></div>'
+      +'<button class="btn btn-sm" onclick="addTiebreakerTeam()" style="width:auto;margin-bottom:10px">+ Add player</button>'
+      +'<button class="btn btn-primary" onclick="saveTiebreakerGame()" style="width:100%;font-size:14px;padding:12px">📢 Announce to players</button>'
+      +'</div></div>';
+    el('modal-area').innerHTML=html;
+    renderTbTeams();
+  }
+  buildModal();
+};
+
 window.clearTiebreakerGame = async ()=>{
   if(!confirm('Clear the tiebreaker game?')) return;
   await update(ref(db,'tournaments/'+currentTourneyId),{tiebreakerGame:null});
