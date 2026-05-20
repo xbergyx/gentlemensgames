@@ -303,7 +303,7 @@ body { background: var(--bg); color: var(--text); }
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v27.19.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v31.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -377,7 +377,7 @@ body { background: var(--bg); color: var(--text); }
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v27.19.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v31.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2225,7 +2225,27 @@ function renderAdminGames(){
   e.innerHTML=`
     <div class="card">
       <div class="card-title">+ Add game</div>
-      <input type="text" id="game-name-input" placeholder="Game name (e.g. Cornhole)">
+      <div class="sec-label">Choose a game</div>
+      <select id="game-preset" onchange="applyGamePreset(this.value)" style="font-size:14px;font-weight:600">
+        <optgroup label="Your games">
+          <option value="cornhole">🌽 Cornhole</option>
+          <option value="kanjam">🎯 KanJam</option>
+          <option value="beerdie">🎲 Beer Die</option>
+          <option value="beerdarts">🎯 Beer Darts</option>
+          <option value="bowling">🎳 Bowling</option>
+          <option value="golf">⛳ Golf (Scramble)</option>
+          <option value="spikeball">🏐 Spikeball</option>
+          <option value="cocaine">🥤 Cocaine (Flip Cup variant)</option>
+          <option value="bucketball">🪣 Bucketball</option>
+        </optgroup>
+        <optgroup label="Other">
+          <option value="custom">✏️ Custom game</option>
+        </optgroup>
+      </select>
+
+      <div class="sec-label" style="margin-top:10px">Game name</div>
+      <input type="text" id="game-name-input" placeholder="Game name">
+
       <div class="sec-label">Format</div>
       <select id="game-format" onchange="toggleRoundsOption()">
         <optgroup label="Bracket">
@@ -2250,6 +2270,13 @@ function renderAdminGames(){
         <div class="sec-label">Number of rounds</div>
         <input type="number" id="game-rounds" min="2" max="10" value="2">
       </div>
+
+      <div class="sec-label">Team size</div>
+      <select id="game-teamsize">
+        <option value="2">2 players per team</option>
+        <option value="3">3 players per team</option>
+      </select>
+
       <div class="sec-label">Tiebreaker Rules</div>
       <select id="game-tiebreak">
         <option value="auto">Auto Tiebreaker</option>
@@ -2258,29 +2285,40 @@ function renderAdminGames(){
       </select>
       <div class="sec-label">Tiebreaker description (shown in results)</div>
       <input type="text" id="game-tb-desc" placeholder="e.g. Closest putt to the pin, Longest drive, etc." style="font-size:12px">
-      <div class="sec-label">Minimum winning score (optional, e.g. 21 for KanJam)</div>
-      <input type="number" id="game-min-score" placeholder="Leave blank for no minimum" style="font-size:12px">
+
+      <div class="sec-label">Score to win (optional)</div>
+      <input type="number" id="game-min-score" placeholder="Leave blank for no target score" style="font-size:12px">
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;flex:1;min-width:90px;padding:7px 8px;background:#f8f7f4;border-radius:8px;border:1px solid #e0ddd6">
+          <input type="radio" name="score-type" id="score-type-min" value="min" checked style="width:auto;margin:0">
+          Can go over
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;flex:1;min-width:90px;padding:7px 8px;background:#f8f7f4;border-radius:8px;border:1px solid #e0ddd6">
+          <input type="radio" name="score-type" id="score-type-exact" value="exact" style="width:auto;margin:0">
+          Must be exact
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;flex:1;min-width:90px;padding:7px 8px;background:#f8f7f4;border-radius:8px;border:1px solid #e0ddd6">
+          <input type="radio" name="score-type" id="score-type-winby2" value="winby2" style="width:auto;margin:0">
+          Must win by 2
+        </label>
+      </div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer">
         <input type="checkbox" id="game-has-rebuttal" style="width:auto;margin:0">
-        This game has a rebuttal rule (tied score triggers overtime)
+        Rebuttal rule (tied score → overtime)
       </label>
       <label style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;cursor:pointer">
         <input type="checkbox" id="game-has-dinger" style="width:auto;margin:0">
-        This game has an instant-win / dinger rule (e.g. KanJam)
+        Instant-win / dinger rule
       </label>
-      <div class="sec-label">Team size</div>
-      <select id="game-teamsize">
-        <option value="2">2 players per team</option>
-        <option value="3">3 players per team</option>
-      </select>
+
       <div class="sec-label">Tiebreaker method</div>
       <select id="game-tbmode">
         <option value="stayon">Stay on step (rank all tied teams by one criterion)</option>
         <option value="restart">Restart (pick one winner at a time, reset to step 1)</option>
       </select>
-      <div class="sec-label">Game rules</div>
-      <div style="font-size:10px;color:#aaa;margin-bottom:4px">Auto-filled based on format — edit as needed. Each line = one rule.</div>
-      <textarea id="game-rules" rows="4" placeholder="• Rule 1&#10;• Rule 2" onkeydown="autoRuleBullet(event,this)" style="font-size:12px;padding:8px;border-radius:8px;border:1px solid #e0ddd6;width:100%;resize:vertical"></textarea>
+
+      <div class="sec-label">Game rules <span style="font-size:10px;color:#aaa;font-weight:400">— edit as needed, each line = one bullet</span></div>
+      <textarea id="game-rules" rows="6" placeholder="• Rule 1&#10;• Rule 2" onkeydown="autoRuleBullet(event,this)" style="font-size:12px;padding:8px;border-radius:8px;border:1px solid #e0ddd6;width:100%;resize:vertical"></textarea>
       <button class="btn btn-primary" onclick="addGame()">+ Add game</button>
     </div>
     <div class="card">
@@ -2509,6 +2547,100 @@ window.startTournament = async ()=>{
 };
 
 // ── GAMES ─────────────────────────────────────────────────
+// ── GAME PRESETS ─────────────────────────────────────────
+const GAME_PRESETS = {
+  cornhole: {
+    name:'Cornhole', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    winScore:21, exactScore:false, hasRebuttal:true, hasDinger:false, tbDesc:'',
+    rules:'• First to or above 21 wins (can go over)\n• Bags in hole = 3 pts, on board = 1 pt\n• Bags cancel — only net score counts each round\n• Bag must land and stay on board to count\n• Rebuttal: if team 1 reaches 21+, team 2 gets one more round to tie\n• Sudden death if tied after rebuttal\n• Foul line: front edge of board — no stepping over\n• Knocked-off bags score nothing'
+  },
+  kanjam: {
+    name:'KanJam', format:'', teamSize:'2', tiebreak:'host-pick', tbMode:'stayon',
+    winScore:21, exactScore:true, hasRebuttal:true, hasDinger:true, tbDesc:'',
+    rules:'• Play to exactly 21 — going over resets to 11\n• 3 pts = partner deflects into top of can, 2 pts = partner hits can, 1 pt = self-throw hits can\n• Dinger: direct slam into the can slot = instant win regardless of score\n• Dinger bypasses rebuttal — dinger team always wins\n• Rebuttal: if team 1 hits 21, team 2 gets one more round to also reach 21\n• If team 2 also hits 21, sudden death — first to score on next throw wins\n• Both players must throw each round\n• Can must stay upright to count points'
+  },
+  beerdie: {
+    name:'Beer Die', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    winScore:7, exactScore:false, winBy2:true, hasRebuttal:false, hasDinger:false, tbDesc:'',
+    rules:'• Play to 7, must win by 2\n• In cup = 3 pts, off cup = 2 pts, off table = 1 pt\n• Die must break table plane before catch — one hand, no trap\n• Must make it past the tape in the middle\n• Die must be thrown above head height of all players\n• No gripping the die\n• Must travel in air and hit tape or further\n• No trapping the die\n• Sink the cup = 3 pts\n• Both partners drink if cup is sunk'
+  },
+  beerdarts: {
+    name:'Beer Darts', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    winScore:6, exactScore:true, hasRebuttal:true, hasDinger:false, tbDesc:'',
+    rules:'• Exactly 6 pierces to win\n• 3 pierces per can — each team has one can\n• First hole in top of can = can eliminated (counts as 3 pierces)\n• Any hole in bottom silver ring = can eliminated (counts as 3 pierces)\n• Rebuttal: if team 1 reaches 6, team 2 gets one more throw\n• Drink when your can is pierced'
+  },
+  bowling: {
+    name:'Bowling', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'stayon',
+    winScore:null, exactScore:false, hasRebuttal:false, hasDinger:false,
+    tbDesc:'Tiebreaker game — highest combined score wins',
+    rules:'• Two games each teammate — total team pins\n• Alternate frames on second game\n• Team with highest combined pin total wins\n• Standard 10-pin bowling rules apply'
+  },
+  golf: {
+    name:'Golf', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'stayon',
+    winScore:null, exactScore:false, hasRebuttal:false, hasDinger:false,
+    tbDesc:'Closest putt to the pin',
+    rules:'• Two man scramble — both hit from each spot, pick best ball and continue\n• One club length to improve lie, no improvement to rough\n• Two mulligans per team per round\n• Lowest total score wins\n• Each teammate must have at least one shot per hole'
+  },
+  spikeball: {
+    name:'Spikeball', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    winScore:21, exactScore:false, winBy2:true, hasRebuttal:false, hasDinger:false, tbDesc:'',
+    rules:'• Play to 21, must win by 2\n• 3 touches per team before hitting net (can be same player)\n• Serve must be hit cleanly — no spinning serves\n• Rim shots are replayed (let)\n• Ball must bounce off net cleanly — pocket shots are out\n• Serving team rotates each point\n• No carrying or catching the ball\n• Body shots count if ball stays in play'
+  },
+  cocaine: {
+    name:'Cocaine', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    winScore:7, exactScore:true, hasRebuttal:false, hasDinger:false, tbDesc:'',
+    rules:'• 6 cups per team — line up 3 in a row across table from partner\n• Shoot ball into cup — on a make, pass cup to other team who must drink and flip before continuing\n• Once all 6 cups are cleared, double bounce (or 17) to center bowl to win\n• Winning score = exactly 7 (6 cups and one bowl)\n• Flip must be completed before next throw can happen'
+  },
+  bucketball: {
+    name:'Bucketball', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    winScore:null, exactScore:false, hasRebuttal:false, hasDinger:false, tbDesc:'',
+    rules:'• Standard Bucketball rules\n• Eliminate all opponent buckets to win\n• Each ball scored stays out of play'
+  },
+  custom: {
+    name:'', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    winScore:null, exactScore:false, hasRebuttal:false, hasDinger:false, tbDesc:'', rules:''
+  }
+};
+
+window.applyGamePreset = (key)=>{
+  const p=GAME_PRESETS[key]; if(!p) return;
+  const ni=el('game-name-input'); if(ni) ni.value=p.name;
+  // Don't override format — let user pick
+  const ts=el('game-teamsize'); if(ts) ts.value=p.teamSize;
+  const tb=el('game-tiebreak'); if(tb) tb.value=p.tiebreak;
+  const tm=el('game-tbmode'); if(tm) tm.value=p.tbMode;
+  const td=el('game-tb-desc'); if(td) td.value=p.tbDesc||'';
+  const ms=el('game-min-score'); if(ms) ms.value=p.winScore||'';
+  const rex=el('score-type-exact'); if(rex) rex.checked=!!p.exactScore&&!p.winBy2;
+  const rmi=el('score-type-min'); if(rmi) rmi.checked=!p.exactScore&&!p.winBy2;
+  const rwb=el('score-type-winby2'); if(rwb) rwb.checked=!!p.winBy2;
+  const hr=el('game-has-rebuttal'); if(hr) hr.checked=!!p.hasRebuttal;
+  const hd=el('game-has-dinger'); if(hd) hd.checked=!!p.hasDinger;
+  const gr=el('game-rules'); if(gr) gr.value=p.rules||'';
+  // Update team-size aware rules for golf
+  if(key==='golf') updateGolfRulesForTeamSize();
+};
+
+window.updateGolfRulesForTeamSize = ()=>{
+  const ts=parseInt(el('game-teamsize')?.value)||2;
+  const gr=el('game-rules'); if(!gr) return;
+  let rules=gr.value;
+  const scrambleTypes={2:'Two man scramble',3:'Three man scramble',4:'Four man scramble'};
+  const scramble=scrambleTypes[ts]||ts+' man scramble';
+  rules=rules.replace(/^(Two|Three|Four|\d+) man scramble/m, scramble);
+  gr.value=rules;
+};
+
+// Update golf rules when team size changes
+const origToggleRounds=window.toggleRoundsOption;
+window.toggleRoundsOption = ()=>{
+  if(origToggleRounds) origToggleRounds();
+  if(el('game-preset')?.value==='golf') updateGolfRulesForTeamSize();
+};
+
+// Auto-apply first preset on load
+setTimeout(()=>{ if(el('game-preset')) applyGamePreset(el('game-preset').value); }, 100);
+
 window.toggleRoundsOption = ()=>{
   const fmt=el('game-format')?.value||'';
   const ro=el('rounds-option');
@@ -2556,10 +2688,12 @@ window.addGame = async ()=>{
   const tbMode=el('game-tbmode')?.value||'stayon';
   const rules=(el('game-rules')?.value||'').trim();
   const tbDesc=(el('game-tb-desc')?.value||'').trim();
-  const minScore=parseFloat(el('game-min-score')?.value)||null;
+  const winScore=parseFloat(el('game-min-score')?.value)||null;
+  const exactScore=el('score-type-exact')?.checked||false;
+  const winBy2=el('score-type-winby2')?.checked||false;
   const hasRebuttal=el('game-has-rebuttal')?.checked||false;
   const hasDinger=el('game-has-dinger')?.checked||false;
-  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize,tbMode,rules,tbDesc,minScore,hasRebuttal,hasDinger};
+  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize,tbMode,rules,tbDesc,winScore,exactScore,winBy2,hasRebuttal,hasDinger};
   const games=[...(S.games||[]),g];
   await update(ref(db,'tournaments/'+currentTourneyId),{games});
   el('game-name-input').value='';
@@ -4385,6 +4519,12 @@ function showPlayerTab(tab,myName){
 function renderGameInfo(){
   const e=el('pview-info'); if(!e) return;
   const games=S.games||[];
+  // Init expanded games - in Games tab, expand the active game by default
+  if(!window._expandedGames){
+    window._expandedGames=new Set();
+    const activeGId=(S.games||[]).find(g=>g.active||S.activeGameId===g.id)?.id;
+    if(activeGId) window._expandedGames.add(activeGId);
+  }
   if(!games.length){ e.innerHTML='<div class="card"><p class="empty">No games yet.</p></div>'; return; }
 
   const fmtFull={
@@ -5117,7 +5257,10 @@ async function renderActiveGameTab(myName){
   }
 
   let html='<div class="card" style="border-color:#7F77DD;border-width:2px">';
-  html+='<div class="card-title" style="color:#534AB7">▶ '+activeGame.name+'</div>';
+  html+='<div class="card-title" style="color:#534AB7;display:flex;align-items:center;justify-content:space-between">'
+    +'<span>▶ '+activeGame.name+'</span>'
+    +'<button onclick="viewGameRules(this)" data-gid="'+activeGame.id+'" class="btn btn-sm" style="width:auto;font-size:10px;padding:3px 8px;color:#534AB7;border-color:#AFA9EC;background:#EEEDFE">📋 Rules</button>'
+    +'</div>';
 
   // ── MY MATCH ──────────────────────────────────────────
   // Helpers available to both myTeam block and board block
@@ -5603,6 +5746,8 @@ function findMyActiveMatch(b,myTeam,fmt){
   return all.find(m=>m&&!m.winner&&m.t1&&m.t2
     &&(m.t1.id===myTeam.id||m.t2.id===myTeam.id))||null;
 }
+
+
 
 window.playerSubmitScore = async (btnOrObj,matchIdArg,sideArg)=>{
   const gameId=typeof btnOrObj==='string'?btnOrObj:btnOrObj.dataset.gid;
@@ -6350,6 +6495,19 @@ window.deleteVote = async (btn)=>{
   if(!confirm('Delete this vote?')) return;
   await update(ref(db,'tournaments/'+currentTourneyId),{['votes/'+vid]:null});
   renderAdminVotes();
+};
+
+window.viewGameRules = (btn)=>{
+  const gid=btn.dataset.gid;
+  // Switch to the Games tab and scroll to/expand that game
+  if(!window._expandedGames) window._expandedGames=new Set();
+  window._expandedGames.add(gid);
+  showPlayerTab('info');
+  // After render, scroll to that game card
+  setTimeout(()=>{
+    const card=document.getElementById('results-card-'+gid);
+    if(card) card.scrollIntoView({behavior:'smooth',block:'start'});
+  },200);
 };
 
 window.acknowledgeCrossover = async (btn)=>{
