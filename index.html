@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v87.22.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v90.22.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v87.22.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v90.22.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4602,7 +4602,7 @@ const BADGE_DEFS = [
   {id:'participation',   cat:'Performance', icon:'🎖️', name:'Participation', auto:true, spicy:false, desc:'Played every single game'},
   // Spicy/personality (manual)
   {id:'flag-on-play',    cat:'Personality', icon:'🚩', name:'Flag on the Play',          auto:true,  spicy:true,  desc:'Filed the most score disputes'},
-  {id:'karen',           cat:'Personality', icon:'📋', name:'Speak to the Host',         auto:false, spicy:true,  desc:'Had notes. Many notes.'},
+  {id:'karen',           cat:'Personality', icon:'😤', name:'Karen',         auto:false, spicy:true,  desc:'Asked to speak to the manager. Twice. Before lunch.'},
   {id:'complaint-dept',  cat:'Personality', icon:'🧾', name:'The Complaint Department',  auto:false, spicy:true,  desc:'Always open, never satisfied'},
   {id:'drama',           cat:'Personality', icon:'🎭', name:'Drama King/Queen',           auto:false, spicy:true,  desc:'Brought the energy, for better or worse'},
   {id:'short-fuse',      cat:'Personality', icon:'⚡', name:'Short Fuse',                auto:false, spicy:true,  desc:'Zero to sixty in record time'},
@@ -4800,7 +4800,7 @@ window.openGameAnnouncement = (gameId)=>{
         if(!bd) return;
         const isFirst=!playerExisting[bid];
         const isSpicy=bd.spicy;
-        html+=`<span style="background:${isSpicy?'#FEF2F2':isFirst?'#FFFBEB':'#EEEDFE'};border:1px solid ${isSpicy?'#f0a0a0':isFirst?'#E4B400':'#AFA9EC'};border-radius:20px;padding:3px 8px;font-size:11px;font-weight:600">${bd.icon} ${bd.name}${isFirst?' ✨':''}${isSpicy?' 🌶️':''}<button onclick="removeBadge('${p}','${bid}')" style="background:none;border:none;cursor:pointer;font-size:10px;color:#aaa;margin-left:2px">✕</button></span>`;
+        html+=`<span title="${bd.desc}" style="background:${isSpicy?'#FEF2F2':isFirst?'#FFFBEB':'#EEEDFE'};border:1px solid ${isSpicy?'#f0a0a0':isFirst?'#E4B400':'#AFA9EC'};border-radius:20px;padding:3px 8px;font-size:11px;font-weight:600;cursor:help">${bd.icon} ${bd.name}<button onclick="removeBadge('${p}','${bid}')" style="background:none;border:none;cursor:pointer;font-size:10px;color:#aaa;margin-left:2px">✕</button></span>`;
       });
       html+=`</div>
         <select onchange="addBadgeFromSelect(this,'${esc(p)}')" style="font-size:12px;margin:0">
@@ -5972,8 +5972,8 @@ async function renderActiveGameTab(myName){
           if(!bd) return;
           const isFirst=!(existing[p]&&existing[p][bid]);
           const isSpicy=bd.spicy;
-          html+='<div style="padding:6px 10px;border-radius:20px;font-size:12px;font-weight:600;background:'+(isSpicy?'rgba(240,100,100,.2)':isFirst?'rgba(228,180,0,.2)':'rgba(159,151,245,.2)')+';border:1px solid '+(isSpicy?'#f07070':isFirst?'#E4B400':'#9f97f5')+'">'+
-            bd.icon+' '+bd.name+(isFirst?' ✨ <span style="font-size:10px;color:#E4B400">First time!</span>':'')+(isSpicy?' 🌶️':'')+'</div>';
+          html+='<div title="'+bd.desc+'" style="padding:6px 10px;border-radius:20px;font-size:12px;font-weight:600;background:'+(isSpicy?'rgba(240,100,100,.2)':isFirst?'rgba(228,180,0,.2)':'rgba(159,151,245,.2)')+';border:1px solid '+(isSpicy?'#f07070':isFirst?'#E4B400':'#9f97f5')+';cursor:pointer;position:relative" onclick="showBadgeTooltip(this,'+JSON.stringify(bd.desc)+')">'+
+            bd.icon+' '+bd.name+'</div>';
         });
         html+='</div></div>';
       });
@@ -7531,6 +7531,18 @@ window.confirmInstaWin = async (gameId,matchId,winnerSide,myName)=>{
   await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:newPending});
   const statusEl=el('ps-'+matchId+'-status');
   if(statusEl) statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px;margin-top:6px">🎯 InstaWin submitted — waiting for opponent to confirm.</div>';
+};
+
+window.showBadgeTooltip = (el, desc)=>{
+  // Remove any existing tooltip
+  document.querySelectorAll('.badge-tooltip').forEach(t=>t.remove());
+  const tip=document.createElement('div');
+  tip.className='badge-tooltip';
+  tip.textContent=desc;
+  tip.style.cssText='position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:5px 10px;border-radius:8px;font-size:11px;white-space:nowrap;z-index:9999;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+  el.style.position='relative';
+  el.appendChild(tip);
+  setTimeout(()=>tip.remove(), 2500);
 };
 
 window.dismissAnnouncement = async ()=>{
