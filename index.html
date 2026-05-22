@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v93.22.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v95.22.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v93.22.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v95.22.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -5962,13 +5962,26 @@ async function renderActiveGameTab(myName){
     if(badgeEntries.length){
       html+='<div style="padding:8px 16px 12px;border-top:1px solid rgba(255,255,255,.08)">';
       html+='<div style="font-size:10px;font-weight:700;color:#9f97f5;letter-spacing:1px;margin-bottom:8px">🏅 BADGES</div>';
+      // Build full flat list with scoring
+      const _bidCount={};
+      badgeEntries.forEach(([p,bids])=>bids.forEach(bid=>{ _bidCount[bid]=(_bidCount[bid]||0)+1; }));
+      const _scored=[];
       badgeEntries.forEach(([p,bids])=>{
-        const isMine=p===myName;
+        const bdList=bids.map(bid=>{
+          const bd=BADGE_DEFS.find(b=>b.id===bid); if(!bd) return null;
+          return {bid,bd,exclusive:_bidCount[bid]===1,spicy:bd.spicy,champ:bd.cat==='Game'&&bd.auto};
+        }).filter(Boolean);
+        bdList.sort((a,b)=>((b.exclusive?100:0)+(b.spicy?50:0)+(b.champ?25:0))-((a.exclusive?100:0)+(a.spicy?50:0)+(a.champ?25:0)));
+        const pScore=bdList.reduce((s,x)=>(x.exclusive?100:0)+(x.spicy?50:0)+(x.champ?25:0)+s,0);
+        _scored.push({p,bdList,pScore,isMine:p===myName});
+      });
+      // Sort people: exclusive/spicy first, then your own name, then rest
+      _scored.sort((a,b)=>b.pScore-a.pScore||(b.isMine?1:0)-(a.isMine?1:0));
+      _scored.forEach(({p,bdList,isMine})=>{
         html+='<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">';
         html+='<span style="font-size:12px;font-weight:700;color:'+(isMine?'#c8c0ff':'rgba(255,255,255,.6)')+';min-width:70px;max-width:80px;flex-shrink:0;padding-top:3px;line-height:1.2;word-break:break-word">'+esc(p.split(' ')[0])+(isMine?' 🫵':'')+'</span>';
         html+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
-        bids.forEach(bid=>{
-          const bd=BADGE_DEFS.find(b=>b.id===bid); if(!bd) return;
+        bdList.forEach(({bd})=>{
           html+='<span data-desc="'+esc(bd.desc)+'" onclick="showBadgeTooltip(this)" style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;position:relative;background:'+(bd.spicy?'rgba(240,80,80,.25)':'rgba(159,151,245,.2)')+';border:1px solid '+(bd.spicy?'rgba(240,100,100,.5)':'rgba(159,151,245,.4)')+'"><span style="font-size:12px">'+bd.icon+'</span><span style="color:#fff">'+bd.name+'</span></span>';
         });
         html+='</div></div>';
@@ -5978,6 +5991,34 @@ async function renderActiveGameTab(myName){
     html+='<div style="padding:0 16px 16px"><button onclick="dismissAnnouncement()" style="width:100%;padding:13px;font-size:15px;font-weight:700;border-radius:12px;border:none;background:linear-gradient(135deg,#534AB7,#9f97f5);color:#fff;cursor:pointer">Got it 🎉</button></div>';
     html+='</div>';
     e.innerHTML=html;
+    return;
+  }
+
+  // Find the currently active game
+  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
+  if(!activeGame){
+    // No active game — check all done or just waiting
+    const allGames=S.games||[];
+    const allDone=allGames.length>0&&allGames.every(g=>g.status==='done'||(S.scores&&S.scores[g.id]&&S.scores[g.id]._fin));
+    const _tbGame=S.tiebreakerGame;
+    e.innerHTML=allDone
+      ? (_tbGame
+          ? '<div class="card" style="border:2px solid #E4B400;background:#FFFBEB;padding:16px">'
+            +'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px;text-align:center">🏆 OVERALL TIEBREAKER</div>'
+            +'<div style="font-size:20px;font-weight:700;text-align:center;margin-bottom:6px">'+esc(_tbGame.name||'')+'</div>'
+            +(_tbGame.description?'<div style="font-size:12px;color:#888;text-align:center;margin-bottom:10px">'+esc(_tbGame.description)+'</div>':'')
+            +(_tbGame.teams&&_tbGame.teams.length?'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-top:8px;margin-bottom:4px;text-align:center">Playing:</div><div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px">'+_tbGame.teams.filter(t=>t.players&&t.players[0]).map(t=>'<span style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:8px;padding:4px 12px;font-size:13px;font-weight:600;color:#7a4f00">'+esc(t.players[0])+'</span>').join('<span style="color:#aaa;padding:0 4px">vs</span>')+'</div>':'') 
+            +'</div>'
+          : '<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">🎉</div><div style="font-size:15px;font-weight:700">All games complete!</div><div style="font-size:12px;color:#888;margin-top:4px">Check the Standings tab for final results.</div></div>'
+        )
+      : (_tbGame&&!_tbGame.winner
+          ? '<div class="card" style="border:2px solid #E4B400;background:#FFFBEB;padding:16px">'
+            +'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px;text-align:center">🏆 OVERALL TIEBREAKER</div>'
+            +'<div style="font-size:20px;font-weight:700;text-align:center;margin-bottom:6px">'+esc(_tbGame.name||'')+'</div>'
+            +(_tbGame.teams&&_tbGame.teams.length?'<div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:8px">'+_tbGame.teams.filter(t=>t.players&&t.players[0]).map(t=>'<span style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:8px;padding:4px 12px;font-size:13px;font-weight:600;color:#7a4f00">'+esc(t.players[0])+'</span>').join('<span style="color:#aaa;padding:0 4px">vs</span>')+'</div>':'') 
+            +'</div>'
+          : '<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">⏳</div><div style="font-size:15px;font-weight:700">No active game right now</div><div style="font-size:12px;color:#888;margin-top:6px">The host will kick off the next game soon.<br>Check the Standings tab while you wait.</div></div>'
+        );
     return;
   }
 
