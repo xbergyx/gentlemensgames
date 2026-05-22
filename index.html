@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v84.22.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v86.22.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v84.22.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v86.22.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4559,7 +4559,20 @@ const BADGE_DEFS = [
   {id:'champion',        cat:'Tournament', icon:'🥇', name:'Champion',      auto:true,  spicy:false, desc:'Overall tournament winner'},
   {id:'runner-up',       cat:'Tournament', icon:'🥈', name:'Runner Up',     auto:true,  spicy:false, desc:'2nd place overall'},
   {id:'third-place',     cat:'Tournament', icon:'🥉', name:'Third Place',   auto:true,  spicy:false, desc:'3rd place overall'},
-  {id:'last-place',      cat:'Tournament', icon:'💀', name:'Last Place',    auto:true,  spicy:true,  desc:'Finished last'},
+  {id:'last-place',      cat:'Tournament', icon:'💀', name:'Last Place',    auto:true,  spicy:true,  desc:'Finished last overall'},
+  {id:'last-place-game', cat:'Game',       icon:'🪦', name:'Dead Last',      auto:true,  spicy:true,  desc:'Finished last in this game'},
+  {id:'naked-lap',       cat:'Game',       icon:'🦨', name:'Naked Lap',       auto:true,  spicy:true,  desc:'Scored 0 points in a match'},
+  {id:'blowout-king',    cat:'Game',       icon:'💣', name:'Blowout King',    auto:true,  spicy:false, desc:'Largest single-match point differential'},
+  {id:'ice-veins-game',  cat:'Game',       icon:'🧊', name:'Ice in the Veins',auto:true,  spicy:false, desc:'Won a match in overtime'},
+  {id:'instawin-game',   cat:'Game',       icon:'🎯', name:'InstaWin',        auto:true,  spicy:false, desc:'Got an InstaWin'},
+  {id:'hot-streak',      cat:'Game',       icon:'🔥', name:'Hot Streak',      auto:true,  spicy:false, desc:'Won 3+ matches in a row'},
+  {id:'perfect-game',    cat:'Game',       icon:'🏆', name:'Perfect Game',    auto:true,  spicy:false, desc:'Won every match with best point diff'},
+  {id:'flag-on-play',    cat:'Tournament', icon:'🚩', name:'Flag on the Play',auto:true,  spicy:true,  desc:'Most score disputes filed'},
+  {id:'sharpshooter',    cat:'Tournament', icon:'📈', name:'Sharpshooter',    auto:true,  spicy:false, desc:'Highest combined point differential'},
+  {id:'iron-man',        cat:'Tournament', icon:'🤝', name:'Iron Man',        auto:true,  spicy:false, desc:'Played every game'},
+  {id:'comeback-kid',    cat:'Tournament', icon:'🎭', name:'Comeback Kid',    auto:true,  spicy:false, desc:'Lost first game, finished top 3'},
+  {id:'consistent',      cat:'Tournament', icon:'👑', name:'Consistent',      auto:true,  spicy:false, desc:'Never finished last in any game'},
+  {id:'participation',   cat:'Tournament', icon:'🎖️', name:'Participation',   auto:true,  spicy:false, desc:'Played every single game'},
   // Performance (auto)
   {id:'undefeated',      cat:'Performance', icon:'💪', name:'Undefeated',   auto:true,  spicy:false, desc:'Went 5-0 in a round robin'},
   {id:'hot-streak',      cat:'Performance', icon:'🔥', name:'Hot Streak',   auto:true,  spicy:false, desc:'Won 3+ matches in a row'},
@@ -4617,11 +4630,15 @@ window.openGameAnnouncement = (gameId)=>{
   const pts=S.points&&S.points[gameId]||{};
   const skip=getSkippedIds();
   window._announceGameId=gameId;
-  window._announceBadges={};
+  // Only reset badges on first open, not on re-render
+  if(!window._announceOpen) window._announceBadges={};
+  window._announceOpen=true;
 
-  // Auto-detect game champ badge
-  const gameNameLower=(game.name||'').toLowerCase().replace(/\s+/g,'');
-  const champBadge=BADGE_DEFS.find(bd=>bd.auto&&bd.cat==='Game'&&gameNameLower.includes(bd.id.split('-')[0]));
+  // Auto-detect game champ badge + other auto badges
+  const gameNameLower=(game.name||'').toLowerCase();
+  const GAME_BADGE_MAP={'cornhole':'cornhole-champ','kanjam':'kanjam-champ','kan jam':'kanjam-champ','beer die':'beerdie-champ','beer darts':'beerdarts-champ','bowling':'bowling-champ','golf':'golf-champ','spikeball':'spikeball-champ','cocaine':'cocaine-champ','bucketball':'bucketball-champ'};
+  const champBadgeId=Object.entries(GAME_BADGE_MAP).find(([k])=>gameNameLower.includes(k))?.[1]||null;
+  const champBadge=champBadgeId?BADGE_DEFS.find(bd=>bd.id===champBadgeId):null;
 
   // Sort teams by points for final standings
   const sorted=[...teams].sort((a,b2)=>{
@@ -4629,11 +4646,98 @@ window.openGameAnnouncement = (gameId)=>{
     return pb-pa;
   });
 
-  // Pre-assign game champ badge to winner
-  if(champBadge&&sorted.length){
-    const winner=sorted[0];
-    const winPlayers=[winner.p1,winner.p2,winner.p3].filter(Boolean);
-    winPlayers.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; window._announceBadges[p].push(champBadge.id); });
+  // Pre-assign badges only if not already set (preserve user changes on re-render)
+  if(!window._announceOpen||(window._announceOpen&&Object.keys(window._announceBadges).length===0)){
+    // Game champ badge to winner
+    if(champBadge&&sorted.length){
+      const winner=sorted[0];
+      const winPlayers=[winner.p1,winner.p2,winner.p3].filter(Boolean);
+      winPlayers.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes(champBadge.id)) window._announceBadges[p].push(champBadge.id); });
+    }
+    // Last place badge
+    if(sorted.length>1){
+      const last=sorted[sorted.length-1];
+      const lastPlayers=[last.p1,last.p2,last.p3].filter(Boolean);
+      lastPlayers.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('last-place-game')) window._announceBadges[p].push('last-place-game'); });
+    }
+    // Undefeated badge
+    if(b&&b.matches){
+      const teamWins={};
+      b.matches.forEach(m=>{ if(m.winner){const wid=m.winner.id; teamWins[wid]=(teamWins[wid]||0)+1;} });
+      sorted.forEach(t=>{ if((teamWins[t.id]||0)===sorted.length-1){
+        const ps=[t.p1,t.p2,t.p3].filter(Boolean);
+        ps.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('undefeated')) window._announceBadges[p].push('undefeated'); });
+      }});
+    }
+    // Per-match auto badges
+    if(b&&b.matches){
+      const allM=b.matches.filter(m=>m.winner&&m.score1!=null&&m.score2!=null);
+      let maxDiff=0; let blowoutWinner=null; let blowoutLoser=null;
+
+      allM.forEach(m=>{
+        const diff=Math.abs(m.score1-m.score2);
+        const t1ps=[m.t1?.p1,m.t1?.p2,m.t1?.p3].filter(Boolean);
+        const t2ps=[m.t2?.p1,m.t2?.p2,m.t2?.p3].filter(Boolean);
+        const winPs=m.winner?.id===m.t1?.id?t1ps:t2ps;
+        const losePs=m.winner?.id===m.t1?.id?t2ps:t1ps;
+
+        // Naked Lap — scored 0 in a match
+        const loserScore=m.winner?.id===m.t1?.id?m.score2:m.score1;
+        if(loserScore===0){
+          losePs.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('naked-lap')) window._announceBadges[p].push('naked-lap'); });
+        }
+
+        // Ice in the Veins — won in OT
+        if(m.wasOT){
+          winPs.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('ice-veins-game')) window._announceBadges[p].push('ice-veins-game'); });
+        }
+
+        // InstaWin
+        if(m.isInstaWin||m.isDinger){
+          winPs.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('instawin-game')) window._announceBadges[p].push('instawin-game'); });
+        }
+
+        // Track blowout
+        if(diff>maxDiff){ maxDiff=diff; blowoutWinner=winPs; blowoutLoser=losePs; }
+      });
+
+      // Blowout King
+      if(blowoutWinner&&maxDiff>=5){
+        blowoutWinner.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('blowout-king')) window._announceBadges[p].push('blowout-king'); });
+      }
+
+      // Hot streak — 3+ wins in a row
+      const teamMatchOrder={};
+      allM.forEach(m=>{
+        const t1ps=[m.t1?.p1,m.t1?.p2,m.t1?.p3].filter(Boolean);
+        const t2ps=[m.t2?.p1,m.t2?.p2,m.t2?.p3].filter(Boolean);
+        const winPs=m.winner?.id===m.t1?.id?t1ps:t2ps;
+        const losePs=m.winner?.id===m.t1?.id?t2ps:t1ps;
+        const allTeamPs=[[...t1ps,m.t1?.id],[...t2ps,m.t2?.id]];
+        allTeamPs.forEach(([...ps])=>{
+          const tid=ps.pop();
+          if(!teamMatchOrder[tid]) teamMatchOrder[tid]=[];
+          teamMatchOrder[tid].push(m.winner?.id===tid?1:0);
+        });
+      });
+      Object.entries(teamMatchOrder).forEach(([tid,results])=>{
+        let streak=0,maxS=0;
+        results.forEach(r=>{ streak=r?streak+1:0; if(streak>maxS)maxS=streak; });
+        if(maxS>=3){
+          const t=sorted.find(t=>t.id===tid);
+          if(t){[t.p1,t.p2,t.p3].filter(Boolean).forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('hot-streak')) window._announceBadges[p].push('hot-streak'); });}
+        }
+      });
+
+      // Perfect game — won all matches
+      sorted.forEach(t=>{
+        const wins=allM.filter(m=>m.winner?.id===t.id).length;
+        const total=allM.filter(m=>m.t1?.id===t.id||m.t2?.id===t.id).length;
+        if(wins===total&&total>=3){
+          [t.p1,t.p2,t.p3].filter(Boolean).forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('perfect-game')) window._announceBadges[p].push('perfect-game'); });
+        }
+      });
+    }
   }
 
   // Check existing tourney badges to detect first-time
@@ -7450,7 +7554,7 @@ window.toggleMatchEdit=(editId)=>{
   if(d) d.style.display=d.style.display==='none'?'block':'none';
 };
 
-window.closeModal = ()=>{ const e=el('modal-area'); if(e)e.innerHTML=''; };
+window.closeModal = ()=>{ const e=el('modal-area'); if(e)e.innerHTML=''; window._announceOpen=false; };
 
 // ── UTILS ─────────────────────────────────────────────────
 function showErr(el2,msg){ el2.innerHTML=`<div class="alert alert-danger">${msg}</div>`; }
