@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v83.22.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v84.22.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v83.22.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v84.22.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3684,11 +3684,13 @@ function renderMatchFeed(){
         ${approvedCount===totalTeams&&!fin?'<span style="font-size:16px">✅</span>':''}
         ${submittedCount<totalTeams&&!fin?'<span style="font-size:11px;color:#aaa">${totalTeams-submittedCount} pending</span>':''}
       </div>`:''}
-      ${fin?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      ${fin?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
         <div class="alert alert-success" style="margin:0;flex:1">✓ Points awarded!</div>
         <button class="btn btn-sm" onclick="recomputeStandings('${game.id}')" style="width:auto;border-color:#AFA9EC;color:#3C3489;background:#EEEDFE;font-size:10px">🔄 Recompute</button>
         <button class="btn btn-sm" onclick="unlockGameScores('${game.id}')" style="width:auto;border-color:#f0a0a0;color:#c0392b;font-size:10px">🔓 Unlock</button>
-      </div>`:''}
+      </div>
+      <button class="btn" onclick="openGameAnnouncement('${game.id}')" style="width:100%;background:linear-gradient(135deg,#534AB7,#9f97f5);color:#fff;border-color:#534AB7;font-size:15px;font-weight:700;padding:12px;margin-bottom:8px">📢 Announce results & badges</button>
+      `:''}
       ${!fin&&isLocked?'<div class="alert alert-warn" style="margin-bottom:8px;font-size:11px">🔒 Scores locked — admin can still change but players cannot resubmit.</div>':''}
       ${pendingHTML}
       ${doneHTML?`<div style="font-size:11px;color:#aaa;margin:8px 0 5px;font-weight:600">COMPLETED</div>${doneHTML}`:''}
@@ -4538,6 +4540,220 @@ window.recordTiebreakerWinner = async (playerName)=>{
   });
   alert('✓ '+playerName+' wins the tiebreaker! +1 point added to standings.');
 };
+
+
+// ── BADGE DEFINITIONS ─────────────────────────────────────────────────────────
+const BADGE_DEFS = [
+  // Game champs (auto)
+  {id:'cornhole-champ',  cat:'Game', icon:'🌽', name:'Cornhole Champ',     auto:true,  spicy:false, desc:'Won Cornhole'},
+  {id:'kanjam-champ',    cat:'Game', icon:'🎯', name:'KanJam King',        auto:true,  spicy:false, desc:'Won KanJam'},
+  {id:'beerdie-champ',   cat:'Game', icon:'🎲', name:'Beer Die Champ',     auto:true,  spicy:false, desc:'Won Beer Die'},
+  {id:'beerdarts-champ', cat:'Game', icon:'🎯', name:'Beer Darts Ace',     auto:true,  spicy:false, desc:'Won Beer Darts'},
+  {id:'bowling-champ',   cat:'Game', icon:'🎳', name:'Bowling King',       auto:true,  spicy:false, desc:'Highest pins'},
+  {id:'golf-champ',      cat:'Game', icon:'⛳', name:'Golf Champ',         auto:true,  spicy:false, desc:'Lowest score'},
+  {id:'spikeball-champ', cat:'Game', icon:'🏐', name:'Spikeball King',     auto:true,  spicy:false, desc:'Won Spikeball'},
+  {id:'cocaine-champ',   cat:'Game', icon:'💊', name:'Cocaine Champ',      auto:true,  spicy:false, desc:'Won Cocaine'},
+  {id:'bucketball-champ',cat:'Game', icon:'🪣', name:'Bucketball Champ',   auto:true,  spicy:false, desc:'Won Bucketball'},
+  {id:'beerpong-champ',  cat:'Game', icon:'🏓', name:'Beer Pong Champ',    auto:false, spicy:false, desc:'Won the overall tiebreaker'},
+  // Tournament results (auto on finalize)
+  {id:'champion',        cat:'Tournament', icon:'🥇', name:'Champion',      auto:true,  spicy:false, desc:'Overall tournament winner'},
+  {id:'runner-up',       cat:'Tournament', icon:'🥈', name:'Runner Up',     auto:true,  spicy:false, desc:'2nd place overall'},
+  {id:'third-place',     cat:'Tournament', icon:'🥉', name:'Third Place',   auto:true,  spicy:false, desc:'3rd place overall'},
+  {id:'last-place',      cat:'Tournament', icon:'💀', name:'Last Place',    auto:true,  spicy:true,  desc:'Finished last'},
+  // Performance (auto)
+  {id:'undefeated',      cat:'Performance', icon:'💪', name:'Undefeated',   auto:true,  spicy:false, desc:'Went 5-0 in a round robin'},
+  {id:'hot-streak',      cat:'Performance', icon:'🔥', name:'Hot Streak',   auto:true,  spicy:false, desc:'Won 3+ matches in a row'},
+  {id:'blowout-king',    cat:'Performance', icon:'💣', name:'Blowout King', auto:true,  spicy:false, desc:'Largest single-match point diff'},
+  {id:'upset-king',      cat:'Performance', icon:'😤', name:'Upset King',   auto:true,  spicy:false, desc:'Beat the highest-ranked opponent'},
+  {id:'ot-king',         cat:'Performance', icon:'🐢', name:'OT King',      auto:true,  spicy:false, desc:'Most matches that went to overtime'},
+  {id:'instawin',        cat:'Performance', icon:'🎯', name:'InstaWin',     auto:true,  spicy:false, desc:'Got an InstaWin in KanJam'},
+  {id:'ice-veins',       cat:'Performance', icon:'🧊', name:'Ice in the Veins', auto:true, spicy:false, desc:'Won a match in overtime'},
+  {id:'sharpshooter',    cat:'Performance', icon:'📈', name:'Sharpshooter', auto:true,  spicy:false, desc:'Highest point differential overall'},
+  {id:'most-improved',   cat:'Performance', icon:'📈', name:'Most Improved',auto:true,  spicy:false, desc:'Biggest jump from historical average'},
+  {id:'participation',   cat:'Performance', icon:'🎖️', name:'Participation', auto:true, spicy:false, desc:'Played every single game'},
+  // Spicy/personality (manual)
+  {id:'flag-on-play',    cat:'Personality', icon:'🚩', name:'Flag on the Play',          auto:true,  spicy:true,  desc:'Filed the most score disputes'},
+  {id:'karen',           cat:'Personality', icon:'📋', name:'Speak to the Host',         auto:false, spicy:true,  desc:'Had notes. Many notes.'},
+  {id:'complaint-dept',  cat:'Personality', icon:'🧾', name:'The Complaint Department',  auto:false, spicy:true,  desc:'Always open, never satisfied'},
+  {id:'drama',           cat:'Personality', icon:'🎭', name:'Drama King/Queen',           auto:false, spicy:true,  desc:'Brought the energy, for better or worse'},
+  {id:'short-fuse',      cat:'Personality', icon:'⚡', name:'Short Fuse',                auto:false, spicy:true,  desc:'Zero to sixty in record time'},
+  {id:'hot-take',        cat:'Personality', icon:'🌡️', name:'Hot Take',                  auto:false, spicy:true,  desc:'Ran hot all day'},
+  {id:'disputed-all',    cat:'Personality', icon:'😤', name:'Disputed Everything',       auto:false, spicy:true,  desc:'Challenged more scores than they won'},
+  {id:'lucky-dog',       cat:'Personality', icon:'🍀', name:'Lucky Dog',                 auto:false, spicy:true,  desc:'Won more than they deserved'},
+  {id:'clowned',         cat:'Personality', icon:'🤡', name:'Clowned',                   auto:false, spicy:true,  desc:'Lost to someone much lower ranked'},
+  {id:'carry',           cat:'Personality', icon:'🏄', name:'The Carry',                 auto:false, spicy:true,  desc:'Clearly dragging their team'},
+  {id:'chaos-agent',     cat:'Personality', icon:'🌪️', name:'Chaos Agent',               auto:false, spicy:true,  desc:'Unpredictable results all day'},
+  {id:'melted',          cat:'Personality', icon:'🫠', name:'Melted',                    auto:false, spicy:true,  desc:'Started strong, fell apart'},
+  {id:'silent-assassin', cat:'Personality', icon:'🤫', name:'Silent Assassin',           auto:false, spicy:false, desc:'Low key, great results'},
+  {id:'goat',            cat:'Personality', icon:'🐐', name:'GOAT',                      auto:false, spicy:false, desc:'Greatest of all time'},
+  {id:'hype-man',        cat:'Personality', icon:'🎤', name:'Hype Man',                  auto:false, spicy:false, desc:'Kept energy up all day'},
+  {id:'coach',           cat:'Personality', icon:'🎓', name:'The Coach',                 auto:false, spicy:true,  desc:'Gave unsolicited advice all day'},
+  {id:'too-cool',        cat:'Personality', icon:'🕶️', name:'Too Cool',                  auto:false, spicy:true,  desc:'Acted like they weren\'t trying'},
+  {id:'show-stopper',    cat:'Personality', icon:'🎪', name:'Show Stopper',              auto:false, spicy:false, desc:'Most memorable moment of the day'},
+  // Drinking (manual)
+  {id:'iron-stomach',    cat:'Drinking', icon:'🍺', name:'Iron Stomach',                 auto:false, spicy:false, desc:'Never put down their drink'},
+  {id:'cheers-machine',  cat:'Drinking', icon:'🥂', name:'Cheers Machine',               auto:false, spicy:false, desc:'Toasted after every point'},
+  {id:'bottoms-up',      cat:'Drinking', icon:'🫗', name:'Bottom\'s Up',                 auto:false, spicy:false, desc:'Finished every drink penalty without complaint'},
+  {id:'flood-warning',   cat:'Drinking', icon:'🌊', name:'Flood Warning',                auto:false, spicy:true,  desc:'Consumed an alarming amount'},
+  {id:'energizer',       cat:'Drinking', icon:'🔋', name:'Energizer',                    auto:false, spicy:false, desc:'Got MORE energetic as the day went on'},
+  {id:'turbo',           cat:'Drinking', icon:'⚡', name:'Turbo',                        auto:false, spicy:false, desc:'Visibly leveled up after drink 3'},
+  {id:'spiral',          cat:'Drinking', icon:'🌀', name:'Spiral',                       auto:false, spicy:true,  desc:'Started great, ended questionable'},
+  {id:'lost-plot',       cat:'Drinking', icon:'🧭', name:'Lost the Plot',                auto:false, spicy:true,  desc:'Clearly forgot the rules by game 4'},
+  {id:'naptime',         cat:'Drinking', icon:'💤', name:'Naptime',                      auto:false, spicy:true,  desc:'Took a break nobody asked for'},
+  {id:'still-standing',  cat:'Drinking', icon:'🌅', name:'Still Standing',               auto:false, spicy:false, desc:'Made it to the end against all odds'},
+  {id:'clutch-cup',      cat:'Drinking', icon:'🎯', name:'Clutch Cup',                   auto:false, spicy:false, desc:'Best performance while clearly several drinks in'},
+  {id:'inverse-corr',    cat:'Drinking', icon:'📈', name:'Inverse Correlation',          auto:false, spicy:false, desc:'Got better with every drink'},
+  {id:'drunk-genius',    cat:'Drinking', icon:'🧠', name:'Drunk Genius',                 auto:false, spicy:false, desc:'Questionable decisions that somehow worked'},
+];
+
+// ── ANNOUNCEMENT SYSTEM ────────────────────────────────────────────────────────
+// _announceGameId, _announceBadges = {playerName: [badgeId, ...]}
+window._announceBadges = {};
+
+window.openGameAnnouncement = (gameId)=>{
+  const game=(S.games||[]).find(g=>g.id===gameId);
+  const teams=(S.teams&&S.teams[gameId])||[];
+  const b=S.bs&&S.bs[gameId];
+  const pts=S.points&&S.points[gameId]||{};
+  const skip=getSkippedIds();
+  window._announceGameId=gameId;
+  window._announceBadges={};
+
+  // Auto-detect game champ badge
+  const gameNameLower=(game.name||'').toLowerCase().replace(/\s+/g,'');
+  const champBadge=BADGE_DEFS.find(bd=>bd.auto&&bd.cat==='Game'&&gameNameLower.includes(bd.id.split('-')[0]));
+
+  // Sort teams by points for final standings
+  const sorted=[...teams].sort((a,b2)=>{
+    const pa=pts[a.p1]||pts[a.id]||0, pb=pts[b2.p1]||pts[b2.id]||0;
+    return pb-pa;
+  });
+
+  // Pre-assign game champ badge to winner
+  if(champBadge&&sorted.length){
+    const winner=sorted[0];
+    const winPlayers=[winner.p1,winner.p2,winner.p3].filter(Boolean);
+    winPlayers.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; window._announceBadges[p].push(champBadge.id); });
+  }
+
+  // Check existing tourney badges to detect first-time
+  const existing=S.tourneyBadges||{};
+
+  function renderAnnounceModal(){
+    const cats=[...new Set(BADGE_DEFS.map(b=>b.cat))];
+    const allPlayers=S.players||[];
+
+    let html=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-height:90vh;overflow-y:auto">
+      <div class="modal-handle"></div>
+      <div class="modal-title"><span>📢 Announce: ${game.name}</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>
+
+      <div class="sec-label">Custom hype message (optional)</div>
+      <textarea id="announce-msg" placeholder="e.g. What a game! Bry came out swinging..." style="height:60px;margin-bottom:10px;resize:none"></textarea>
+
+      <div class="sec-label">Final standings</div>
+      <div style="margin-bottom:12px">`;
+
+    const icons=['🥇','🥈','🥉'];
+    sorted.forEach((t,i)=>{
+      const tPts=pts[t.p1]||pts[t.id]||0;
+      const tLabel=[t.p1,t.p2,t.p3].filter(Boolean).join(' & ');
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:${i===0?'#FFF3CD':i===1?'#EBF4FF':i===2?'#EAF3DE':'#f8f7f4'};border-radius:8px;margin-bottom:4px">
+        <span style="font-size:18px">${icons[i]||i+1}</span>
+        <span style="flex:1;font-weight:600;font-size:13px">${tLabel}</span>
+        <span style="font-size:12px;color:#888">${tPts} pts</span>
+      </div>`;
+    });
+    html+=`</div>
+
+      <div class="sec-label">Award badges</div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px">Tap a player then pick their badge. First-time badges are highlighted ✨</div>`;
+
+    // Badge assignment UI per player
+    allPlayers.forEach(p=>{
+      const assigned=window._announceBadges[p]||[];
+      const playerExisting=existing[p]||{};
+      html+=`<div style="margin-bottom:8px;padding:8px;background:#f8f7f4;border-radius:10px">
+        <div style="font-size:12px;font-weight:700;margin-bottom:6px">${p}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">`;
+      assigned.forEach(bid=>{
+        const bd=BADGE_DEFS.find(b=>b.id===bid);
+        if(!bd) return;
+        const isFirst=!playerExisting[bid];
+        const isSpicy=bd.spicy;
+        html+=`<span style="background:${isSpicy?'#FEF2F2':isFirst?'#FFFBEB':'#EEEDFE'};border:1px solid ${isSpicy?'#f0a0a0':isFirst?'#E4B400':'#AFA9EC'};border-radius:20px;padding:3px 8px;font-size:11px;font-weight:600">${bd.icon} ${bd.name}${isFirst?' ✨':''}${isSpicy?' 🌶️':''}<button onclick="removeBadge('${p}','${bid}')" style="background:none;border:none;cursor:pointer;font-size:10px;color:#aaa;margin-left:2px">✕</button></span>`;
+      });
+      html+=`</div>
+        <select onchange="addBadgeFromSelect(this,'${esc(p)}')" style="font-size:12px;margin:0">
+          <option value="">+ Add badge...</option>`;
+      cats.forEach(cat=>{
+        html+=`<optgroup label="${cat}">`;
+        BADGE_DEFS.filter(bd=>bd.cat===cat&&!assigned.includes(bd.id)).forEach(bd=>{
+          const isFirst=!playerExisting[bd.id];
+          html+=`<option value="${bd.id}">${bd.icon} ${bd.name}${isFirst?' ✨':''}${bd.spicy?' 🌶️':''}</option>`;
+        });
+        html+=`</optgroup>`;
+      });
+      html+=`</select></div>`;
+    });
+
+    html+=`<button class="btn btn-primary" onclick="sendAnnouncement('${gameId}')" style="width:100%;font-size:15px;font-weight:700;padding:14px;margin-top:8px;background:linear-gradient(135deg,#534AB7,#9f97f5);border-color:#534AB7">📢 Send to all players</button>
+    </div></div>`;
+    el('modal-area').innerHTML=html;
+  }
+  renderAnnounceModal();
+};
+
+window.addBadgeFromSelect = (sel, player)=>{
+  const bid=sel.value; if(!bid) return;
+  if(!window._announceBadges[player]) window._announceBadges[player]=[];
+  if(!window._announceBadges[player].includes(bid)) window._announceBadges[player].push(bid);
+  openGameAnnouncement(window._announceGameId); // re-render
+};
+
+window.removeBadge = (player, bid)=>{
+  if(window._announceBadges[player]) window._announceBadges[player]=window._announceBadges[player].filter(b=>b!==bid);
+  openGameAnnouncement(window._announceGameId);
+};
+
+window.sendAnnouncement = async (gameId)=>{
+  const game=(S.games||[]).find(g=>g.id===gameId);
+  const msg=(el('announce-msg')?.value||'').trim();
+  const teams=(S.teams&&S.teams[gameId])||[];
+  const pts=S.points&&S.points[gameId]||{};
+  const sorted=[...teams].sort((a,b)=>{
+    const pa=pts[a.p1]||pts[a.id]||0, pb=pts[b.p1]||pts[b.id]||0; return pb-pa;
+  });
+
+  // Build announcement object
+  const announcement={
+    gameId, gameName:game.name,
+    at:Date.now(), msg,
+    standings:sorted.map((t,i)=>({
+      place:i+1,
+      label:[t.p1,t.p2,t.p3].filter(Boolean).join(' & '),
+      pts:pts[t.p1]||pts[t.id]||0
+    })),
+    badges:window._announceBadges,
+    existingBadges:S.tourneyBadges||{}
+  };
+
+  // Save announcement to Firebase + update tourneyBadges
+  const newTourneyBadges=JSON.parse(JSON.stringify(S.tourneyBadges||{}));
+  Object.entries(window._announceBadges).forEach(([p,bids])=>{
+    if(!newTourneyBadges[p]) newTourneyBadges[p]={};
+    bids.forEach(bid=>{ newTourneyBadges[p][bid]=true; });
+  });
+
+  await update(ref(db,'tournaments/'+currentTourneyId),{
+    activeAnnouncement:announcement,
+    announcementAcks:{}, // reset acks for new announcement
+    tourneyBadges:newTourneyBadges
+  });
+  closeModal();
+  alert('✓ Announcement sent! Players must dismiss before seeing next matchups.');
+};
+
+
 
 window.clearTiebreakerGame = async ()=>{
   if(!confirm('Clear the tiebreaker game?')) return;
@@ -5600,6 +5816,53 @@ window.submitGameRanking = async (btnOrId, myNameOrUndef)=>{
 async function renderActiveGameTab(myName){
   const e=el('pview-active');if(!e)return;
   try {
+  // Check for active announcement that player hasn't dismissed
+  const ann=S.activeAnnouncement;
+  const acks=S.announcementAcks||{};
+  if(ann&&!acks[myName]){
+    const existing=ann.existingBadges||{};
+    const icons=['🥇','🥈','🥉'];
+    let html='<div class="card" style="border:2px solid #534AB7;background:linear-gradient(135deg,#0f0a2e,#1a1540);color:#fff;padding:16px">';
+    html+='<div style="text-align:center;margin-bottom:10px"><div style="font-size:32px;margin-bottom:4px">📢</div>';
+    html+='<div style="font-size:18px;font-weight:800;color:#fff">'+esc(ann.gameName)+' Results</div>';
+    if(ann.msg) html+='<div style="font-size:13px;color:#c8c0ff;margin-top:6px;font-style:italic">"'+esc(ann.msg)+'"</div>';
+    html+='</div>';
+    // Standings
+    html+='<div style="margin-bottom:14px">';
+    (ann.standings||[]).forEach((s,i)=>{
+      const isMine=s.label.split(' & ').some(p=>p.trim()===myName);
+      html+='<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:'+(i===0?'rgba(255,215,0,.15)':i===1?'rgba(150,180,255,.1)':i===2?'rgba(100,220,100,.1)':'rgba(255,255,255,.05)')+';border-radius:8px;margin-bottom:4px;'+(isMine?'border:1px solid #9f97f5':'')+'">'+
+        '<span style="font-size:18px">'+(icons[i]||i+1)+'</span>'+
+        '<span style="flex:1;font-weight:600;font-size:13px;color:'+(isMine?'#c8c0ff':'#fff')+'">'+esc(s.label)+(isMine?' (you)':'')+'</span>'+
+        '<span style="font-size:12px;color:#9f97f5">'+s.pts+' pts</span>'+
+        '</div>';
+    });
+    html+='</div>';
+    // Badges
+    const badgeEntries=Object.entries(ann.badges||{}).filter(([p,bids])=>bids&&bids.length);
+    if(badgeEntries.length){
+      html+='<div style="font-size:11px;font-weight:700;color:#9f97f5;margin-bottom:8px;text-align:center">🏅 BADGES AWARDED</div>';
+      badgeEntries.forEach(([p,bids])=>{
+        const isMine=p===myName;
+        html+='<div style="margin-bottom:8px;padding:8px 10px;background:rgba(255,255,255,.05);border-radius:8px;'+(isMine?'border:1px solid #9f97f5':'')+'">'+
+          '<div style="font-size:12px;font-weight:700;color:'+(isMine?'#c8c0ff':'#ddd')+';margin-bottom:4px">'+esc(p)+(isMine?' 🫵':'')+'</div>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+        bids.forEach(bid=>{
+          const bd=BADGE_DEFS.find(b=>b.id===bid);
+          if(!bd) return;
+          const isFirst=!(existing[p]&&existing[p][bid]);
+          const isSpicy=bd.spicy;
+          html+='<div style="padding:6px 10px;border-radius:20px;font-size:12px;font-weight:600;background:'+(isSpicy?'rgba(240,100,100,.2)':isFirst?'rgba(228,180,0,.2)':'rgba(159,151,245,.2)')+';border:1px solid '+(isSpicy?'#f07070':isFirst?'#E4B400':'#9f97f5')+'">'+
+            bd.icon+' '+bd.name+(isFirst?' ✨ <span style="font-size:10px;color:#E4B400">First time!</span>':'')+(isSpicy?' 🌶️':'')+'</div>';
+        });
+        html+='</div></div>';
+      });
+    }
+    html+='<button class="btn btn-primary" onclick="dismissAnnouncement()" style="width:100%;font-size:15px;font-weight:700;padding:14px;margin-top:8px;background:#534AB7;border-color:#534AB7">Got it 🎉</button>';
+    html+='</div>';
+    e.innerHTML=html;
+    return; // don't show anything else until dismissed
+  }
   const fmtL={'h2h-points':'H2H points','h2h-wins':'H2H wins','score-low':'Low score','score-high':'High score','multi-round-high':'Multi-round high','multi-round-low':'Multi-round low','round-robin':'Round robin','single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools','pool-playoff':'Pool + knockout'};
 
   // Find the currently active game
@@ -7148,6 +7411,12 @@ window.confirmInstaWin = async (gameId,matchId,winnerSide,myName)=>{
   await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:newPending});
   const statusEl=el('ps-'+matchId+'-status');
   if(statusEl) statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px;margin-top:6px">🎯 InstaWin submitted — waiting for opponent to confirm.</div>';
+};
+
+window.dismissAnnouncement = async ()=>{
+  const myName=actingAsName||(userProfile?.name)||'';
+  if(!myName) return;
+  await update(ref(db,'tournaments/'+currentTourneyId),{['announcementAcks/'+myName]:true});
 };
 
 window.submitOTWinner = async (btn)=>{
