@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v79.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v80.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v79.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v80.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2410,18 +2410,19 @@ function renderAdminSetup(){
   const _sE2=el('admin-setup');
   if(_sE2&&isTourneyAdmin){
     const _sPlayers2=S.players||[];
-    const _c1=document.createElement('div'); _c1.className='card';
+    // Remove previously appended admin cards to avoid duplicates
+    _sE2.querySelectorAll('.setup-admin-card').forEach(el=>el.remove());
+    const _c1=document.createElement('div'); _c1.className='card setup-admin-card';
     _c1.innerHTML='<div class="card-title">👥 Tournament admins</div><div class="alert alert-info" style="font-size:11px;margin-bottom:8px">Add others who can approve scores and manage this tournament.</div><button class="btn" onclick="manageTourneyAdmins()">👥 Manage tournament admins</button>';
     _sE2.appendChild(_c1);
-    const _c2=document.createElement('div'); _c2.className='card';
-    const _actH=actingAsName?'<div class="alert alert-warn" style="font-size:11px;margin-bottom:8px">Currently viewing as: <strong>'+actingAsName+'</strong></div>':'';
-    const _stopB=actingAsName?'<button class="btn btn-sm btn-danger" onclick="tourneyStopActAs()" style="width:100%;margin-top:8px">Stop viewing as '+actingAsName+'</button>':'';
-    const _pills2=_sPlayers2.map(p=>'<button class="btn btn-sm" onclick="tourneyActAs('+JSON.stringify(p)+')" style="width:auto;'+(actingAsName===p?'background:#EEEDFE;border-color:#7F77DD;color:#534AB7;font-weight:700':'')+'">' +p+'</button>').join('');
-    _c2.innerHTML=["<div class=\"card-title\">🎭 View as player</div>",
-      "<div class=\"alert alert-info\" style=\"font-size:11px;margin-bottom:8px\">See the tournament from any player perspective.</div>",
-      _actH,
-      "<div style=\"display:flex;flex-wrap:wrap;gap:6px\">"+_pills2+"</div>",
-      _stopB].join('');
+    const _c2=document.createElement('div'); _c2.className='card setup-admin-card';
+    const _h2=document.createElement('div'); _h2.className='card-title'; _h2.textContent='🎭 View as player'; _c2.appendChild(_h2);
+    const _inf2=document.createElement('div'); _inf2.className='alert alert-info'; _inf2.style.cssText='font-size:11px;margin-bottom:8px'; _inf2.textContent='See the tournament from any player perspective.'; _c2.appendChild(_inf2);
+    if(actingAsName){ const _aw=document.createElement('div'); _aw.className='alert alert-warn'; _aw.style.cssText='font-size:11px;margin-bottom:8px'; _aw.innerHTML='Currently viewing as: <strong>'+actingAsName+'</strong>'; _c2.appendChild(_aw); }
+    const _pw=document.createElement('div'); _pw.style.cssText='display:flex;flex-wrap:wrap;gap:6px';
+    _sPlayers2.forEach(p=>{ const _pb=document.createElement('button'); _pb.className='btn btn-sm'; _pb.style.width='auto'; if(actingAsName===p){ _pb.style.background='#EEEDFE'; _pb.style.borderColor='#7F77DD'; _pb.style.color='#534AB7'; _pb.style.fontWeight='700'; } _pb.textContent=p; _pb.addEventListener('click',()=>tourneyActAs(p)); _pw.appendChild(_pb); });
+    _c2.appendChild(_pw);
+    if(actingAsName){ const _sb=document.createElement('button'); _sb.className='btn btn-sm btn-danger'; _sb.style.cssText='width:100%;margin-top:8px'; _sb.textContent='Stop viewing as '+actingAsName; _sb.addEventListener('click',()=>tourneyStopActAs()); _c2.appendChild(_sb); }
     _sE2.appendChild(_c2);
   }
 }
