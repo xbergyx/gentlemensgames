@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v80.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v82.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v80.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v82.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4420,7 +4420,7 @@ window.tourneyStopActAs = ()=>{
   el('btn-manage-admins')?.classList.remove('hidden');
   const myName=(userProfile?.preferredName||userProfile?.name)||'';
   el('btn-player-view')?.classList.toggle('hidden',!(S.players||[]).includes(myName));
-  showAdminPhase(_phase||'board'); // return to leaderboard tab
+  showAdminPhase('setup'); // return to setup tab where View as player lives
 };
 
 window.manageTourneyAdmins=()=>{
@@ -5617,7 +5617,7 @@ async function renderActiveGameTab(myName){
             +(_tbGame.teams&&_tbGame.teams.length?'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px">Players:</div>'
               +'<div style="display:flex;flex-wrap:wrap;gap:6px">'+_tbGame.teams.filter(t=>t.players&&t.players[0]).map(t=>'<span style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:8px;padding:4px 10px;font-size:13px;font-weight:600;color:#7a4f00">'+esc(t.players[0])+'</span>').join('')+'</div>'
               :'')
-            +'<div style="font-size:11px;color:#27500A;margin-top:10px;text-align:center">Check with the host for your match!</div>'
+            +(_tbGame.teams&&_tbGame.teams.length?'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-top:8px;margin-bottom:4px;text-align:center">Playing:</div><div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px">'+_tbGame.teams.filter(t=>t.players&&t.players[0]).map(t=>'<span style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:8px;padding:4px 12px;font-size:13px;font-weight:600;color:#7a4f00">'+esc(t.players[0])+'</span>').join('<span style="color:#aaa;padding:0 4px">vs</span>')+'</div>':'')
             +'</div>'
           : '<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">🎉</div><div style="font-size:15px;font-weight:700">All games complete!</div><div style="font-size:12px;color:#888;margin-top:4px">Check the Standings tab for final results.</div></div>'
         )
@@ -5626,7 +5626,7 @@ async function renderActiveGameTab(myName){
             +'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px;text-align:center">🏆 OVERALL TIEBREAKER</div>'
             +'<div style="font-size:20px;font-weight:700;text-align:center;margin-bottom:6px">'+esc(_tbGame.name||'')+'</div>'
             +(_tbGame.description?'<div style="font-size:12px;color:#888;text-align:center;margin-bottom:10px">'+esc(_tbGame.description)+'</div>':'')
-            +'<div style="font-size:11px;color:#27500A;text-align:center">Check with the host for your match!</div>'
+            +(_tbGame.teams&&_tbGame.teams.length?'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-top:8px;margin-bottom:4px;text-align:center">Playing:</div><div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px">'+_tbGame.teams.filter(t=>t.players&&t.players[0]).map(t=>'<span style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:8px;padding:4px 12px;font-size:13px;font-weight:600;color:#7a4f00">'+esc(t.players[0])+'</span>').join('<span style="color:#aaa;padding:0 4px">vs</span>')+'</div>':'')
             +'</div>'
           : '<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">⏳</div><div style="font-size:15px;font-weight:700">No active game right now</div><div style="font-size:12px;color:#888;margin-top:6px">The host will kick off the next game soon.<br>Check the Standings tab while you wait.</div></div>'
         );
