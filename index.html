@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v90.22.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v92.22.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v90.22.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v92.22.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4800,7 +4800,7 @@ window.openGameAnnouncement = (gameId)=>{
         if(!bd) return;
         const isFirst=!playerExisting[bid];
         const isSpicy=bd.spicy;
-        html+=`<span title="${bd.desc}" style="background:${isSpicy?'#FEF2F2':isFirst?'#FFFBEB':'#EEEDFE'};border:1px solid ${isSpicy?'#f0a0a0':isFirst?'#E4B400':'#AFA9EC'};border-radius:20px;padding:3px 8px;font-size:11px;font-weight:600;cursor:help">${bd.icon} ${bd.name}<button onclick="removeBadge('${p}','${bid}')" style="background:none;border:none;cursor:pointer;font-size:10px;color:#aaa;margin-left:2px">✕</button></span>`;
+        html+=`<span title="${bd.desc}" onclick="showBadgeTooltip(this,${JSON.stringify(bd.desc)})" style="background:${isSpicy?'#FEF2F2':isFirst?'#FFFBEB':'#EEEDFE'};border:1px solid ${isSpicy?'#f0a0a0':isFirst?'#E4B400':'#AFA9EC'};border-radius:20px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;position:relative">${bd.icon} ${bd.name}<button onclick="event.stopPropagation();removeBadge('${p}','${bid}')" style="background:none;border:none;cursor:pointer;font-size:10px;color:#aaa;margin-left:2px">✕</button></span>`;
       });
       html+=`</div>
         <select onchange="addBadgeFromSelect(this,'${esc(p)}')" style="font-size:12px;margin:0">
@@ -5941,80 +5941,43 @@ async function renderActiveGameTab(myName){
   const acks=S.announcementAcks||{};
   if(ann&&!acks[myName]){
     const existing=ann.existingBadges||{};
-    const icons=['🥇','🥈','🥉'];
-    let html='<div class="card" style="border:2px solid #534AB7;background:linear-gradient(135deg,#0f0a2e,#1a1540);color:#fff;padding:16px">';
-    html+='<div style="text-align:center;margin-bottom:10px"><div style="font-size:32px;margin-bottom:4px">📢</div>';
-    html+='<div style="font-size:18px;font-weight:800;color:#fff">'+esc(ann.gameName)+' Results</div>';
-    if(ann.msg) html+='<div style="font-size:13px;color:#c8c0ff;margin-top:6px;font-style:italic">"'+esc(ann.msg)+'"</div>';
+    const posIcons=['🥇','🥈','🥉'];
+    const badgeEntries=Object.entries(ann.badges||{}).filter(([p,bids])=>bids&&bids.length);
+    let html='<div style="background:linear-gradient(160deg,#0d0a2a,#1e1650);border-radius:16px;overflow:hidden">';
+    html+='<div style="padding:14px 16px 10px;text-align:center;border-bottom:1px solid rgba(255,255,255,.08)">';
+    html+='<div style="font-size:10px;font-weight:700;color:#9f97f5;letter-spacing:1px;margin-bottom:3px">📢 RESULTS</div>';
+    html+='<div style="font-size:20px;font-weight:800;color:#fff">'+esc(ann.gameName)+'</div>';
+    if(ann.msg) html+='<div style="font-size:12px;color:#c8c0ff;margin-top:4px;font-style:italic">&ldquo;'+esc(ann.msg)+'&rdquo;</div>';
     html+='</div>';
-    // Standings
-    html+='<div style="margin-bottom:14px">';
+    html+='<div style="padding:8px 16px">';
     (ann.standings||[]).forEach((s,i)=>{
       const isMine=s.label.split(' & ').some(p=>p.trim()===myName);
-      html+='<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:'+(i===0?'rgba(255,215,0,.15)':i===1?'rgba(150,180,255,.1)':i===2?'rgba(100,220,100,.1)':'rgba(255,255,255,.05)')+';border-radius:8px;margin-bottom:4px;'+(isMine?'border:1px solid #9f97f5':'')+'">'+
-        '<span style="font-size:18px">'+(icons[i]||i+1)+'</span>'+
-        '<span style="flex:1;font-weight:600;font-size:13px;color:'+(isMine?'#c8c0ff':'#fff')+'">'+esc(s.label)+(isMine?' (you)':'')+'</span>'+
-        '<span style="font-size:12px;color:#9f97f5">'+s.pts+' pts</span>'+
-        '</div>';
+      html+='<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);'+(isMine?'border-left:2px solid #9f97f5;padding-left:6px;margin-left:-6px':'')+'">'+
+        '<span style="font-size:'+(i<3?'15px':'11px')+';min-width:20px;text-align:center;color:rgba(255,255,255,.5)">'+(posIcons[i]||i+1+'.')+'</span>'+
+        '<span style="flex:1;font-size:13px;font-weight:'+(isMine?700:400)+';color:'+(isMine?'#c8c0ff':'rgba(255,255,255,.8)')+'">'+esc(s.label)+'</span>'+
+        '<span style="font-size:11px;color:#9f97f5;font-weight:600">'+s.pts+' pts</span>'+
+      '</div>';
     });
     html+='</div>';
-    // Badges
-    const badgeEntries=Object.entries(ann.badges||{}).filter(([p,bids])=>bids&&bids.length);
     if(badgeEntries.length){
-      html+='<div style="font-size:11px;font-weight:700;color:#9f97f5;margin-bottom:8px;text-align:center">🏅 BADGES AWARDED</div>';
+      html+='<div style="padding:8px 16px 12px;border-top:1px solid rgba(255,255,255,.08)">';
+      html+='<div style="font-size:10px;font-weight:700;color:#9f97f5;letter-spacing:1px;margin-bottom:8px">🏅 BADGES</div>';
       badgeEntries.forEach(([p,bids])=>{
         const isMine=p===myName;
-        html+='<div style="margin-bottom:8px;padding:8px 10px;background:rgba(255,255,255,.05);border-radius:8px;'+(isMine?'border:1px solid #9f97f5':'')+'">'+
-          '<div style="font-size:12px;font-weight:700;color:'+(isMine?'#c8c0ff':'#ddd')+';margin-bottom:4px">'+esc(p)+(isMine?' 🫵':'')+'</div>'+
-          '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+        html+='<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">';
+        html+='<span style="font-size:12px;font-weight:700;color:'+(isMine?'#c8c0ff':'rgba(255,255,255,.6)')+';min-width:70px;max-width:80px;flex-shrink:0;padding-top:3px;line-height:1.2;word-break:break-word">'+esc(p.split(' ')[0])+(isMine?' 🫵':'')+'</span>';
+        html+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
         bids.forEach(bid=>{
-          const bd=BADGE_DEFS.find(b=>b.id===bid);
-          if(!bd) return;
-          const isFirst=!(existing[p]&&existing[p][bid]);
-          const isSpicy=bd.spicy;
-          html+='<div title="'+bd.desc+'" style="padding:6px 10px;border-radius:20px;font-size:12px;font-weight:600;background:'+(isSpicy?'rgba(240,100,100,.2)':isFirst?'rgba(228,180,0,.2)':'rgba(159,151,245,.2)')+';border:1px solid '+(isSpicy?'#f07070':isFirst?'#E4B400':'#9f97f5')+';cursor:pointer;position:relative" onclick="showBadgeTooltip(this,'+JSON.stringify(bd.desc)+')">'+
-            bd.icon+' '+bd.name+'</div>';
+          const bd=BADGE_DEFS.find(b=>b.id===bid); if(!bd) return;
+          html+='<span onclick="showBadgeTooltip(this,'+JSON.stringify(bd.desc)+')" style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;position:relative;background:'+(bd.spicy?'rgba(240,80,80,.25)':'rgba(159,151,245,.2)')+';border:1px solid '+(bd.spicy?'rgba(240,100,100,.5)':'rgba(159,151,245,.4)')+'"><span style="font-size:12px">'+bd.icon+'</span><span style="color:#fff">'+bd.name+'</span></span>';
         });
         html+='</div></div>';
       });
+      html+='</div>';
     }
-    html+='<button class="btn btn-primary" onclick="dismissAnnouncement()" style="width:100%;font-size:15px;font-weight:700;padding:14px;margin-top:8px;background:#534AB7;border-color:#534AB7">Got it 🎉</button>';
+    html+='<div style="padding:0 16px 16px"><button onclick="dismissAnnouncement()" style="width:100%;padding:13px;font-size:15px;font-weight:700;border-radius:12px;border:none;background:linear-gradient(135deg,#534AB7,#9f97f5);color:#fff;cursor:pointer">Got it 🎉</button></div>';
     html+='</div>';
     e.innerHTML=html;
-    return; // don't show anything else until dismissed
-  }
-  const fmtL={'h2h-points':'H2H points','h2h-wins':'H2H wins','score-low':'Low score','score-high':'High score','multi-round-high':'Multi-round high','multi-round-low':'Multi-round low','round-robin':'Round robin','single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools','pool-playoff':'Pool + knockout'};
-
-  // Find the currently active game
-  const activeGame=(S.games||[]).find(g=>g.active||S.activeGameId===g.id);
-
-  if(!activeGame){
-    // Check if all games are done
-    const allGames=S.games||[];
-    const allDone=allGames.length>0&&allGames.every(g=>g.status==='done'||(S.scores&&S.scores[g.id]&&S.scores[g.id]._fin));
-    const _tbGame=S.tiebreakerGame;
-    e.innerHTML=allDone
-      ? (_tbGame
-          ? '<div class="card" style="border:2px solid #E4B400;background:#FFFBEB;padding:16px">'
-            +'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px;text-align:center">🏆 OVERALL TIEBREAKER</div>'
-            +'<div style="font-size:20px;font-weight:700;text-align:center;margin-bottom:6px">'+esc(_tbGame.name||'')+'</div>'
-            +(_tbGame.description?'<div style="font-size:12px;color:#888;text-align:center;margin-bottom:10px">'+esc(_tbGame.description)+'</div>':'')
-            +(_tbGame.teams&&_tbGame.teams.length?'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px">Players:</div>'
-              +'<div style="display:flex;flex-wrap:wrap;gap:6px">'+_tbGame.teams.filter(t=>t.players&&t.players[0]).map(t=>'<span style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:8px;padding:4px 10px;font-size:13px;font-weight:600;color:#7a4f00">'+esc(t.players[0])+'</span>').join('')+'</div>'
-              :'')
-            +(_tbGame.teams&&_tbGame.teams.length?'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-top:8px;margin-bottom:4px;text-align:center">Playing:</div><div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px">'+_tbGame.teams.filter(t=>t.players&&t.players[0]).map(t=>'<span style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:8px;padding:4px 12px;font-size:13px;font-weight:600;color:#7a4f00">'+esc(t.players[0])+'</span>').join('<span style="color:#aaa;padding:0 4px">vs</span>')+'</div>':'')
-            +'</div>'
-          : '<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">🎉</div><div style="font-size:15px;font-weight:700">All games complete!</div><div style="font-size:12px;color:#888;margin-top:4px">Check the Standings tab for final results.</div></div>'
-        )
-      : (_tbGame
-          ? '<div class="card" style="border:2px solid #E4B400;background:#FFFBEB;padding:16px">'
-            +'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px;text-align:center">🏆 OVERALL TIEBREAKER</div>'
-            +'<div style="font-size:20px;font-weight:700;text-align:center;margin-bottom:6px">'+esc(_tbGame.name||'')+'</div>'
-            +(_tbGame.description?'<div style="font-size:12px;color:#888;text-align:center;margin-bottom:10px">'+esc(_tbGame.description)+'</div>':'')
-            +(_tbGame.teams&&_tbGame.teams.length?'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-top:8px;margin-bottom:4px;text-align:center">Playing:</div><div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px">'+_tbGame.teams.filter(t=>t.players&&t.players[0]).map(t=>'<span style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:8px;padding:4px 12px;font-size:13px;font-weight:600;color:#7a4f00">'+esc(t.players[0])+'</span>').join('<span style="color:#aaa;padding:0 4px">vs</span>')+'</div>':'')
-            +'</div>'
-          : '<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">⏳</div><div style="font-size:15px;font-weight:700">No active game right now</div><div style="font-size:12px;color:#888;margin-top:6px">The host will kick off the next game soon.<br>Check the Standings tab while you wait.</div></div>'
-        );
     return;
   }
 
