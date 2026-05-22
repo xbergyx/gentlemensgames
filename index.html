@@ -486,7 +486,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v74.20.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v75.20.05.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +560,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v74.20.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v75.20.05.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4335,31 +4335,7 @@ function updateStats(){
 }
 function renderTiebreakerPanel(){
   const e=el('tiebreaker-panel'); if(!e) return;
-  const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
-  if(!sorted.length){e.innerHTML='';return;}
-  const topScore=getTotalPts(sorted[0]),tied=sorted.filter(p=>getTotalPts(p)===topScore),tb=S.tiebreaker||{};
-  if(tied.length<=1){e.innerHTML='<p style="font-size:12px;color:#27500A;font-weight:600">✓ No tie — clear winner!</p>';return;}
-  const existingTbNote=tb.note||'';
-  let html=`<div class="alert alert-warn" style="font-size:11px;margin-bottom:10px"><strong>${tied.length} players tied at ${topScore}pts:</strong> ${tied.join(', ')}</div>
-  <div class="sec-label">Tiebreaker description (shown in results)</div>
-  <input type="text" id="tb-note-input" placeholder="e.g. Closest putt to the pin" value="${esc(existingTbNote)}" style="margin-bottom:8px">
-  <button class="btn btn-sm" onclick="saveTbNote()" style="width:auto;margin-bottom:10px">💾 Save description</button>`;
-  for(let i=0;i<tied.length;i++)for(let j=i+1;j<tied.length;j++){
-    const p1=tied[i],p2=tied[j],key=p1+'___'+p2,res=tb[key];
-    html+=`<div style="background:#fff;border:1px solid #e8e6df;border-radius:10px;padding:10px;margin-bottom:8px">
-      <div style="font-size:11px;color:#aaa;font-weight:700;margin-bottom:6px">🏓 Beer pong</div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="flex:1;font-size:13px;font-weight:500">${p1}</div>
-        <input type="number" id="tb-${key}-1" placeholder="Cups" value="${res?res.s1:''}" style="width:60px;padding:6px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center;margin:0">
-        <span style="font-size:12px;color:#aaa">vs</span>
-        <input type="number" id="tb-${key}-2" placeholder="Cups" value="${res?res.s2:''}" style="width:60px;padding:6px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center;margin:0">
-        <div style="flex:1;font-size:13px;font-weight:500;text-align:right">${p2}</div>
-      </div>
-      ${res?`<div style="font-size:11px;color:#27500A;margin-top:5px;font-weight:600">✓ Winner: ${res.winner}</div>`:''}
-      <button class="btn btn-success btn-sm" style="width:100%;margin-top:6px" onclick="saveTBMatch('${esc(key)}','${esc(p1)}','${esc(p2)}')">✓ Save</button>
-    </div>`;
-  }
-  // Tiebreaker — only show if tiebreakerGame exists or user clicks the button
+  // Tiebreaker — only show if tiebreakerGame exists, otherwise just the button
   {
     const tbGame=S.tiebreakerGame;
     if(tbGame){
