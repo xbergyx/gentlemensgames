@@ -500,7 +500,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v99.16.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v100.16.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -574,7 +574,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v99.16.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v100.16.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -872,8 +872,31 @@ window.addEventListener('beforeinstallprompt', e=>{
   show('install-prompt');
 });
 window.installPWA = ()=>{
-  if(_pwaPrompt){ _pwaPrompt.prompt(); _pwaPrompt.userChoice.then(()=>hide('install-prompt')); }
+  if(_pwaPrompt){ _pwaPrompt.prompt(); _pwaPrompt.userChoice.then(()=>{ _pwaPrompt=null; hide('install-prompt'); }); return; }
+  const ua=navigator.userAgent||'';
+  const ios=/iPhone|iPad|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const inApp=/FBAN|FBAV|Instagram|Line\/|GSA\/|Snapchat|Twitter/i.test(ua);
+  const step=(n,t)=>'<div style="display:flex;gap:10px;align-items:flex-start;margin:10px 0"><div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#534AB7;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:13px">'+n+'</div><div style="font-size:14px;line-height:1.4;padding-top:3px">'+t+'</div></div>';
+  let body;
+  if(inApp){
+    body=step(1,'You opened this inside another app. Tap the <b>⋯</b> menu and choose <b>Open in Safari</b> (iPhone) or <b>Open in Chrome</b> (Android).')+step(2,'Then tap <b>Install</b> again.');
+  } else if(ios){
+    body=step(1,'Tap the <b>Share</b> button <span style="font-size:18px">⎋</span>: at the bottom of the screen in Safari, or at the top right in Chrome.')
+      +step(2,'Scroll down and tap <b>Add to Home Screen</b> ➕. If you don\'t see it, tap <b>Edit Actions</b> or <b>More</b> to find it.')
+      +step(3,'Tap <b>Add</b>, then open <b>GG</b> from your home screen.');
+  } else {
+    body=step(1,'Tap the browser menu <b>⋮</b> (top right in Chrome).')
+      +step(2,'Tap <b>Add to Home screen</b> or <b>Install app</b>.')
+      +step(3,'Tap <b>Install</b>, then open <b>GG</b> from your home screen.');
+  }
+  el('modal-area').innerHTML='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
+    +'<div class="modal-handle"></div>'
+    +'<div class="modal-title"><span>📲 Install the app</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
+    +body
+    +'<div class="alert alert-info" style="font-size:12px;margin-top:8px">Opening it from your home screen is what lets you turn on alerts.</div>'
+    +'<button class="btn btn-primary" onclick="closeModal()">Got it</button></div></div>';
 };
+window.addEventListener('appinstalled',()=>{ _pwaPrompt=null; hide('install-prompt'); });
 
 // ── AUTH FLOW ─────────────────────────────────────────────
 function isPhone(v){ return /^\+?[\d\s\-().]{7,}$/.test(v.trim()); }
@@ -1105,8 +1128,8 @@ function afterSignIn(){
   showView('home');
   // Show install prompt on iOS manually
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  const isStandalone = window.navigator.standalone;
-  if(isIOS&&!isStandalone) show('install-prompt');
+  const isStandalone = window.navigator.standalone || (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);
+  if(!isStandalone) show('install-prompt');
 }
 
 // ── GLOBAL PROFILES + GHOST LINKS ────────────────────────
