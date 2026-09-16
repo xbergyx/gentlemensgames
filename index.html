@@ -49,6 +49,35 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .badge-founder{background:#FDF2F8;color:#9d174d;border-color:#f9a8d4}
 .badge-winless{background:#F9FAFB;color:#374151;border-color:#d1d5db}
 .badge-specialist{background:#ECFDF5;color:#065f46;border-color:#6ee7b7}.badge-gamewinner{background:#EAF3DE;color:#27500A;border-color:#97C459}
+.is-spectator #ptab-teams,.is-spectator #ptab-rank,.is-spectator #ptab-vote{display:none!important}
+.chat-card{padding:.8rem .8rem .7rem}
+.chat-list{height:min(58vh,520px);overflow-y:auto;display:flex;flex-direction:column;gap:3px;padding:4px 2px;-webkit-overflow-scrolling:touch}
+.chat-row{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-top:6px}
+.chat-row.grouped{margin-top:0}
+.chat-row.mine{align-self:flex-end;align-items:flex-end}
+.chat-name{font-size:11px;font-weight:700;color:#888;margin:0 0 2px 10px}
+.chat-spec{font-size:10px}
+.chat-bubble{background:#f0eee8;padding:7px 11px;border-radius:16px;font-size:14px;line-height:1.35;word-wrap:break-word;overflow-wrap:anywhere}
+.chat-row.mine .chat-bubble{background:#534AB7;color:#fff}
+.chat-bubble.at-me{box-shadow:0 0 0 2px #e3b341}
+.chat-at{color:#534AB7}
+.chat-row.mine .chat-at{color:#fff;text-decoration:underline}
+.chat-time{font-size:10px;opacity:.55;margin-left:6px;white-space:nowrap}
+.chat-x{font-size:11px;color:#c0392b;text-decoration:none;margin-left:4px;opacity:.7}
+.chat-row.mine .chat-x{color:#ffd0d0}
+.chat-sys{align-self:center;text-align:center;font-size:12px;color:#777;background:rgba(83,74,183,.07);padding:4px 10px;border-radius:12px;margin:6px 0;max-width:92%}
+.chat-sys.spicy{background:rgba(240,80,80,.09)}
+.chat-sys.spicy .bfeed-name{color:#c0392b}
+.chat-sys.mine{background:rgba(83,74,183,.16)}
+.chat-sys .bfeed-name{border-bottom:none}
+.chat-suggest{display:flex;flex-wrap:wrap}
+.chat-input-row{display:flex;gap:6px;align-items:flex-end;margin-top:6px}
+.chat-input-row textarea{flex:1;margin:0;resize:none;font-size:16px;line-height:1.3;padding:9px 12px;border-radius:18px;min-height:40px;max-height:110px;font-family:inherit}
+.chat-dot{display:inline-block;min-width:16px;padding:0 4px;border-radius:9px;background:#e74c3c;color:#fff;font-size:10px;line-height:16px;margin-left:3px}
+[data-theme="dark"] .chat-bubble{background:#23232c;color:#e6e6ec}
+[data-theme="dark"] .chat-row.mine .chat-bubble{background:#5a50c4}
+[data-theme="dark"] .chat-at{color:#a9a2ff}
+[data-theme="dark"] .chat-sys{color:#aaa;background:rgba(159,151,245,.1)}
 .bfeed-row{display:flex;align-items:center;gap:8px;padding:7px 8px;margin:0 -8px;border-radius:10px;border-bottom:1px solid rgba(128,128,128,.12)}
 .bfeed-row:last-of-type{border-bottom:none}
 .bfeed-icon{font-size:20px;width:30px;text-align:center;flex-shrink:0}
@@ -500,7 +529,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v100.16.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v103.16.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -574,7 +603,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v100.16.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v103.16.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -1126,6 +1155,7 @@ function afterSignIn(){
     syncPlayerNameAcrossTournaments(currentUser.uid,userProfile);
   }
   showView('home');
+  try{ const wt=localStorage.getItem('gg_watch'); if(wt) setTimeout(()=>joinAsSpectator(wt),300); }catch(e){}
   // Show install prompt on iOS manually
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const isStandalone = window.navigator.standalone || (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);
@@ -1802,7 +1832,7 @@ function loadTournamentList(){
       if(!t||!t.tourneyName) return;
       // Show tournament if user is a participant or admin
       const myUid = actingAsUid||currentUser?.uid;
-      const isParticipant = t.playerUids && t.playerUids[myUid];
+      const isParticipant = (t.playerUids && t.playerUids[myUid]) || (t.spectators && t.spectators[myUid]);
       if(!isAdmin&&!isParticipant) return;
       if(t.tournamentFinalized) past.push({id,...t});
       else active.push({id,...t});
@@ -1834,6 +1864,7 @@ function renderTourneyList(elId, list, isPast, showAll=false){
         <div style="font-size:20px">${isPast?'📜':'🏆'}</div>
       </div>
       ${!isPast&&t.tournamentStarted?'<div class="tag tag-green" style="margin-top:6px;font-size:10px">● In progress</div>':''}
+      ${(()=>{const u=actingAsUid||currentUser?.uid;return u&&t.spectators&&t.spectators[u]&&!(t.playerUids&&t.playerUids[u])?'<div class="tag" style="margin-top:6px;font-size:10px">👀 Spectating</div>':'';})()}
       ${showAll&&isAdmin?`<div style="margin-top:8px;display:flex;gap:6px">
         <button class="btn btn-sm" onclick="openTournament('${t.id}')" style="width:auto;flex:1">Open</button>
         <button class="btn btn-sm btn-danger" onclick="deleteTournament('${t.id}','${esc(t.tourneyName||'this tournament')}')" style="width:auto">🗑 Delete</button>
@@ -2218,6 +2249,7 @@ window.openTournament = (tid)=>{
       if(isTourneyAdmin&&!_viewingAsPlayer&&!actingAsOther) renderAdminView();
       else { renderPlayerView(myName); updateVoteTabVisibility(myName); }
       try{ ensureGameChampDefs(); renderBadgeFeeds(); checkBadgeToasts(tid); }catch(err){ console.warn('badge feed',err); }
+      try{ refreshChats(); checkChatToasts(tid); }catch(err){ console.warn('chat',err); }
     });
   });
 };
@@ -2242,18 +2274,20 @@ function buildTournamentShell(){
       <div class="phase-tab" data-phase="history">📜 History</div>
       <div class="phase-tab" data-phase="testing">🧪 Testing</div>
       <div class="phase-tab" data-phase="votes">🗳️ Votes</div>
+      <div class="phase-tab" data-phase="chat" id="atab-chat">💬 Chat</div>
     </div>
     <div id="admin-setup"></div>
     <div id="admin-players" class="hidden"></div>
     <div id="admin-games" class="hidden"></div>
     <div id="admin-rankings" class="hidden"></div>
-    <div id="admin-scores" class="hidden"><div id="push-prompt-admin"></div><div id="admin-scores-main"></div><div id="badge-feed-admin" style="margin-top:4px"></div></div>
+    <div id="admin-scores" class="hidden"><div id="push-prompt-admin"></div><div id="admin-scores-main"></div></div>
     <div id="admin-board" class="hidden"></div>
     <div id="admin-power" class="hidden"></div>
     <div id="admin-history" class="hidden"></div>
     <div id="admin-testing" class="hidden"></div>
     <div id="admin-players" class="hidden"></div>
     <div id="admin-votes" class="hidden"></div>
+    <div id="admin-chat" class="hidden"></div>
   </div>
   <div id="player-area" class="hidden">
     <div class="card" id="player-header-card"></div>
@@ -2264,9 +2298,11 @@ function buildTournamentShell(){
       <div class="ptab-btn" id="ptab-info" data-tab="info">📋 Games</div>
       <div class="ptab-btn" id="ptab-teams" data-tab="teams">👥 My Teams</div>
       <div class="ptab-btn" id="ptab-rank" data-tab="rank">🎯 Rankings</div>
+      <div class="ptab-btn" id="ptab-chat" data-tab="chat">💬 Chat</div>
       <div class="ptab-btn" id="ptab-vote" data-tab="vote" style="display:none">🗳️ Vote</div>
     </div>
-    <div id="pview-active"><div id="push-prompt-player"></div><div id="pview-active-main"></div><div id="badge-feed-player" style="margin-top:4px"></div></div>
+    <div id="pview-active"><div id="push-prompt-player"></div><div id="pview-active-main"></div></div>
+    <div id="pview-chat" class="hidden"></div>
     <div id="pview-lb" class="hidden"></div>
     <div id="pview-games" class="hidden"></div>
     <div id="pview-info" class="hidden"></div>
@@ -2403,14 +2439,15 @@ window.switchToAdminView=()=>{
 
 function showAdminPhase(phase){
   _phase=phase;
-  ['setup','players','games','rankings','scores','board','history','testing','votes'].forEach(p=>{
+  ['setup','players','games','rankings','scores','board','history','testing','votes','chat'].forEach(p=>{
     const panel=el('admin-'+p); if(panel) panel.classList.add('hidden');
     document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===p) t.classList.remove('active'); });
   });
   const target=el('admin-'+phase); if(target) target.classList.remove('hidden');
   document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===phase) t.classList.add('active'); });
-  if(phase==='setup')    renderAdminSetup();
-  if(phase==='players')  renderAdminPlayers();
+  if(phase==='setup')    { renderAdminSetup(); try{ renderIconCard(); }catch(err){ console.warn('icon',err); } }
+  if(phase==='chat')     renderChat('a');
+  if(phase==='players')  { renderAdminPlayers(); renderSpectatorAdmin(); }
   if(phase==='games')    renderAdminGames();
   if(phase==='testing')  renderAdminTesting();
   if(phase==='votes')    renderAdminVotes();
@@ -4683,6 +4720,7 @@ const BADGE_DEFS = [
   {id:'still-standing',  cat:'Drinking', icon:'🌅', name:'Still Standing',               auto:false, spicy:false, desc:'Made it to the end against all odds'},
   {id:'clutch-cup',      cat:'Drinking', icon:'🎯', name:'Clutch Cup',                   auto:false, spicy:false, desc:'Best performance while clearly several drinks in'},
   {id:'inverse-corr',    cat:'Drinking', icon:'📈', name:'Inverse Correlation',          auto:false, spicy:false, desc:'Got better with every drink'},
+  {id:'spectator', cat:'Tournament', icon:'👀', name:'Spectator', auto:true, spicy:false, desc:'Here for the show: following along from the sidelines'},
   // Added v96 (manual)
   {id:"chatty-kathy", cat:"Personality", icon:"💬", name:"Chatty Kathy", auto:false, spicy:true, desc:"Talked through every throw, including the other team's"},
   {id:"true-gentleman", cat:"Personality", icon:"🎩", name:"True Gentleman", auto:false, spicy:false, desc:"Pure class all day, gracious in victory and in defeat"},
@@ -5248,6 +5286,339 @@ function renderCustomBadgePlayerSelect(){
 
 
 
+// ── CHAT + SPECTATORS ─────────────────────────────────────
+function chatMyUid(){ return actingAsUid||currentUser?.uid||''; }
+function chatMyName(){ return String(actingAsName||userProfile?.preferredName||userProfile?.name||'').trim(); }
+function isSpectatorHere(){
+  if(!S) return false;
+  const u=chatMyUid(), nm=chatMyName().toLowerCase();
+  return !!(S.spectators&&S.spectators[u]) && !(S.players||[]).some(p=>String(p).trim().toLowerCase()===nm);
+}
+function chatPeople(){
+  const out=[], seen=new Set();
+  Object.entries(S.playerUids||{}).forEach(([u,n])=>{ if(n&&!seen.has(u)){ seen.add(u); out.push({uid:u,name:String(n)}); } });
+  Object.entries(S.spectators||{}).forEach(([u,v])=>{ if(v&&v.name&&!seen.has(u)){ seen.add(u); out.push({uid:u,name:String(v.name),spectator:true}); } });
+  return out;
+}
+const chatKeyFirst=n=>String(n||'').trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g,'');
+const chatKeyFull=n=>String(n||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+function chatHandle(p){
+  const first=String(p.name).trim().split(/\s+/)[0].replace(/[^A-Za-z0-9]/g,'');
+  return chatPeople().filter(x=>chatKeyFirst(x.name)===chatKeyFirst(p.name)).length===1 ? first : String(p.name).replace(/[^A-Za-z0-9]/g,'');
+}
+const CHAT_GROUPS={everyone:'Everyone',all:'Everyone',players:'Players',spectators:'Spectators'};
+function chatGroupsAllowed(){ return isSpectatorHere()?['spectators']:['everyone','players','spectators']; }
+function findMentions(text,groupsOut){
+  const toks=(String(text).match(/@[A-Za-z0-9_.'-]+/g)||[]).map(t=>t.slice(1).toLowerCase().replace(/[^a-z0-9]/g,''));
+  const m={}; if(!toks.length) return m;
+  const ppl=chatPeople(), allowed=chatGroupsAllowed();
+  toks.forEach(t=>{
+    const g=t==='all'?'everyone':t;
+    if(CHAT_GROUPS[t]){
+      if(!allowed.includes(g)) return;
+      if(groupsOut&&!groupsOut.includes(g)) groupsOut.push(g);
+      ppl.filter(p=>g==='everyone'||(g==='players'?!p.spectator:p.spectator)).forEach(p=>{ m[p.uid]=true; });
+      return;
+    }
+    let hits=ppl.filter(p=>chatKeyFull(p.name)===t);
+    if(!hits.length) hits=ppl.filter(p=>chatKeyFirst(p.name)===t);
+    hits.forEach(p=>{ m[p.uid]=true; });
+  });
+  return m;
+}
+function chatItems(){
+  const msgs=Object.entries(S.chat||{}).filter(([,v])=>v&&v.text).map(([k,v])=>({...v,k,type:'msg'}));
+  const feed=getBadgeFeed().map(f=>({...f,k:f.key,type:'badge'}));
+  return [...msgs,...feed].sort((a,b)=>(a.at||0)-(b.at||0)).slice(-200);
+}
+function chatText(t){
+  return feedEsc(t).replace(/@([A-Za-z0-9_.'-]+)/g,'<b class="chat-at">@$1</b>').replace(/\n/g,'<br>');
+}
+function chatListHTML(admin){
+  const items=chatItems(), me=feedMyName(), myUid=chatMyUid();
+  if(!items.length) return '<p class="empty" style="margin:30px 0;text-align:center">No messages yet. Say something! 🍻</p>';
+  let h='', prev=null;
+  items.forEach(it=>{
+    if(it.type==='badge'){
+      const mine=me&&String(it.player).trim().toLowerCase()===me;
+      const what=it.src==='spectator'?' joined as a spectator':' earned '+feedEsc(it.name);
+      h+='<div class="chat-sys'+(it.spicy?' spicy':'')+(mine?' mine':'')+'"><span class="bfeed-name" data-desc="'+feedEsc(it.desc||'')+'" onclick="showBadgeTooltip(this)">'
+        +feedEsc(it.icon||'🏅')+' '+(mine?'You':feedEsc(it.player))+what+'</span>'
+        +(it.gameName&&it.src!=='spectator'?' · '+feedEsc(it.gameName):'')
+        +' <span class="chat-time">'+feedAgo(it.at)+'</span>'
+        +(admin?' <a href="#" class="chat-x" onclick="removeFeedItem(\''+it.k+'\');return false">✕</a>':'')+'</div>';
+      prev=null; return;
+    }
+    const mine=it.uid===myUid;
+    const grouped=prev&&prev.uid===it.uid&&(it.at-prev.at)<180000;
+    const atMe=!mine&&it.mentions&&it.mentions[myUid];
+    h+='<div class="chat-row'+(mine?' mine':'')+(grouped?' grouped':'')+'">'
+      +(!mine&&!grouped?'<div class="chat-name">'+feedEsc(it.name)+(it.spectator?' <span class="chat-spec">👀</span>':'')+'</div>':'')
+      +'<div class="chat-bubble'+(atMe?' at-me':'')+'">'+chatText(it.text)
+      +'<span class="chat-time">'+feedAgo(it.at)+'</span>'
+      +(admin||mine?' <a href="#" class="chat-x" onclick="deleteChat(\''+it.k+'\');return false">✕</a>':'')
+      +'</div></div>';
+    prev=it;
+  });
+  return h;
+}
+function chatBox(box){ return box==='a'?el('admin-chat'):el('pview-chat'); }
+function renderChat(box){
+  const wrap=chatBox(box); if(!wrap||!S) return;
+  if(!el('chat-list-'+box)){
+    wrap.innerHTML='<div class="card chat-card">'
+      +'<div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>💬 Chat</span><span style="font-size:11px;color:#999;font-weight:500" id="chat-count-'+box+'"></span></div>'
+      +'<div class="chat-list" id="chat-list-'+box+'"></div>'
+      +'<div class="chat-suggest" id="chat-suggest-'+box+'"></div>'
+      +'<div class="chat-input-row"><textarea id="chat-input-'+box+'" rows="1" maxlength="500" placeholder="Message… (type @ to mention)" oninput="chatOnInput(\''+box+'\')" onkeydown="chatKey(event,\''+box+'\')"></textarea>'
+      +'<button class="btn btn-primary btn-sm" onclick="sendChat(\''+box+'\')" style="width:auto">Send</button></div>'
+      +'</div>';
+  }
+  const list=el('chat-list-'+box);
+  const html=chatListHTML(box==='a');
+  if(list.dataset.h!==html){
+    const nearBottom=!list.dataset.h||(list.scrollHeight-list.scrollTop-list.clientHeight<80);
+    list.innerHTML=html; list.dataset.h=html;
+    if(nearBottom) list.scrollTop=list.scrollHeight;
+  }
+  const cnt=el('chat-count-'+box); if(cnt) cnt.textContent=chatPeople().length+' people';
+  updateChatBadges();
+}
+function refreshChats(){
+  ['p','a'].forEach(b=>{ if(el('chat-list-'+b)) renderChat(b); });
+  updateChatBadges();
+}
+function chatReadKey(){ return 'gg_chat_read_'+currentTourneyId; }
+function chatMarkRead(){ try{ localStorage.setItem(chatReadKey(),String(Date.now())); }catch(e){} }
+function chatUnread(){
+  let lr=0; try{ lr=+localStorage.getItem(chatReadKey())||0; }catch(e){ return 0; }
+  if(!lr){ chatMarkRead(); return 0; }
+  const u=chatMyUid();
+  return Object.values((S&&S.chat)||{}).filter(m=>m&&m.uid!==u&&(m.at||0)>lr).length;
+}
+function chatIsOpen(){ return ['p','a'].some(b=>{ const w=chatBox(b); return w&&w.offsetParent!==null; }); }
+function updateChatBadges(){
+  const open=chatIsOpen();
+  if(open) chatMarkRead();
+  const n=open?0:chatUnread();
+  const lbl='💬 Chat'+(n?' <span class="chat-dot">'+(n>99?'99+':n)+'</span>':'');
+  ['ptab-chat','atab-chat'].forEach(id=>{ const t=el(id); if(t&&t.innerHTML!==lbl) t.innerHTML=lbl; });
+}
+window.chatKey=(ev,box)=>{ if(ev.key==='Enter'&&!ev.shiftKey){ ev.preventDefault(); sendChat(box); } };
+window.chatOnInput=(box)=>{
+  const inp=el('chat-input-'+box), sug=el('chat-suggest-'+box); if(!inp||!sug) return;
+  inp.style.height='auto'; inp.style.height=Math.min(inp.scrollHeight,110)+'px';
+  const m=inp.value.slice(0,inp.selectionStart).match(/@([A-Za-z0-9]*)$/);
+  if(!m){ sug.innerHTML=''; return; }
+  const q=m[1].toLowerCase(), meU=chatMyUid();
+  const groups=chatGroupsAllowed().filter(g=>g.startsWith(q)).map(g=>'<button class="btn btn-sm" style="width:auto;margin:2px;font-weight:700" onclick="chatPick(\''+box+'\',\''+g+'\')">📣 @'+g+'</button>').join('');
+  const hits=chatPeople().filter(p=>p.uid!==meU&&(chatKeyFirst(p.name).startsWith(q)||chatKeyFull(p.name).startsWith(q))).slice(0,6);
+  sug.innerHTML=groups+hits.map(p=>'<button class="btn btn-sm" style="width:auto;margin:2px" onclick="chatPick(\''+box+'\',\''+chatHandle(p)+'\')">@'+feedEsc(p.name)+(p.spectator?' 👀':'')+'</button>').join('');
+};
+window.chatPick=(box,handle)=>{
+  const inp=el('chat-input-'+box); if(!inp) return;
+  const pos=inp.selectionStart, before=inp.value.slice(0,pos).replace(/@[A-Za-z0-9]*$/,'@'+handle+' ');
+  inp.value=before+inp.value.slice(pos);
+  el('chat-suggest-'+box).innerHTML='';
+  inp.focus(); inp.selectionStart=inp.selectionEnd=before.length;
+};
+window.sendChat=async(box)=>{
+  const inp=el('chat-input-'+box); if(!inp) return;
+  const text=inp.value.trim(); if(!text) return;
+  if(!currentUser){ alert('Sign in first.'); return; }
+  const msg={uid:chatMyUid(),name:chatMyName()||'Someone',text:text.slice(0,500),at:Date.now()};
+  if(isSpectatorHere()) msg.spectator=true;
+  const grp=[], men=findMentions(text,grp); delete men[msg.uid];
+  if(Object.keys(men).length) msg.mentions=men;
+  if(grp.length) msg.group=grp[0];
+  inp.value=''; inp.style.height='auto';
+  const sug=el('chat-suggest-'+box); if(sug) sug.innerHTML='';
+  try{ await set(ref(db,'tournaments/'+currentTourneyId+'/chat/'+feedKey()),msg); }
+  catch(err){ inp.value=text; alert('Could not send: '+(err&&err.message||err)); }
+  const list=el('chat-list-'+box); if(list) list.scrollTop=list.scrollHeight;
+};
+window.deleteChat=async(k)=>{
+  if(!confirm('Delete this message?')) return;
+  try{ await set(ref(db,'tournaments/'+currentTourneyId+'/chat/'+k),null); }
+  catch(err){ alert('Could not delete: '+(err&&err.message||err)); }
+};
+const _chatSeen=new Set(); let _chatInitTid=null;
+function checkChatToasts(tid){
+  const entries=Object.entries((S&&S.chat)||{});
+  if(_chatInitTid!==tid){ _chatSeen.clear(); entries.forEach(([k])=>_chatSeen.add(k)); _chatInitTid=tid; return; }
+  const u=chatMyUid(), open=chatIsOpen();
+  entries.forEach(([k,m])=>{
+    if(_chatSeen.has(k)) return; _chatSeen.add(k);
+    if(!m||m.uid===u||open) return;
+    if(m.mentions&&m.mentions[u]) showBadgeToast('💬 <b>'+feedEsc(String(m.name).split(' ')[0])+'</b>: '+feedEsc(String(m.text).slice(0,80)),true);
+  });
+}
+
+// ── SPECTATORS ────────────────────────────────────────────
+async function addSpectatorRecord(tid,uid,name,how){
+  const bd=BADGE_DEFS.find(b=>b.id==='spectator'), now=Date.now();
+  await update(ref(db,'tournaments/'+tid),{
+    ['spectators/'+uid]:{name,at:now,how},
+    ['badgeFeed/'+feedKey()]:{player:name,uid,badgeId:'spectator',icon:bd.icon,name:bd.name,desc:bd.desc,spicy:false,at:now,src:'spectator'}
+  });
+}
+window.joinAsSpectator=async(tid)=>{
+  try{ localStorage.removeItem('gg_watch'); }catch(e){}
+  if(!currentUser||!userProfile) return;
+  let t=null;
+  try{ t=(await get(ref(db,'tournaments/'+tid))).val(); }catch(e){}
+  if(!t||!t.tourneyName){ alert('That spectator link is not valid.'); return; }
+  const uid=currentUser.uid, name=String(userProfile.preferredName||userProfile.name||'').trim()||'Spectator';
+  if((t.playerUids&&t.playerUids[uid])||(t.spectators&&t.spectators[uid])||isAdmin){ openTournament(tid); return; }
+  if(!confirm('Follow '+t.tourneyName+' as a spectator? You can see everything and chat, but you won\'t be on a team.')) return;
+  try{ await addSpectatorRecord(tid,uid,name,'link'); }
+  catch(err){ alert('Could not join: '+(err&&err.message||err)); return; }
+  openTournament(tid);
+};
+async function renderSpectatorAdmin(){
+  const e=el('admin-players'); if(!e||!S) return;
+  let box=el('spectator-admin');
+  if(!box){ box=document.createElement('div'); box.id='spectator-admin'; box.className='card'; e.appendChild(box); }
+  const specs=Object.entries(S.spectators||{}).filter(([,v])=>v);
+  const link=APP_DOMAIN+'/?watch='+currentTourneyId;
+  let h='<div class="card-title">👀 Spectators <span class="tag tag-purple">'+specs.length+'</span></div>'
+    +'<div style="font-size:11px;color:#888;margin-bottom:8px">They see everything and can chat, but aren\'t on a team. Share this link or add them below.</div>'
+    +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px"><div class="invite-link-box" style="flex:1;margin:0;font-size:11px;word-break:break-all">'+feedEsc(link)+'</div>'
+    +'<button class="btn btn-sm btn-primary" onclick="navigator.clipboard.writeText(\''+link+'\').then(()=>alert(\'Copied!\'))" style="width:auto">📋</button></div>';
+  h+=specs.length?specs.map(([u,v])=>'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.12)">'
+      +'<span style="flex:1;font-size:13px">👀 '+feedEsc(v.name)+'</span>'
+      +'<button class="btn btn-sm btn-danger" onclick="removeSpectator(\''+u+'\')" style="width:auto">✕</button></div>').join('')
+    :'<p class="empty">No spectators yet.</p>';
+  h+='<div class="sec-label" style="margin-top:10px">Add from player database</div>'
+    +'<div style="display:flex;gap:6px"><select id="spec-add-sel" style="flex:1;margin:0"><option value="">Loading…</option></select>'
+    +'<button class="btn btn-sm" onclick="adminAddSpectator()" style="width:auto">+ Add</button></div>';
+  if(box.dataset.h!==h){ box.innerHTML=h; box.dataset.h=h; fillSpectatorSelect(); }
+}
+let _allPlayersCache=null;
+async function fillSpectatorSelect(){
+  const sel=el('spec-add-sel'); if(!sel) return;
+  try{ if(!_allPlayersCache) _allPlayersCache=(await get(ref(db,'players'))).val()||{}; }catch(e){ _allPlayersCache={}; }
+  const inT=new Set(Object.keys(S.playerUids||{}).concat(Object.keys(S.spectators||{})));
+  const names=new Set((S.players||[]).map(p=>String(p).trim().toLowerCase()));
+  const list=Object.entries(_allPlayersCache).filter(([u,p])=>p&&!inT.has(u)&&(p.preferredName||p.name)&&!names.has(String(p.preferredName||p.name).trim().toLowerCase()))
+    .map(([u,p])=>({u,n:String(p.preferredName||p.name).trim()})).sort((a,b)=>a.n.localeCompare(b.n));
+  sel.innerHTML='<option value="">— select person —</option>'+list.map(x=>'<option value="'+x.u+'">'+feedEsc(x.n)+'</option>').join('');
+}
+window.adminAddSpectator=async()=>{
+  const u=el('spec-add-sel')?.value; if(!u) return;
+  const p=(_allPlayersCache||{})[u]; if(!p) return;
+  await addSpectatorRecord(currentTourneyId,u,String(p.preferredName||p.name).trim(),'admin');
+};
+window.removeSpectator=async(u)=>{
+  const v=(S.spectators||{})[u]; if(!v) return;
+  if(!confirm('Remove '+v.name+' as a spectator?')) return;
+  const upd={['spectators/'+u]:null};
+  Object.entries(S.badgeFeed||{}).forEach(([k,f])=>{ if(f&&f.src==='spectator'&&f.uid===u) upd['badgeFeed/'+k]=null; });
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
+};
+
+// ── YEARLY APP ICON ───────────────────────────────────────
+const GG_PALETTES=[
+  {n:'Midnight',      bg1:'#232a5c',bg2:'#0b0d1f',sh:'#1a1f45',m1:'#c9a456',m2:'#f6e2a8',ink:'#0b0d1f'},
+  {n:'Oxblood',       bg1:'#7a1830',bg2:'#2a0610',sh:'#5a1024',m1:'#c9a456',m2:'#f6e2a8',ink:'#2a0610'},
+  {n:'Club Green',    bg1:'#23604a',bg2:'#0a2118',sh:'#17402e',m1:'#d2b06a',m2:'#f8e9bd',ink:'#0a2118'},
+  {n:'Royal Purple',  bg1:'#6258c9',bg2:'#1f1a55',sh:'#3b33a0',m1:'#d6b865',m2:'#fcebb8',ink:'#1f1a55'},
+  {n:'Smoke & Copper',bg1:'#44444c',bg2:'#111113',sh:'#2c2c31',m1:'#c2855a',m2:'#f2cfae',ink:'#111113'},
+  {n:'Teal & Brass',  bg1:'#1a6b78',bg2:'#06242a',sh:'#0f4a54',m1:'#c9a966',m2:'#f5e4b4',ink:'#06242a'},
+];
+function toRoman(n){
+  n=Math.max(1,Math.min(3999,Math.floor(n||1)));
+  return [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']]
+    .reduce((s,[v,r])=>{ while(n>=v){ s+=r; n-=v; } return s; },'');
+}
+function ggIconInfo(){
+  const year=parseInt(S.tourneyYear)||new Date().getFullYear(), fy=parseInt(S.foundingYear)||2019;
+  const m=String(S.tourneyName||'').match(/\b([IVXLCDM]{1,8})\s*$/i);
+  return {year, numeral:m?m[1].toUpperCase():toRoman(year-fy+1), seed:parseInt(S.iconSeed)||0};
+}
+function ggPalette(year,seed){ return GG_PALETTES[((year%GG_PALETTES.length)+seed)%GG_PALETTES.length]; }
+function ggStar(cx,cy,r){
+  let d=''; for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*0.42:r; d+=(i?'L':'M')+(cx+rr*Math.cos(a)).toFixed(1)+' '+(cy+rr*Math.sin(a)).toFixed(1); }
+  return d+'Z';
+}
+function ggCrestSVG({year,numeral,seed}){
+  const P=ggPalette(year,seed);
+  const orn=((year+seed*2)%3+3)%3;
+  const cx=256, cy=262, R=176;
+  let leaves='', stems='';
+  for(const side of [-1,1]){
+    const P0=[cx+side*52,452], P1=[cx+side*236,418], P2=[cx+side*196,150];
+    stems+='<path d="M'+P0[0]+' '+P0[1]+' Q'+P1[0]+' '+P1[1]+' '+P2[0]+' '+P2[1]+'" fill="none" stroke="url(#mt)" stroke-width="4" stroke-linecap="round"/>';
+    for(let i=0;i<9;i++){
+      const t=0.12+i*0.1, u=1-t;
+      const x=u*u*P0[0]+2*u*t*P1[0]+t*t*P2[0], y=u*u*P0[1]+2*u*t*P1[1]+t*t*P2[1];
+      const dx=2*u*(P1[0]-P0[0])+2*t*(P2[0]-P1[0]), dy=2*u*(P1[1]-P0[1])+2*t*(P2[1]-P1[1]);
+      const ang=Math.atan2(dy,dx)*180/Math.PI;
+      for(const k of [-1,1]){
+        const a=ang+k*38, r=(a*Math.PI/180), lx=x+Math.cos(r)*13, ly=y+Math.sin(r)*13;
+        leaves+='<ellipse cx="'+lx.toFixed(1)+'" cy="'+ly.toFixed(1)+'" rx="15" ry="6" transform="rotate('+a.toFixed(1)+' '+lx.toFixed(1)+' '+ly.toFixed(1)+')"/>';
+      }
+    }
+  }
+  leaves=stems+leaves;
+  let ornament='';
+  if(orn===0) ornament=[[-34,196,11],[0,184,15],[34,196,11]].map(([dx,y,r])=>'<path d="'+ggStar(cx+dx,y,r)+'"/>').join('');
+  else if(orn===1) ornament='<path d="M218 206 L218 178 L236 192 L256 168 L276 192 L294 178 L294 206 Z"/><rect x="216" y="206" width="80" height="7" rx="2"/>';
+  else ornament='<path d="M256 168 L270 190 L256 212 L242 190 Z"/><path d="M226 184 L234 194 L226 204 L218 194 Z"/><path d="M286 184 L294 194 L286 204 L278 194 Z"/>';
+  const fs=numeral.length>5?34:numeral.length>3?40:46;
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">'
+   +'<defs><radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="'+P.bg1+'"/><stop offset="1" stop-color="'+P.bg2+'"/></radialGradient>'
+   +'<linearGradient id="mt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+P.m2+'"/><stop offset=".55" stop-color="'+P.m1+'"/><stop offset="1" stop-color="'+P.m2+'"/></linearGradient>'
+   +'<linearGradient id="sh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+P.bg1+'"/><stop offset="1" stop-color="'+P.sh+'"/></linearGradient>'
+   +'<pattern id="ps" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width="1.4" height="14" fill="'+P.m2+'" opacity=".05"/></pattern></defs>'
+   +'<rect width="512" height="512" fill="url(#bg)"/><rect width="512" height="512" fill="url(#ps)"/>'
+   +'<g fill="url(#mt)" opacity=".95">'+leaves+'</g>'
+   +'<path d="M256 118 C300 132 338 134 372 126 L372 262 C372 336 322 382 256 410 C190 382 140 336 140 262 L140 126 C174 134 212 132 256 118 Z" fill="url(#sh)" stroke="url(#mt)" stroke-width="9"/>'
+   +'<path d="M256 136 C294 148 326 150 354 144 L354 262 C354 324 312 362 256 388 C200 362 158 324 158 262 L158 144 C186 150 218 148 256 136 Z" fill="none" stroke="'+P.m2+'" stroke-opacity=".35" stroke-width="2"/>'
+   +'<g fill="url(#mt)">'+ornament+'</g>'
+   +'<text x="256" y="322" text-anchor="middle" font-family="Georgia, \'Times New Roman\', serif" font-weight="700" font-size="112" letter-spacing="-4" fill="url(#mt)">GG</text>'
+   +'<text x="256" y="100" text-anchor="middle" font-family="Georgia, serif" font-size="24" letter-spacing="8" fill="'+P.m2+'" opacity=".85">'+year+'</text>'
+   +'<path d="M112 404 L150 404 L150 454 L112 454 L128 429 Z" fill="'+P.m1+'" opacity=".75"/>'
+   +'<path d="M400 404 L362 404 L362 454 L400 454 L384 429 Z" fill="'+P.m1+'" opacity=".75"/>'
+   +'<rect x="140" y="396" width="232" height="50" rx="4" fill="url(#mt)"/>'
+   +'<text x="256" y="'+(421+fs*0.36).toFixed(0)+'" text-anchor="middle" font-family="Georgia, serif" font-weight="700" font-size="'+fs+'" letter-spacing="5" fill="'+P.ink+'">'+numeral+'</text>'
+   +'</svg>';
+}
+async function ggIconPNG(svg,size){
+  const img=new Image();
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+  await img.decode();
+  const cv=document.createElement('canvas'); cv.width=cv.height=size;
+  cv.getContext('2d').drawImage(img,0,0,size,size);
+  return new Promise(r=>cv.toBlob(r,'image/png'));
+}
+function renderIconCard(){
+  const e=el('admin-setup'); if(!e||!S||!isAdmin) return;
+  let card=el('icon-card');
+  if(!card){ card=document.createElement('div'); card.id='icon-card'; card.className='card'; e.appendChild(card); }
+  const info=ggIconInfo(), svg=ggCrestSVG(info);
+  const h='<div class="card-title">🎨 App icon for '+info.year+'</div>'
+    +'<div style="display:flex;gap:14px;align-items:center">'
+    +'<img src="data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)+'" width="96" height="96" style="border-radius:22px;box-shadow:0 4px 14px rgba(0,0,0,.25);flex-shrink:0" alt="App icon preview">'
+    +'<div style="font-size:12px;color:#888;line-height:1.45">Made from this tournament: <b>'+info.numeral+'</b>, '+info.year+', '+ggPalette(info.year,info.seed).n+' style. It changes on its own each year.</div></div>'
+    +'<div style="display:flex;gap:6px;margin-top:10px"><button class="btn btn-sm" onclick="shuffleGGIcon()" style="flex:1">🔀 Different style</button>'
+    +'<button class="btn btn-sm btn-primary" onclick="downloadGGIcons()" style="flex:1">⬇️ Download icon files</button></div>'
+    +'<div style="font-size:11px;color:#999;margin-top:8px">Upload <b>icon-192.png</b> and <b>icon-512.png</b> to your site, replacing the old ones. Anyone who installed before needs to re-add the app to see the new icon.</div>';
+  if(card.dataset.h!==h){ card.innerHTML=h; card.dataset.h=h; }
+}
+window.shuffleGGIcon=async()=>{ await update(ref(db,'tournaments/'+currentTourneyId),{iconSeed:(parseInt(S.iconSeed)||0)+1}); };
+window.downloadGGIcons=async()=>{
+  const svg=ggCrestSVG(ggIconInfo());
+  try{
+    for(const [f,s] of [['icon-512.png',512],['icon-192.png',192]]){
+      const b=await ggIconPNG(svg,s);
+      const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=f;
+      document.body.appendChild(a); a.click(); a.remove();
+      await new Promise(r=>setTimeout(r,500));
+    }
+  }catch(err){ alert('Could not make icon files: '+(err&&err.message||err)); }
+};
+
 // ── PUSH ALERTS ───────────────────────────────────────────
 function pushEnv(){
   const ua=navigator.userAgent||'';
@@ -5587,12 +5958,15 @@ function renderPlayerView(myName){
     const badges=getPlayerBadges(myName);
     hcard.innerHTML=`<div style="display:flex;align-items:center;gap:10px">
       <div class="avatar" style="width:38px;height:38px;font-size:14px">${initials(myName)}</div>
-      <div><div style="font-size:15px;font-weight:700">${myName}</div><div class="badges-wrap">${renderBadges(badges)}</div></div>
+      <div><div style="font-size:15px;font-weight:700">${myName}</div><div class="badges-wrap">${isSpectatorHere()?'<span class="badge badge-custom">👀 Spectator</span>':''}${renderBadges(badges)}</div></div>
     </div>`;
   }
   // Smart default tab: active game if they have something to do, otherwise leaderboard
   const defaultTab = getSmartDefaultTab(myName);
   updateVoteTabVisibility(myName);
+  const _spec=isSpectatorHere();
+  el('player-area')?.classList.toggle('is-spectator',_spec);
+  if(_spec&&['teams','rank','vote'].includes(_tab)) _tab='active';
   showPlayerTab(_tab||'active',myName);
 }
 
@@ -5653,13 +6027,14 @@ function updateVoteTabVisibility(myName){
 function showPlayerTab(tab,myName){
   _tab=tab;
   myName=myName||actingAsName||(userProfile?.name)||'';
-  ['active','lb','games','info','teams','rank','vote'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
+  ['active','lb','games','info','teams','rank','vote','chat'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
   const tv=el('pview-'+tab);if(tv)tv.classList.remove('hidden');
   const tb=el('ptab-'+tab);if(tb)tb.classList.add('active');
   if(tab==='rank')   renderPlayerRankings(myName);
   if(tab==='vote')   renderPlayerVotes(myName);
   if(tab==='teams')  renderMyTeams(myName);
   if(tab==='active') renderActiveGameTab(myName);
+  if(tab==='chat')   renderChat('p');
   if(tab==='games')  renderPlayerGames(myName);
   if(tab==='info')   renderGameInfo();
   if(tab==='lb')     { renderPlayerLB(myName); renderAllPlayerBadges(); }
@@ -8045,6 +8420,8 @@ const inviteKey = urlParams.get('invite');
 const joinCode  = urlParams.get('join');
 if(inviteKey) localStorage.setItem('gg_invite_key', inviteKey);
 if(joinCode)  localStorage.setItem('gg_join_code', joinCode);
+const watchTid  = urlParams.get('watch');
+if(watchTid){ try{ localStorage.setItem('gg_watch', watchTid); }catch(e){} }
 
 </script>
 </body>
