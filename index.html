@@ -500,7 +500,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v97.16.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v98.16.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -574,7 +574,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v97.16.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v98.16.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2129,7 +2129,13 @@ window.doCreateTournament = async ()=>{
     tiebreaker:{}, tournamentFinalized:false, tournamentStarted:false,
     createdBy: currentUser.uid, createdAt: Date.now()
   };
-  await set(ref(db,'tournaments/'+tid), doc);
+  status.innerHTML='<div class="alert alert-info">Creating...</div>';
+  try{
+    await set(ref(db,'tournaments/'+tid), doc);
+  }catch(err){
+    status.innerHTML='<div class="alert alert-warn">Could not create tournament: '+String(err&&err.message||err)+'</div>';
+    return;
+  }
   closeModal();
   openTournament(tid);
 };
@@ -2175,6 +2181,7 @@ window.openTournament = (tid)=>{
         update(ref(db,'tournaments/'+currentTourneyId),{playerUids:cleaned}).catch(()=>{});
       }
     }
+    try{ ensureGameChampDefs(); }catch(err){}
     const myUid = actingAsUid||currentUser?.uid;
     const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
     isTourneyAdmin=isAdmin||!!(S.tourneyAdmins&&S.tourneyAdmins[myUid]);
@@ -2183,7 +2190,7 @@ window.openTournament = (tid)=>{
       const actingAsOther = actingAsName && actingAsName!==(userProfile?.preferredName||userProfile?.name||'');
       if(isTourneyAdmin&&!_viewingAsPlayer&&!actingAsOther) renderAdminView();
       else { renderPlayerView(myName); updateVoteTabVisibility(myName); }
-      try{ renderBadgeFeeds(); checkBadgeToasts(tid); }catch(err){ console.warn('badge feed',err); }
+      try{ ensureGameChampDefs(); renderBadgeFeeds(); checkBadgeToasts(tid); }catch(err){ console.warn('badge feed',err); }
     });
   });
 };
@@ -2239,8 +2246,7 @@ function buildTournamentShell(){
     <div id="pview-teams" class="hidden"></div>
     <div id="pview-rank" class="hidden"></div>
     <div id="pview-vote" class="hidden"></div>
-  </div>
-  <div id="modal-area"></div>`;
+  </div>`;
 }
 
 window.leaveTournament = ()=>{
@@ -4087,6 +4093,7 @@ window.saveMFMatch = async (gameId,matchId,type,poolKey,ri,s1override,s2override
     }
   }
   await update(ref(db,'tournaments/'+currentTourneyId+'/bs'),{[gameId]:b});
+  try{ await giveLiveMatchBadges(gameId,m); }catch(err){ console.warn('live badge',err); }
   // Auto-advance scheduler after match saved
   advanceMatchScheduler(gameId);
 };
@@ -4186,7 +4193,7 @@ window.unlockGameScores = async (gameId)=>{
       }
     });
     updates['tourneyBadges']=newTourneyBadges;
-    Object.entries(S.badgeFeed||{}).forEach(([k,v])=>{ if(v&&v.src==='announce'&&v.gameId===gameId) updates['badgeFeed/'+k]=null; });
+    Object.entries(S.badgeFeed||{}).forEach(([k,v])=>{ if(v&&(v.src==='announce'||v.src==='live')&&v.gameId===gameId) updates['badgeFeed/'+k]=null; });
     updates['activeAnnouncement']=null;
     updates['announcementAcks']=null;
   }
@@ -4363,7 +4370,8 @@ function renderLeaderboard(){
     ${Object.entries(S.points?.adjustments||{}).length?'<div style="margin-top:10px"><div style="font-size:10px;font-weight:700;color:#888;margin-bottom:6px">APPLIED ADJUSTMENTS</div>'+Object.entries(S.points?.adjustments||{}).map(([aid,a])=>'<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0ede6;font-size:11px"><span style="flex:1"><strong>'+a.player+'</strong> '+(a.amount>0?'+'+a.amount:a.amount)+' pts — '+(a.reason||'no reason')+'</span><button onclick="removePointAdjustment(\''+aid+'\')" style="font-size:10px;color:#c0392b;background:none;border:none;cursor:pointer">✕</button></div>').join('')+'</div>':''}
   </div>`:'');
   html+=`<div class="card"><div class="card-title">🏆 Declare champion</div><div class="alert alert-warn" style="font-size:11px">Do at end of day. Saves to history and awards all badges.</div>
-      <button class="btn btn-primary" onclick="declareTournamentWinner()">🏆 Finalize &amp; save to history</button><div id="declare-status"></div></div>`;
+      <button class="btn btn-primary" onclick="declareTournamentWinner()">🏆 Finalize &amp; save to history</button>
+      <button class="btn" onclick="openTournamentAwards()" style="margin-top:6px">🏅 Preview / announce final awards</button><div id="declare-status"></div></div>`;
   
   e.innerHTML=html;
   renderGPB(); updateStats(); renderTiebreakerPanel();
@@ -4602,8 +4610,8 @@ const BADGE_DEFS = [
   {id:'flag-on-play',    cat:'Tournament', icon:'🚩', name:'Flag on the Play',auto:true,  spicy:true,  desc:'Most score disputes filed'},
   {id:'sharpshooter',    cat:'Tournament', icon:'📈', name:'Sharpshooter',    auto:true,  spicy:false, desc:'Highest combined point differential'},
   {id:'iron-man',        cat:'Tournament', icon:'🤝', name:'Iron Man',        auto:true,  spicy:false, desc:'Played every game'},
-  {id:'comeback-kid',    cat:'Tournament', icon:'🎭', name:'Comeback Kid',    auto:true,  spicy:false, desc:'Lost first game, finished top 3'},
-  {id:'consistent',      cat:'Tournament', icon:'👑', name:'Consistent',      auto:true,  spicy:false, desc:'Never finished last in any game'},
+  {id:'comeback-kid',    cat:'Tournament', icon:'🎭', name:'Comeback Kid',    auto:true,  spicy:false, desc:'Bottom half in the first game, still finished top 3'},
+  {id:'consistent',      cat:'Tournament', icon:'👑', name:'Consistent',      auto:true,  spicy:false, desc:'Finished in the top half of every game'},
   {id:'participation',   cat:'Tournament', icon:'🎖️', name:'Participation',   auto:true,  spicy:false, desc:'Played every single game'},
   // Performance (auto)
   {id:'undefeated',      cat:'Performance', icon:'💪', name:'Undefeated',   auto:true,  spicy:false, desc:'Went 5-0 in a round robin'},
@@ -4705,7 +4713,8 @@ window.openGameAnnouncement = (gameId)=>{
   // Auto-detect game champ badge + other auto badges
   const gameNameLower=(game.name||'').toLowerCase();
   const GAME_BADGE_MAP={'cornhole':'cornhole-champ','kanjam':'kanjam-champ','kan jam':'kanjam-champ','beer die':'beerdie-champ','beer darts':'beerdarts-champ','bowling':'bowling-champ','golf':'golf-champ','spikeball':'spikeball-champ','cocaine':'cocaine-champ','bucketball':'bucketball-champ'};
-  const champBadgeId=Object.entries(GAME_BADGE_MAP).find(([k])=>gameNameLower.includes(k))?.[1]||null;
+  ensureGameChampDefs();
+  const champBadgeId=Object.entries(GAME_BADGE_MAP).find(([k])=>gameNameLower.includes(k))?.[1]||('champ-'+gameId);
   const champBadge=champBadgeId?BADGE_DEFS.find(bd=>bd.id===champBadgeId):null;
 
   // Sort teams by points for final standings
@@ -4728,18 +4737,19 @@ window.openGameAnnouncement = (gameId)=>{
       const lastPlayers=[last.p1,last.p2,last.p3].filter(Boolean);
       lastPlayers.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('last-place-game')) window._announceBadges[p].push('last-place-game'); });
     }
-    // Undefeated badge
-    if(b&&b.matches){
-      const teamWins={};
-      b.matches.forEach(m=>{ if(m.winner){const wid=m.winner.id; teamWins[wid]=(teamWins[wid]||0)+1;} });
-      sorted.forEach(t=>{ if((teamWins[t.id]||0)===sorted.length-1){
+    // Undefeated badge (all formats): won every match they played, 2+ played
+    const allGM=b?getAllMatchesFromBracket(b,game.format).filter(m=>m&&m.winner&&m.t1&&m.t2&&m.score1!=null&&m.score2!=null):[];
+    if(allGM.length){
+      const teamWins={}, teamPlayed={};
+      allGM.forEach(m=>{ teamWins[m.winner.id]=(teamWins[m.winner.id]||0)+1; teamPlayed[m.t1.id]=(teamPlayed[m.t1.id]||0)+1; teamPlayed[m.t2.id]=(teamPlayed[m.t2.id]||0)+1; });
+      sorted.forEach(t=>{ if((teamPlayed[t.id]||0)>=2&&(teamWins[t.id]||0)===teamPlayed[t.id]){
         const ps=[t.p1,t.p2,t.p3].filter(Boolean);
         ps.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('undefeated')) window._announceBadges[p].push('undefeated'); });
       }});
     }
     // Per-match auto badges
-    if(b&&b.matches){
-      const allM=b.matches.filter(m=>m.winner&&m.score1!=null&&m.score2!=null);
+    if(allGM.length){
+      const allM=allGM;
       let maxDiff=0; let blowoutWinner=null; let blowoutLoser=null;
 
       allM.forEach(m=>{
@@ -4986,6 +4996,7 @@ window.declareTournamentWinner=async()=>{
     if(curr.years>=3&&!curr.wins&&!curr.podiums) earned.push({icon:'😅',name:'Winless Wonder'});
     Object.entries(curr.gameWins||{}).forEach(([g,n])=>{if(n>=2&&((prev.gameWins||{})[g]||0)<2)earned.push({icon:'🎯',name:g+' Specialist'});});
     (S.playerBadges&&S.playerBadges[p]||[]).forEach(bid=>{const b=getBadgeById(bid);if(b)earned.push({icon:b.icon,name:b.name});});
+    Object.keys((S.tourneyBadges&&S.tourneyBadges[p])||{}).forEach(bid=>{const b=BADGE_DEFS.find(x=>x.id===bid);if(b&&!earned.some(x=>x.name===b.name))earned.push({icon:b.icon,name:b.name});});
     (S.customBadges||[]).filter(b=>b.player===p).forEach(b=>earned.push({icon:b.icon||'✨',name:b.name}));
     if(earned.length) newBadges[p]=earned;
   });
@@ -5003,7 +5014,9 @@ window.declareTournamentWinner=async()=>{
     finalizedAt:Date.now(),finalStandings:sorted.map((p,i)=>({player:p,place:i+1,points:getTotalPts(p)})),
     newBadgesEarned:newBadges});
   statusEl.innerHTML='<div class="alert alert-success" style="margin-top:8px">🏆 <strong>'+winner+'</strong> wins '+yr+'!'
-    +'<br><button class="btn btn-sm btn-primary" onclick="showTournamentSummaryModal()" style="width:100%;margin-top:8px">View full summary</button></div>';
+    +'<br><button class="btn btn-sm btn-primary" onclick="openTournamentAwards()" style="width:100%;margin-top:8px">🏅 Announce final awards</button>'
+    +'<button class="btn btn-sm" onclick="showTournamentSummaryModal()" style="width:100%;margin-top:6px">View full summary</button></div>';
+  openTournamentAwards();
 };
 
 // ── POWER RANKINGS ────────────────────────────────────────
@@ -5205,6 +5218,153 @@ function renderCustomBadgePlayerSelect(){
   pk.value=keepB;
 }
 
+
+
+// ── AUTO BADGES: live + end-of-day awards ─────────────────
+function ensureGameChampDefs(){
+  const presets=['cornhole','kanjam','kan jam','beer die','beer darts','bowling','golf','spikeball','cocaine','bucketball'];
+  (S?.games||[]).forEach(g=>{
+    const id='champ-'+g.id;
+    if(presets.some(k=>(g.name||'').toLowerCase().includes(k))) return;
+    if(BADGE_DEFS.some(b=>b.id===id)) return;
+    BADGE_DEFS.push({id,cat:'Game',icon:'🥇',name:(g.name||'Game')+' Champ',auto:true,spicy:false,desc:'Won '+(g.name||'this game')});
+  });
+}
+async function giveLiveMatchBadges(gameId,m){
+  if(!m||!m.winner) return;
+  const bid=m.isInstaWin?'instawin-game':(m.wasOT?'ice-veins-game':null);
+  if(!bid) return;
+  const bd=BADGE_DEFS.find(b=>b.id===bid); if(!bd) return;
+  const game=(S.games||[]).find(g=>g.id===gameId);
+  const tb=S.tourneyBadges||{}, now=Date.now(), upd={};
+  [m.winner.p1,m.winner.p2,m.winner.p3].filter(Boolean).forEach((p,i)=>{
+    if(tb[p]&&tb[p][bid]) return;
+    upd['tourneyBadges/'+p+'/'+bid]=true;
+    upd['badgeFeed/'+feedKey()]={player:p,badgeId:bid,icon:bd.icon,name:bd.name,desc:bd.desc||'',spicy:!!bd.spicy,
+      at:now+i,src:'live',gameId,gameName:game?.name||''};
+  });
+  if(Object.keys(upd).length) await update(ref(db,'tournaments/'+currentTourneyId),upd);
+}
+function computeTournamentAwards(){
+  const players=S.players||[], skip=getSkippedIds();
+  const sorted=players.slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
+  const A={};
+  const give=(bid,ps)=>{ ps=[...new Set((ps||[]).filter(Boolean))]; if(ps.length&&BADGE_DEFS.some(b=>b.id===bid)) A[bid]=ps; };
+  const maxBy=(obj,min)=>{ const v=Object.values(obj); if(!v.length) return []; const mx=Math.max(...v); return mx<min?[]:Object.keys(obj).filter(k=>obj[k]===mx); };
+  if(sorted.length) give('champion',[sorted[0]]);
+  if(sorted.length>1) give('runner-up',[sorted[1]]);
+  if(sorted.length>2) give('third-place',[sorted[2]]);
+  if(sorted.length>3) give('last-place',[sorted[sorted.length-1]]);
+  const dc={};
+  Object.values(S.disputeLog||{}).forEach(d=>{ if(d&&d.player) dc[d.player]=(dc[d.player]||0)+1; });
+  give('flag-on-play',maxBy(dc,1));
+  const games=(S.games||[]).filter(g=>!skip.has(g.id));
+  const diff={}, ot={};
+  games.forEach(g=>{
+    const b=S.bs&&S.bs[g.id]; if(!b) return;
+    getAllMatchesFromBracket(b,g.format).forEach(m=>{
+      if(!m||!m.winner||!m.t1||!m.t2||m.score1==null||m.score2==null) return;
+      const a=[m.t1.p1,m.t1.p2,m.t1.p3].filter(Boolean), z=[m.t2.p1,m.t2.p2,m.t2.p3].filter(Boolean);
+      a.forEach(p=>{ diff[p]=(diff[p]||0)+(m.score1-m.score2); });
+      z.forEach(p=>{ diff[p]=(diff[p]||0)+(m.score2-m.score1); });
+      if(m.wasOT) [...a,...z].forEach(p=>{ ot[p]=(ot[p]||0)+1; });
+    });
+  });
+  give('sharpshooter',maxBy(diff,1));
+  give('ot-king',maxBy(ot,2));
+  const played=games.filter(g=>{ const p=S.points&&S.points[g.id]; return p&&Object.keys(p).length>1; });
+  if(played.length){
+    const fp=S.points[played[0].id];
+    const asc=Object.values(fp).sort((x,y)=>x-y), med=asc[Math.floor((asc.length-1)/2)];
+    give('comeback-kid',sorted.slice(0,3).filter(p=>fp[p]!=null&&fp[p]<=med));
+    if(played.length>=2) give('consistent',players.filter(p=>played.every(g=>{
+      const pts=S.points[g.id], desc=Object.values(pts).sort((x,y)=>y-x), cut=desc[Math.floor((desc.length-1)/2)];
+      return pts[p]!=null&&pts[p]>=cut&&pts[p]>desc[desc.length-1];
+    })));
+  }
+  return {A,sorted};
+}
+window.openTournamentAwards=()=>{
+  if(!S) return;
+  if(!window._tAwardsOpen){ window._tAwards=computeTournamentAwards().A; window._tAwardsMsg=''; window._tAwardsOpen=true; }
+  renderTournamentAwards();
+};
+window.closeTournamentAwards=()=>{ window._tAwardsOpen=false; closeModal(); };
+function renderTournamentAwards(){
+  const A=window._tAwards||{}, players=S.players||[];
+  const chip='display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 10px;border-radius:14px;background:rgba(83,74,183,.12);font-size:12px;margin:2px';
+  let h='<div class="modal-bg" onclick="if(event.target===this)closeTournamentAwards()"><div class="modal" style="max-height:90vh;overflow-y:auto">'
+    +'<div class="modal-handle"></div>'
+    +'<div class="modal-title"><span>🏆 Final awards</span><button class="btn btn-sm" onclick="closeTournamentAwards()" style="width:auto">✕</button></div>'
+    +'<div class="alert alert-info" style="font-size:11px">Filled in from the results so far. Swap people, remove a badge or add more, then send. Everyone gets the results card and the badges hit the feed.</div>'
+    +'<div class="sec-label">Message (optional)</div><input type="text" id="tawards-msg" value="'+feedEsc(window._tAwardsMsg||'')+'" oninput="window._tAwardsMsg=this.value" placeholder="e.g. Another one in the books">';
+  const ids=Object.keys(A);
+  if(!ids.length) h+='<p class="empty">Nothing calculated yet. Finish and finalize some games first, or add badges below.</p>';
+  ids.forEach(bid=>{
+    const bd=BADGE_DEFS.find(b=>b.id===bid); if(!bd) return;
+    const ps=A[bid]||[];
+    h+='<div style="padding:10px 0;border-bottom:1px solid rgba(128,128,128,.15)">'
+      +'<div style="display:flex;align-items:center;gap:8px"><span style="font-size:22px">'+bd.icon+'</span>'
+      +'<div style="flex:1"><div style="font-weight:700;font-size:14px">'+feedEsc(bd.name)+(bd.spicy?' 🌶️':'')+'</div>'
+      +'<div style="font-size:11px;color:#999">'+feedEsc(bd.desc||'')+'</div></div>'
+      +'<button class="btn btn-sm btn-danger" onclick="tAwardDrop(\''+bid+'\')" style="width:auto">Remove</button></div>'
+      +'<div style="margin-top:6px">'
+      +ps.map((p,i)=>'<span style="'+chip+'">'+feedEsc(p)+'<button onclick="tAwardRemove(\''+bid+'\','+i+')" style="border:none;background:none;cursor:pointer;font-size:12px;color:#c0392b">✕</button></span>').join('')
+      +'<select onchange="tAwardAdd(this,\''+bid+'\')" style="font-size:12px;margin:4px 0 0;width:auto"><option value="">+ add player…</option>'
+      +players.map((p,i)=>ps.includes(p)?'':'<option value="'+i+'">'+feedEsc(p)+'</option>').join('')+'</select>'
+      +'</div></div>';
+  });
+  const seen=new Set();
+  const opts=BADGE_DEFS.filter(b=>!A[b.id]&&!seen.has(b.id)&&seen.add(b.id));
+  const cats=[...new Set(opts.map(b=>b.cat))];
+  h+='<div class="sec-label" style="margin-top:12px">Add another badge</div>'
+    +'<select id="tawards-newbadge"><option value="">— badge —</option>'
+    +cats.map(cat=>'<optgroup label="'+cat+'">'+opts.filter(b=>b.cat===cat).map(b=>'<option value="'+b.id+'">'+b.icon+' '+feedEsc(b.name)+'</option>').join('')+'</optgroup>').join('')
+    +'</select><select id="tawards-newplayer"><option value="">— player —</option>'
+    +players.map((p,i)=>'<option value="'+i+'">'+feedEsc(p)+'</option>').join('')+'</select>'
+    +'<button class="btn btn-sm" onclick="tAwardNew()" style="width:auto">+ Add</button>'
+    +'<button class="btn btn-primary" onclick="sendTournamentAwards()" style="width:100%;font-size:15px;font-weight:700;padding:14px;margin-top:14px;background:linear-gradient(135deg,#534AB7,#9f97f5);border-color:#534AB7">📢 Send final awards</button>'
+    +'</div></div>';
+  el('modal-area').innerHTML=h;
+}
+window.tAwardDrop=(bid)=>{ delete window._tAwards[bid]; renderTournamentAwards(); };
+window.tAwardRemove=(bid,i)=>{ const a=window._tAwards[bid]||[]; a.splice(i,1); if(!a.length) delete window._tAwards[bid]; renderTournamentAwards(); };
+window.tAwardAdd=(sel,bid)=>{ const p=(S.players||[])[parseInt(sel.value)]; if(!p) return; const a=window._tAwards[bid]=window._tAwards[bid]||[]; if(!a.includes(p)) a.push(p); renderTournamentAwards(); };
+window.tAwardNew=()=>{
+  const bid=el('tawards-newbadge').value, p=(S.players||[])[parseInt(el('tawards-newplayer').value)];
+  if(!bid||!p){ alert('Pick a badge and a player.'); return; }
+  const a=window._tAwards[bid]=window._tAwards[bid]||[]; if(!a.includes(p)) a.push(p); renderTournamentAwards();
+};
+window.sendTournamentAwards=async()=>{
+  const A=window._tAwards||{}, byP={};
+  Object.entries(A).forEach(([bid,ps])=>(ps||[]).forEach(p=>{ (byP[p]=byP[p]||[]).push(bid); }));
+  if(!Object.keys(byP).length){ alert('No awards to send.'); return; }
+  const yr=S.tourneyYear||new Date().getFullYear();
+  const sorted=(S.players||[]).slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
+  const prev=S.tourneyBadges||{}, tb=JSON.parse(JSON.stringify(prev)), now=Date.now(), upd={};
+  let n=0;
+  Object.entries(byP).forEach(([p,bids])=>{
+    if(!tb[p]||typeof tb[p]!=='object') tb[p]={};
+    bids.forEach(bid=>{
+      const bd=BADGE_DEFS.find(b=>b.id===bid); if(!bd) return;
+      if(!(prev[p]&&prev[p][bid])) upd['badgeFeed/'+feedKey()]={player:p,badgeId:bid,icon:bd.icon,name:bd.name,desc:bd.desc||'',
+        spicy:!!bd.spicy,at:now+(n++),src:'awards',gameName:'Final'};
+      tb[p][bid]=true;
+    });
+  });
+  upd.tourneyBadges=tb;
+  upd.activeAnnouncement={gameId:'__final',gameName:'🏆 Final Results '+yr,at:now,msg:window._tAwardsMsg||'',
+    standings:sorted.map((p,i)=>({place:i+1,label:p,pts:getTotalPts(p)})),badges:byP,existingBadges:prev};
+  upd.announcementAcks=null;
+  if(S.tournamentFinalized){
+    const nb=JSON.parse(JSON.stringify(S.newBadgesEarned||{}));
+    Object.entries(byP).forEach(([p,bids])=>{ nb[p]=nb[p]||[]; bids.forEach(bid=>{ const bd=BADGE_DEFS.find(b=>b.id===bid); if(bd&&!nb[p].some(x=>x.name===bd.name)) nb[p].push({icon:bd.icon,name:bd.name}); }); });
+    upd.newBadgesEarned=nb;
+  }
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
+  window._tAwardsOpen=false; closeModal();
+  alert('✓ Final awards sent to everyone!');
+};
 
 // ── BADGE FEED ────────────────────────────────────────────
 const _feedSeen=new Set(); let _feedInitTid=null; const _feedOpen={};
@@ -6900,7 +7060,8 @@ window.disputeScore = async (btn)=>{
     _disputed:true,
     _disputedAt:Date.now()
   };
-  await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:updated});
+  await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+matchId]:updated,
+    ['disputeLog/'+feedKey()]:{player:myName,gameId,matchId,at:Date.now()}});
   alert('Dispute recorded. Admin will resolve.');
   setTimeout(()=>{ if(el('pview-active')&&!el('pview-active').classList.contains('hidden')) renderActiveGameTab(myName); },500);
 };
