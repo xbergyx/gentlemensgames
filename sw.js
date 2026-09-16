@@ -1,4 +1,5 @@
-const CACHE = 'gg-v1';
+// Gentleman's Games service worker: offline cache + push alerts
+const CACHE = 'gg-v2';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -13,6 +14,7 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  if (new URL(e.request.url).origin !== self.location.origin) return; // don't cache Firebase/CDN calls
   e.respondWith(
     fetch(e.request)
       .then(res => {
@@ -22,4 +24,28 @@ self.addEventListener('fetch', e => {
       })
       .catch(() => caches.match(e.request))
   );
+});
+
+// ── Push alerts (sent by the Cloud Function as FCM data messages) ──
+self.addEventListener('push', e => {
+  let p = {};
+  try { p = e.data ? e.data.json() : {}; } catch (_) { p = { data: { body: e.data ? e.data.text() : '' } }; }
+  const d = p.data || p.notification || {};
+  const title = d.title || "Gentleman's Games";
+  e.waitUntil(self.registration.showNotification(title, {
+    body: d.body || '',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: d.tag || 'gg',
+    renotify: true,
+    data: { url: d.url || '/' }
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const c of list) { if ('focus' in c) return c.focus(); }
+    return self.clients.openWindow(url);
+  }));
 });
