@@ -545,7 +545,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v111.16.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v112.16.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -619,7 +619,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v111.16.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v112.16.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -1172,6 +1172,10 @@ function afterSignIn(){
     syncPlayerNameAcrossTournaments(currentUser.uid,userProfile);
   }
   showView('home');
+  try{
+    const nv=sessionStorage.getItem('gg_nav');
+    if(nv){ sessionStorage.removeItem('gg_nav'); setTimeout(()=>goNav(JSON.parse(nv)),200); }
+  }catch(e){}
   try{
     const jc=localStorage.getItem('gg_join_code'), wt=localStorage.getItem('gg_watch');
     if(jc) setTimeout(()=>handleJoinLink(jc,''),300);
@@ -2287,6 +2291,7 @@ window.openTournament = (tid)=>{
       try{ ensureGameChampDefs(); renderBadgeFeeds(); checkBadgeToasts(tid); }catch(err){ console.warn('badge feed',err); }
       try{ refreshChats(); checkChatToasts(tid); }catch(err){ console.warn('chat',err); }
       try{ reconcileTiming(); }catch(err){ console.warn('timing',err); }
+      try{ if(window._pendingNav) setTimeout(applyPendingNav,50); }catch(err){}
       try{ const n=Object.keys(S.joinRequests||{}).length, t=el('atab-players'), l='👥 Players'+(n?' <span class="chat-dot">'+n+'</span>':''); if(t&&t.innerHTML!==l) t.innerHTML=l; }catch(err){}
     });
   });
@@ -6258,6 +6263,41 @@ window.downloadGGIcons=async()=>{
   }catch(err){ alert('Could not make icon files: '+(err&&err.message||err)); }
 };
 
+
+// ── DEEP LINKS FROM PUSH ALERTS ───────────────────────────
+window._pendingNav=null;
+function parseNav(url){
+  try{ const u=new URL(url,location.origin); const t=u.searchParams.get('t'), tab=u.searchParams.get('tab'); return t?{t,tab:tab||'active'}:null; }catch(e){ return null; }
+}
+function goNav(nav){
+  if(!nav||!nav.t) return;
+  if(!currentUser){ try{ sessionStorage.setItem('gg_nav',JSON.stringify(nav)); }catch(e){} return; }
+  window._pendingNav=nav;
+  if(currentTourneyId===nav.t&&S) applyPendingNav();
+  else openTournament(nav.t);
+}
+function applyPendingNav(){
+  const nav=window._pendingNav; if(!nav||!S||nav.t!==currentTourneyId) return;
+  window._pendingNav=null;
+  closeModal();
+  const adminView=isTourneyAdmin&&!_viewingAsPlayer&&!(actingAsName&&actingAsName!==(userProfile?.preferredName||userProfile?.name||''));
+  if(adminView){
+    const map={chat:'chat',active:'scores',lb:'board',players:'players'};
+    showAdminPhase(map[nav.tab]||'scores');
+  } else {
+    let tab=['chat','active','lb','games','info','teams','rank'].includes(nav.tab)?nav.tab:'active';
+    if(tab==='players') tab='active';
+    _tab=tab;
+    showPlayerTab(tab,chatMyName());
+  }
+  window.scrollTo(0,0);
+}
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message',e=>{
+    if(e.data&&e.data.type==='gg-nav') goNav(parseNav(e.data.url));
+  });
+}
+
 // ── PUSH ALERTS ───────────────────────────────────────────
 function pushEnv(){
   const ua=navigator.userAgent||'';
@@ -9119,6 +9159,10 @@ const joinCode  = urlParams.get('join');
 if(inviteKey) localStorage.setItem('gg_invite_key', inviteKey);
 if(joinCode)  localStorage.setItem('gg_join_code', joinCode);
 const watchTid  = urlParams.get('watch');
+if(urlParams.get('t')){
+  try{ sessionStorage.setItem('gg_nav',JSON.stringify({t:urlParams.get('t'),tab:urlParams.get('tab')||'active'})); }catch(e){}
+  try{ window.history.replaceState({},'','/'); }catch(e){}
+}
 if(watchTid){ try{ localStorage.setItem('gg_watch', watchTid); }catch(e){} }
 
 </script>
