@@ -71,7 +71,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .chat-sys.spicy .bfeed-name{color:#c0392b}
 .chat-sys.mine{background:rgba(83,74,183,.16)}
 .chat-sys .bfeed-name{border-bottom:none}
-.chat-suggest{display:flex;flex-wrap:wrap}
+.chat-suggest{display:flex;flex-wrap:wrap;max-height:130px;overflow-y:auto}
 .chat-input-row{display:flex;gap:6px;align-items:flex-end;margin-top:6px}
 .chat-input-row textarea{flex:1;margin:0;resize:none;font-size:16px;line-height:1.3;padding:9px 12px;border-radius:18px;min-height:40px;max-height:110px;font-family:inherit}
 .chat-dot{display:inline-block;min-width:16px;padding:0 4px;border-radius:9px;background:#e74c3c;color:#fff;font-size:10px;line-height:16px;margin-left:3px}
@@ -530,7 +530,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v104.16.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v105.16.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -604,7 +604,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v104.16.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v105.16.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -5296,8 +5296,16 @@ function isSpectatorHere(){
   return !!(S.spectators&&S.spectators[u]) && !(S.players||[]).some(p=>String(p).trim().toLowerCase()===nm);
 }
 function chatPeople(){
-  const out=[], seen=new Set();
-  Object.entries(S.playerUids||{}).forEach(([u,n])=>{ if(n&&!seen.has(u)){ seen.add(u); out.push({uid:u,name:String(n)}); } });
+  const out=[], seen=new Set(), named=new Set();
+  Object.entries(S.playerUids||{}).forEach(([u,n])=>{ if(n&&!seen.has(u)){ seen.add(u); named.add(String(n).trim().toLowerCase()); out.push({uid:u,name:String(n)}); } });
+  (S.players||[]).forEach(n=>{ const k=String(n).trim().toLowerCase(); if(n&&!named.has(k)){ named.add(k); out.push({uid:'',name:String(n),noAccount:true}); } });
+  const meU=chatMyUid(), meN=chatMyName();
+  if(meU&&meN&&!seen.has(meU)){
+    const mn=meN.toLowerCase(), fn=chatKeyFirst(meN);
+    let i=out.findIndex(x=>!x.uid&&x.name.trim().toLowerCase()===mn);
+    if(i<0){ const cands=out.filter(x=>!x.uid&&chatKeyFirst(x.name)===fn); if(cands.length===1) i=out.indexOf(cands[0]); }
+    if(i>=0) out[i]={uid:meU,name:out[i].name}; else out.push({uid:meU,name:meN});
+  }
   Object.entries(S.spectators||{}).forEach(([u,v])=>{ if(v&&v.name&&!seen.has(u)){ seen.add(u); out.push({uid:u,name:String(v.name),spectator:true}); } });
   return out;
 }
@@ -5318,12 +5326,12 @@ function findMentions(text,groupsOut){
     if(CHAT_GROUPS[t]){
       if(!allowed.includes(g)) return;
       if(groupsOut&&!groupsOut.includes(g)) groupsOut.push(g);
-      ppl.filter(p=>g==='everyone'||(g==='players'?!p.spectator:p.spectator)).forEach(p=>{ m[p.uid]=true; });
+      ppl.filter(p=>p.uid&&p.uid!==chatMyUid()&&(g==='everyone'||(g==='players'?!p.spectator:p.spectator))).forEach(p=>{ m[p.uid]=true; });
       return;
     }
     let hits=ppl.filter(p=>chatKeyFull(p.name)===t);
     if(!hits.length) hits=ppl.filter(p=>chatKeyFirst(p.name)===t);
-    hits.forEach(p=>{ m[p.uid]=true; });
+    hits.forEach(p=>{ if(p.uid) m[p.uid]=true; });
   });
   return m;
 }
@@ -5413,8 +5421,9 @@ window.chatOnInput=(box)=>{
   if(!m){ sug.innerHTML=''; return; }
   const q=m[1].toLowerCase(), meU=chatMyUid();
   const groups=chatGroupsAllowed().filter(g=>g.startsWith(q)).map(g=>'<button class="btn btn-sm" style="width:auto;margin:2px;font-weight:700" onclick="chatPick(\''+box+'\',\''+g+'\')">📣 @'+g+'</button>').join('');
-  const hits=chatPeople().filter(p=>p.uid!==meU&&(chatKeyFirst(p.name).startsWith(q)||chatKeyFull(p.name).startsWith(q))).slice(0,6);
-  sug.innerHTML=groups+hits.map(p=>'<button class="btn btn-sm" style="width:auto;margin:2px" onclick="chatPick(\''+box+'\',\''+chatHandle(p)+'\')">@'+feedEsc(p.name)+(p.spectator?' 👀':'')+'</button>').join('');
+  const hits=chatPeople().filter(p=>chatKeyFirst(p.name).startsWith(q)||chatKeyFull(p.name).startsWith(q)||chatKeyFull(p.name).includes(q))
+    .sort((a,b)=>(a.uid===meU)-(b.uid===meU)||a.name.localeCompare(b.name)).slice(0,q?8:30);
+  sug.innerHTML=groups+hits.map(p=>'<button class="btn btn-sm" style="width:auto;margin:2px" onclick="chatPick(\''+box+'\',\''+chatHandle(p)+'\')">@'+feedEsc(p.name)+(p.spectator?' 👀':'')+(p.uid&&p.uid===meU?' (you)':'')+(p.noAccount?' <span style="opacity:.5">· no app yet</span>':'')+'</button>').join('');
 };
 window.chatPick=(box,handle)=>{
   const inp=el('chat-input-'+box); if(!inp) return;
@@ -5429,7 +5438,7 @@ window.sendChat=async(box)=>{
   if(!currentUser){ alert('Sign in first.'); return; }
   const msg={uid:chatMyUid(),name:chatMyName()||'Someone',text:text.slice(0,500),at:Date.now()};
   if(isSpectatorHere()) msg.spectator=true;
-  const grp=[], men=findMentions(text,grp); delete men[msg.uid];
+  const grp=[], men=findMentions(text,grp);
   if(Object.keys(men).length) msg.mentions=men;
   if(grp.length) msg.group=grp[0];
   inp.value=''; inp.style.height='auto';
@@ -5645,7 +5654,25 @@ function pushPromptHTML(){
   return box('<span style="font-size:22px">🔔</span><div style="flex:1;font-size:12px;line-height:1.35"><b>Get alerts</b><br>Badges, scores to approve, next game.</div>'
     +'<button class="btn btn-primary btn-sm" onclick="enablePush(this)" style="width:auto">Turn on</button>');
 }
+let _autoPushAsked=false;
+function maybeAutoPushPrompt(){
+  if(_autoPushAsked||!currentUser) return;
+  const env=pushEnv();
+  if(!env.hasApi||!env.standalone||Notification.permission!=='default'||VAPID_KEY.startsWith('PASTE')) return;
+  let last=0; try{ last=+localStorage.getItem('gg_push_asked')||0; }catch(e){}
+  if(Date.now()-last<6*3600*1000) return;
+  if(el('modal-area')?.innerHTML) return;
+  _autoPushAsked=true;
+  try{ localStorage.setItem('gg_push_asked',String(Date.now())); }catch(e){}
+  el('modal-area').innerHTML='<div class="modal-bg"><div class="modal" style="text-align:center">'
+    +'<div style="font-size:44px;margin:6px 0">🔔</div>'
+    +'<div style="font-size:18px;font-weight:800;margin-bottom:6px">Turn on alerts?</div>'
+    +'<div style="font-size:13px;color:#888;margin-bottom:14px">Get a buzz when you\'re up next, when a score needs your OK, when you earn a badge, or when someone @mentions you.</div>'
+    +'<button class="btn btn-primary" onclick="closeModal();enablePush()" style="font-size:16px;padding:13px">Turn on alerts</button>'
+    +'<button class="btn" onclick="closeModal()" style="margin-top:6px">Not now</button></div></div>';
+}
 function renderPushPrompts(){
+  try{ maybeAutoPushPrompt(); }catch(e){}
   ['push-prompt-player','push-prompt-admin'].forEach(id=>{ const e=el(id); if(e){ const h=pushPromptHTML(); if(e.innerHTML!==h) e.innerHTML=h; } });
 }
 async function savePushToken(){
