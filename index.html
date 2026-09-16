@@ -50,6 +50,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .badge-founder{background:#FDF2F8;color:#9d174d;border-color:#f9a8d4}
 .badge-winless{background:#F9FAFB;color:#374151;border-color:#d1d5db}
 .badge-specialist{background:#ECFDF5;color:#065f46;border-color:#6ee7b7}.badge-gamewinner{background:#EAF3DE;color:#27500A;border-color:#97C459}
+.no-rank #ptab-rank{display:none!important}
 .is-spectator #ptab-teams,.is-spectator #ptab-rank,.is-spectator #ptab-vote{display:none!important}
 .chat-card{padding:.8rem .8rem .7rem}
 .chat-list{height:min(58vh,520px);overflow-y:auto;display:flex;flex-direction:column;gap:3px;padding:4px 2px;-webkit-overflow-scrolling:touch}
@@ -530,7 +531,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v106.16.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v107.16.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -604,7 +605,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v106.16.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v107.16.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -1156,7 +1157,11 @@ function afterSignIn(){
     syncPlayerNameAcrossTournaments(currentUser.uid,userProfile);
   }
   showView('home');
-  try{ const wt=localStorage.getItem('gg_watch'); if(wt) setTimeout(()=>joinAsSpectator(wt),300); }catch(e){}
+  try{
+    const jc=localStorage.getItem('gg_join_code'), wt=localStorage.getItem('gg_watch');
+    if(jc) setTimeout(()=>handleJoinLink(jc,''),300);
+    else if(wt) setTimeout(()=>handleJoinLink(wt,'spectator'),300);
+  }catch(e){}
   // Show install prompt on iOS manually
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const isStandalone = window.navigator.standalone || (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);
@@ -1834,6 +1839,8 @@ function loadTournamentList(){
       // Show tournament if user is a participant or admin
       const myUid = actingAsUid||currentUser?.uid;
       const isParticipant = (t.playerUids && t.playerUids[myUid]) || (t.spectators && t.spectators[myUid]);
+      const isPending = !isParticipant && t.joinRequests && t.joinRequests[myUid];
+      if(isPending&&!isAdmin&&!t.tournamentFinalized){ active.push({id,...t,_pending:true}); return; }
       if(!isAdmin&&!isParticipant) return;
       if(t.tournamentFinalized) past.push({id,...t});
       else active.push({id,...t});
@@ -1857,13 +1864,14 @@ function renderTourneyList(elId, list, isPast, showAll=false){
   if(!list.length){ e.innerHTML='<p class="empty">None yet.</p>'; return; }
   e.innerHTML=list.map(t=>`
     <div class="tourney-card ${!isPast?'active-tourney':''}">
-      <div style="display:flex;align-items:center;justify-content:space-between" onclick="openTournament('${t.id}')">
+      <div style="display:flex;align-items:center;justify-content:space-between" onclick="${t._pending?"alert('⏳ Waiting for the host to let you in.')":"openTournament('"+t.id+"')"}">
         <div>
           <div style="font-size:14px;font-weight:700">${t.tourneyName||'Tournament'}</div>
           <div style="font-size:11px;color:#888;margin-top:2px">${t.tourneyYear||''} · ${(t.players||[]).length} players</div>
         </div>
         <div style="font-size:20px">${isPast?'📜':'🏆'}</div>
       </div>
+      ${t._pending?'<div class="tag tag-amber" style="margin-top:6px;font-size:10px">⏳ Waiting for host approval</div>':''}
       ${!isPast&&t.tournamentStarted?'<div class="tag tag-green" style="margin-top:6px;font-size:10px">● In progress</div>':''}
       ${(()=>{const u=actingAsUid||currentUser?.uid;return u&&t.spectators&&t.spectators[u]&&!(t.playerUids&&t.playerUids[u])?'<div class="tag" style="margin-top:6px;font-size:10px">👀 Spectating</div>':'';})()}
       ${showAll&&isAdmin?`<div style="margin-top:8px;display:flex;gap:6px">
@@ -2251,6 +2259,7 @@ window.openTournament = (tid)=>{
       else { renderPlayerView(myName); updateVoteTabVisibility(myName); }
       try{ ensureGameChampDefs(); renderBadgeFeeds(); checkBadgeToasts(tid); }catch(err){ console.warn('badge feed',err); }
       try{ refreshChats(); checkChatToasts(tid); }catch(err){ console.warn('chat',err); }
+      try{ const n=Object.keys(S.joinRequests||{}).length, t=el('atab-players'), l='👥 Players'+(n?' <span class="chat-dot">'+n+'</span>':''); if(t&&t.innerHTML!==l) t.innerHTML=l; }catch(err){}
     });
   });
 };
@@ -2267,7 +2276,7 @@ function buildTournamentShell(){
   <div id="admin-area" class="hidden">
     <div class="phase-tabs">
       <div class="phase-tab active" data-phase="setup">⚙️ Setup</div>
-      <div class="phase-tab" data-phase="players">👥 Players</div>
+      <div class="phase-tab" data-phase="players" id="atab-players">👥 Players</div>
       <div class="phase-tab" data-phase="games">🎮 Games</div>
       <div class="phase-tab" data-phase="rankings">📋 Rankings</div>
       <div class="phase-tab" data-phase="scores">🏅 Scores</div>
@@ -2448,7 +2457,7 @@ function showAdminPhase(phase){
   document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===phase) t.classList.add('active'); });
   if(phase==='setup')    { renderAdminSetup(); try{ renderIconCard(); }catch(err){ console.warn('icon',err); } }
   if(phase==='chat')     renderChat('a');
-  if(phase==='players')  { renderAdminPlayers(); renderSpectatorAdmin(); }
+  if(phase==='players')  { renderAdminPlayers(); renderJoinRequestsAdmin(); renderSpectatorAdmin(); }
   if(phase==='games')    renderAdminGames();
   if(phase==='testing')  renderAdminTesting();
   if(phase==='votes')    renderAdminVotes();
@@ -3147,7 +3156,7 @@ function renderGames(){
 function renderRankingStatus(){
   const e=el('admin-rankings'); if(!e) return;
   const games=S.games||[], players=S.players||[];
-  let html='<div class="card"><div class="card-title">📋 Ranking status</div>';
+  let html=teamSetupCardHTML()+'<div class="card"><div class="card-title">📋 Ranking status</div>';
   if(!S.tournamentStarted){ html+='<div class="alert alert-warn">Start the tournament first.</div></div>'; e.innerHTML=html; return; }
   if(!games.length){ html+='<p class="empty">No games yet.</p></div>'; e.innerHTML=html; return; }
   games.forEach(g=>{
@@ -3206,7 +3215,7 @@ window.lockGameRankingsRandom = async (gameId)=>{
   for(let i=players.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[players[i],players[j]]=[players[j],players[i]];}
   const pairs=makeTeamsFromSorted(players,game.teamSize||2);
   const bracket=buildBracket(game,pairs);
-  const games=(S.games||[]).map(g=>g.id===gameId?{...g,status:'locked'}:g);
+  const games=(S.games||[]).map(g=>g.id===gameId?{...g,status:'locked',teamMethod:'random'}:g);
   const teams={...(S.teams||{}),[gameId]:pairs};
   const bs={...(S.bs||{}),[gameId]:bracket};
   await update(ref(db,'tournaments/'+currentTourneyId),{games,teams,bs});
@@ -3219,7 +3228,7 @@ window.lockGameRankings = async (gameId)=>{
   if(rc<total){ alert('Not all players have ranked yet.'); return; }
   const pairs=makePairsFromGameRankings(gameId);
   const bracket=buildBracket(game,pairs);
-  const games=(S.games||[]).map(g=>g.id===gameId?{...g,status:'locked'}:g);
+  const games=(S.games||[]).map(g=>g.id===gameId?{...g,status:'locked',teamMethod:'ranked'}:g);
   const teams={...(S.teams||{}),[gameId]:pairs};
   const bs={...(S.bs||{}),[gameId]:bracket};
   await update(ref(db,'tournaments/'+currentTourneyId),{games,teams,bs});
@@ -3271,7 +3280,7 @@ window.generateAllTeams = async (mode='ranked')=>{
     }
     const bracket=buildBracket(g,pairs);
     const i=newGames.findIndex(x=>x.id===g.id);
-    if(i>=0) newGames[i]={...g,status:'locked'};
+    if(i>=0) newGames[i]={...g,status:'locked',teamMethod:mode==='random'?'random':'ranked'};
     newTeams[g.id]=pairs;
     newBs[g.id]=bracket;
   });
@@ -3366,7 +3375,7 @@ window.saveManualTeams = async (btn)=>{
   if(dupes.length){ alert('Duplicate players: '+dupes.join(', ')); return; }
 
   const bracket=buildBracket(game,pairs);
-  const newGames=(S.games||[]).map(g=>g.id===gameId?{...g,status:'locked'}:g);
+  const newGames=(S.games||[]).map(g=>g.id===gameId?{...g,status:'locked',teamMethod:'manual'}:g);
   const newTeams={...(S.teams||{}),[gameId]:pairs};
   const newBs={...(S.bs||{}),[gameId]:bracket};
   await update(ref(db,'tournaments/'+currentTourneyId),{games:newGames,teams:newTeams,bs:newBs});
@@ -5472,29 +5481,13 @@ async function addSpectatorRecord(tid,uid,name,how){
     ['badgeFeed/'+feedKey()]:{player:name,uid,badgeId:'spectator',icon:bd.icon,name:bd.name,desc:bd.desc,spicy:false,at:now,src:'spectator'}
   });
 }
-window.joinAsSpectator=async(tid)=>{
-  try{ localStorage.removeItem('gg_watch'); }catch(e){}
-  if(!currentUser||!userProfile) return;
-  let t=null;
-  try{ t=(await get(ref(db,'tournaments/'+tid))).val(); }catch(e){}
-  if(!t||!t.tourneyName){ alert('That spectator link is not valid.'); return; }
-  const uid=currentUser.uid, name=String(userProfile.preferredName||userProfile.name||'').trim()||'Spectator';
-  if((t.playerUids&&t.playerUids[uid])||(t.spectators&&t.spectators[uid])||isAdmin){ openTournament(tid); return; }
-  if(!confirm('Follow '+t.tourneyName+' as a spectator? You can see everything and chat, but you won\'t be on a team.')) return;
-  try{ await addSpectatorRecord(tid,uid,name,'link'); }
-  catch(err){ alert('Could not join: '+(err&&err.message||err)); return; }
-  openTournament(tid);
-};
 async function renderSpectatorAdmin(){
   const e=el('admin-players'); if(!e||!S) return;
   let box=el('spectator-admin');
   if(!box){ box=document.createElement('div'); box.id='spectator-admin'; box.className='card'; e.appendChild(box); }
   const specs=Object.entries(S.spectators||{}).filter(([,v])=>v);
-  const link=APP_DOMAIN+'/?watch='+currentTourneyId;
   let h='<div class="card-title">👀 Spectators <span class="tag tag-purple">'+specs.length+'</span></div>'
-    +'<div style="font-size:11px;color:#888;margin-bottom:8px">They see everything and can chat, but aren\'t on a team. Share this link or add them below.</div>'
-    +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px"><div class="invite-link-box" style="flex:1;margin:0;font-size:11px;word-break:break-all">'+feedEsc(link)+'</div>'
-    +'<button class="btn btn-sm btn-primary" onclick="navigator.clipboard.writeText(\''+link+'\').then(()=>alert(\'Copied!\'))" style="width:auto">📋</button></div>';
+    +'<div style="font-size:11px;color:#888;margin-bottom:8px">They see everything and can chat, but aren\'t on a team. Approve them from Join requests above, or add them here.</div>';
   h+=specs.length?specs.map(([u,v])=>'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.12)">'
       +'<span style="flex:1;font-size:13px">👀 '+feedEsc(v.name)+'</span>'
       +'<button class="btn btn-sm btn-danger" onclick="removeSpectator(\''+u+'\')" style="width:auto">✕</button></div>').join('')
@@ -5526,6 +5519,88 @@ window.removeSpectator=async(u)=>{
   Object.entries(S.badgeFeed||{}).forEach(([k,f])=>{ if(f&&f.src==='spectator'&&f.uid===u) upd['badgeFeed/'+k]=null; });
   await update(ref(db,'tournaments/'+currentTourneyId),upd);
 };
+
+// ── JOIN REQUESTS (one link → host approves as player or spectator) ──
+function joinLinkFor(){ return APP_DOMAIN+'/?join='+encodeURIComponent(S.joinCode||''); }
+async function handleJoinLink(code,hint){
+  try{ localStorage.removeItem('gg_join_code'); localStorage.removeItem('gg_watch'); }catch(e){}
+  if(!currentUser||!userProfile||!code) return;
+  let all={};
+  try{ all=(await get(ref(db,'tournaments'))).val()||{}; }catch(e){ return; }
+  const hit=Object.entries(all).find(([id,t])=>t&&(t.joinCode===code||id===code));
+  if(!hit){ alert('That invite link isn\'t valid anymore. Ask the host for a new one.'); return; }
+  const [tid,t]=hit, uid=currentUser.uid;
+  if((t.playerUids&&t.playerUids[uid])||(t.spectators&&t.spectators[uid])||isAdmin){ openTournament(tid); return; }
+  if(t.joinRequests&&t.joinRequests[uid]){ alert('⏳ You already asked to join '+t.tourneyName+'. The host will let you in soon.'); return; }
+  const name=String(userProfile.preferredName||userProfile.name||'').trim()||'Guest';
+  try{
+    await set(ref(db,'tournaments/'+tid+'/joinRequests/'+uid),{name,at:Date.now(),hint:hint||'',contact:userProfile.phone||userProfile.email||''});
+    alert('🙋 Request sent! The host will add you to '+t.tourneyName+' as a player or spectator. It\'ll show up on your home screen once you\'re in.');
+  }catch(err){ alert('Could not send your request: '+(err&&err.message||err)); }
+}
+window.joinAsSpectator=(tid)=>handleJoinLink(tid,'spectator');
+function renderJoinRequestsAdmin(){
+  const e=el('admin-players'); if(!e||!S) return;
+  let box=el('join-requests-admin');
+  if(!box){ box=document.createElement('div'); box.id='join-requests-admin'; box.className='card'; e.insertBefore(box,e.firstChild); }
+  const reqs=Object.entries(S.joinRequests||{}).filter(([,v])=>v).sort((a,b)=>(a[1].at||0)-(b[1].at||0));
+  const link=joinLinkFor();
+  let h='<div class="card-title">🙋 Join requests '+(reqs.length?'<span class="tag tag-amber">'+reqs.length+'</span>':'')+'</div>'
+    +'<div style="font-size:11px;color:#888;margin-bottom:6px">Send everyone this one link. When they sign in you\'ll see them here and pick player or spectator.</div>'
+    +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px"><div class="invite-link-box" style="flex:1;margin:0;font-size:11px;word-break:break-all">'+feedEsc(link)+'</div>'
+    +'<button class="btn btn-sm btn-primary" onclick="navigator.clipboard.writeText(\''+link+'\').then(()=>alert(\'Copied!\'))" style="width:auto">📋</button></div>';
+  h+=reqs.length?reqs.map(([u,v])=>'<div style="padding:8px 0;border-top:1px solid rgba(128,128,128,.12)">'
+      +'<div style="font-size:14px;font-weight:700">'+feedEsc(v.name)+(v.hint==='spectator'?' <span class="tag" style="font-size:10px">asked to watch</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:#999;margin-bottom:6px">'+feedEsc(v.contact||'')+' · '+feedAgo(v.at)+' ago</div>'
+      +'<div style="display:flex;gap:6px">'
+      +'<button class="btn btn-sm btn-primary" onclick="approveJoin(\''+u+'\',\'player\')" style="flex:1">➕ Player</button>'
+      +'<button class="btn btn-sm" onclick="approveJoin(\''+u+'\',\'spectator\')" style="flex:1">👀 Spectator</button>'
+      +'<button class="btn btn-sm btn-danger" onclick="declineJoin(\''+u+'\')" style="width:auto">✕</button></div></div>').join('')
+    :'<p class="empty" style="margin:0">No one waiting.</p>';
+  if(box.dataset.h!==h){ box.innerHTML=h; box.dataset.h=h; }
+}
+window.approveJoin=async(u,as)=>{
+  const r=(S.joinRequests||{})[u]; if(!r) return;
+  let name=r.name;
+  try{ const p=(await get(ref(db,'players/'+u))).val(); if(p) name=String(p.preferredName||p.name||name).trim(); }catch(e){}
+  try{
+    if(as==='player'){
+      if((S.players||[]).includes(name)){
+        await update(ref(db,'tournaments/'+currentTourneyId),{['playerUids/'+u]:name,['joinRequests/'+u]:null});
+      } else {
+        await addPlayerFromGlobal(u,name);
+        await update(ref(db,'tournaments/'+currentTourneyId),{['joinRequests/'+u]:null});
+      }
+    } else {
+      await addSpectatorRecord(currentTourneyId,u,name,'request');
+      await update(ref(db,'tournaments/'+currentTourneyId),{['joinRequests/'+u]:null});
+    }
+  }catch(err){ alert('Could not add '+name+': '+(err&&err.message||err)); return; }
+  if(isAdmin){ try{ await update(ref(db),{['players/'+u+'/pendingAdminReview']:false,['pendingApprovals/'+u]:null}); }catch(e){} }
+};
+window.declineJoin=async(u)=>{
+  const r=(S.joinRequests||{})[u]; if(!r) return;
+  if(!confirm('Decline '+r.name+'\'s request?')) return;
+  await update(ref(db,'tournaments/'+currentTourneyId),{['joinRequests/'+u]:null});
+};
+// ── RANKINGS TAB VISIBILITY ──
+function rankingsNeeded(){
+  if(!S) return true;
+  if(S.teamSetup==='random'||S.teamSetup==='manual') return false;
+  const gs=(S.games||[]).filter(g=>g.status!=='skipped');
+  if(!gs.length) return true;
+  const open=gs.filter(g=>g.status!=='locked'&&g.status!=='scoring'&&g.status!=='done');
+  if(open.length) return true;
+  return gs.some(g=>(g.teamMethod||'ranked')==='ranked');
+}
+window.setTeamSetup=async(v)=>{ await update(ref(db,'tournaments/'+currentTourneyId),{teamSetup:v}); };
+function teamSetupCardHTML(){
+  const cur=S.teamSetup||'rankings';
+  const b=(v,l,d)=>'<button class="btn btn-sm'+(cur===v?' btn-primary':'')+'" onclick="setTeamSetup(\''+v+'\')" style="flex:1;flex-direction:column;padding:8px 4px"><div style="font-weight:700">'+l+'</div><div style="font-size:10px;opacity:.75">'+d+'</div></button>';
+  return '<div class="card"><div class="card-title">👥 How are teams made this year?</div>'
+    +'<div style="display:flex;gap:6px">'+b('rankings','🎯 Rankings','players rank each other')+b('random','🎲 Random','no ranking needed')+b('manual','✏️ Manual','you set them')+'</div>'
+    +'<div style="font-size:11px;color:#999;margin-top:8px">'+(cur==='rankings'?'Players see the Rankings tab.':'The Rankings tab is hidden from players.')+'</div></div>';
+}
 
 // ── YEARLY APP ICON ───────────────────────────────────────
 const GG_PALETTES=[
@@ -5994,7 +6069,10 @@ function renderPlayerView(myName){
   updateVoteTabVisibility(myName);
   const _spec=isSpectatorHere();
   el('player-area')?.classList.toggle('is-spectator',_spec);
+  const _noRank=!rankingsNeeded();
+  el('player-area')?.classList.toggle('no-rank',_noRank);
   if(_spec&&['teams','rank','vote'].includes(_tab)) _tab='active';
+  if(_noRank&&_tab==='rank') _tab='active';
   showPlayerTab(_tab||'active',myName);
 }
 
