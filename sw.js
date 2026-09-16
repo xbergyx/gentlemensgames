@@ -1,5 +1,5 @@
 // Gentleman's Games service worker: offline cache + push alerts
-const CACHE = 'gg-v2';
+const CACHE = 'gg-v3';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -43,9 +43,14 @@ self.addEventListener('push', e => {
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || '/';
-  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-    for (const c of list) { if ('focus' in c) return c.focus(); }
-    return self.clients.openWindow(url);
+  const raw = (e.notification.data && e.notification.data.url) || '/';
+  const target = new URL(raw, self.location.origin).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async list => {
+    for (const c of list) {
+      if (new URL(c.url).origin !== self.location.origin) continue;
+      c.postMessage({ type: 'gg-nav', url: target });
+      if ('focus' in c) return c.focus();
+    }
+    return self.clients.openWindow(target);
   }));
 });
