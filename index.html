@@ -49,6 +49,20 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .badge-founder{background:#FDF2F8;color:#9d174d;border-color:#f9a8d4}
 .badge-winless{background:#F9FAFB;color:#374151;border-color:#d1d5db}
 .badge-specialist{background:#ECFDF5;color:#065f46;border-color:#6ee7b7}.badge-gamewinner{background:#EAF3DE;color:#27500A;border-color:#97C459}
+.bfeed-row{display:flex;align-items:center;gap:8px;padding:7px 8px;margin:0 -8px;border-radius:10px;border-bottom:1px solid rgba(128,128,128,.12)}
+.bfeed-row:last-of-type{border-bottom:none}
+.bfeed-icon{font-size:20px;width:30px;text-align:center;flex-shrink:0}
+.bfeed-name{font-weight:700;color:#534AB7;cursor:pointer;position:relative;border-bottom:1px dotted currentColor}
+.bfeed-spicy{background:rgba(240,80,80,.09)}
+.bfeed-spicy .bfeed-name{color:#c0392b}
+.bfeed-mine{background:rgba(83,74,183,.12);box-shadow:inset 3px 0 0 #534AB7}
+[data-theme="dark"] .bfeed-name{color:#9f97f5}
+[data-theme="dark"] .bfeed-spicy .bfeed-name{color:#f07070}
+.bfeed-toast{position:fixed;top:12px;left:50%;transform:translate(-50%,-140%);z-index:10001;max-width:calc(100vw - 32px);
+  background:rgba(20,18,40,.95);color:#fff;padding:10px 16px;border-radius:14px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.3);
+  transition:transform .35s cubic-bezier(.2,.9,.3,1.2);cursor:pointer;text-align:center}
+.bfeed-toast.in{transform:translate(-50%,0)}
+.bfeed-toast.mine{background:linear-gradient(135deg,#534AB7,#9f97f5)}
 .badge-custom{background:#FFF1F2;color:#9f1239;border-color:#fda4af}
 .badge-lastplace{background:#FEF2F2;color:#991b1b;border-color:#fca5a5}
 .badge-everyyear{background:#FFF7ED;color:#7c2d12;border-color:#fb923c}
@@ -486,7 +500,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v95.22.05.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v97.16.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -560,7 +574,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v95.22.05.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v97.16.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2169,6 +2183,7 @@ window.openTournament = (tid)=>{
       const actingAsOther = actingAsName && actingAsName!==(userProfile?.preferredName||userProfile?.name||'');
       if(isTourneyAdmin&&!_viewingAsPlayer&&!actingAsOther) renderAdminView();
       else { renderPlayerView(myName); updateVoteTabVisibility(myName); }
+      try{ renderBadgeFeeds(); checkBadgeToasts(tid); }catch(err){ console.warn('badge feed',err); }
     });
   });
 };
@@ -2198,7 +2213,7 @@ function buildTournamentShell(){
     <div id="admin-players" class="hidden"></div>
     <div id="admin-games" class="hidden"></div>
     <div id="admin-rankings" class="hidden"></div>
-    <div id="admin-scores" class="hidden"></div>
+    <div id="admin-scores" class="hidden"><div id="admin-scores-main"></div><div id="badge-feed-admin" style="margin-top:4px"></div></div>
     <div id="admin-board" class="hidden"></div>
     <div id="admin-power" class="hidden"></div>
     <div id="admin-history" class="hidden"></div>
@@ -2217,7 +2232,7 @@ function buildTournamentShell(){
       <div class="ptab-btn" id="ptab-rank" data-tab="rank">🎯 Rankings</div>
       <div class="ptab-btn" id="ptab-vote" data-tab="vote" style="display:none">🗳️ Vote</div>
     </div>
-    <div id="pview-active"></div>
+    <div id="pview-active"><div id="pview-active-main"></div><div id="badge-feed-player" style="margin-top:4px"></div></div>
     <div id="pview-lb" class="hidden"></div>
     <div id="pview-games" class="hidden"></div>
     <div id="pview-info" class="hidden"></div>
@@ -3547,7 +3562,7 @@ function mHTML(gid,m,pfx,onSave){
 
 // ── MATCH FEED (SCORES TAB) ───────────────────────────────
 function renderMatchFeed(){
-  const e=el('admin-scores'); if(!e) return;
+  const e=el('admin-scores-main'); if(!e) return;
   const lockedGames=(S.games||[]).filter(g=>(g.status==='locked'||g.status==='scoring')&&g.status!=='skipped');
   if(!lockedGames.length){ e.innerHTML='<div class="card"><div class="alert alert-info">No games with locked teams yet.</div></div>'; return; }
   // Active game banner at top of scores
@@ -4171,6 +4186,7 @@ window.unlockGameScores = async (gameId)=>{
       }
     });
     updates['tourneyBadges']=newTourneyBadges;
+    Object.entries(S.badgeFeed||{}).forEach(([k,v])=>{ if(v&&v.src==='announce'&&v.gameId===gameId) updates['badgeFeed/'+k]=null; });
     updates['activeAnnouncement']=null;
     updates['announcementAcks']=null;
   }
@@ -4632,6 +4648,42 @@ const BADGE_DEFS = [
   {id:'still-standing',  cat:'Drinking', icon:'🌅', name:'Still Standing',               auto:false, spicy:false, desc:'Made it to the end against all odds'},
   {id:'clutch-cup',      cat:'Drinking', icon:'🎯', name:'Clutch Cup',                   auto:false, spicy:false, desc:'Best performance while clearly several drinks in'},
   {id:'inverse-corr',    cat:'Drinking', icon:'📈', name:'Inverse Correlation',          auto:false, spicy:false, desc:'Got better with every drink'},
+  // Added v96 (manual)
+  {id:"chatty-kathy", cat:"Personality", icon:"💬", name:"Chatty Kathy", auto:false, spicy:true, desc:"Talked through every throw, including the other team's"},
+  {id:"true-gentleman", cat:"Personality", icon:"🎩", name:"True Gentleman", auto:false, spicy:false, desc:"Pure class all day, gracious in victory and in defeat"},
+  {id:"extra-salty", cat:"Personality", icon:"🧂", name:"Extra Salty", auto:false, spicy:true, desc:"Took a loss personally and is still not over it"},
+  {id:"main-character", cat:"Personality", icon:"🎭", name:"Main Character", auto:false, spicy:true, desc:"Somehow made every moment about themselves"},
+  {id:"not-my-fault", cat:"Personality", icon:"🤌", name:"Not My Fault", auto:false, spicy:true, desc:"Blamed the wind, the sun, the partner. Never themselves"},
+  {id:"boomerang", cat:"Performance", icon:"🪃", name:"Boomerang", auto:false, spicy:false, desc:"Fell way behind and kept coming right back"},
+  {id:"overconfident-oracle", cat:"Personality", icon:"🔮", name:"Overconfident Oracle", auto:false, spicy:true, desc:"Loudly predicted a win. Did not win"},
+  {id:"bottomless", cat:"Drinking", icon:"🫗", name:"Bottomless", auto:false, spicy:false, desc:"Cup was never empty and nobody ever saw a refill"},
+  {id:"personal-vendetta", cat:"Personality", icon:"🥊", name:"Personal Vendetta", auto:false, spicy:true, desc:"Treated one opponent like a lifelong rival"},
+  {id:"sandbagger", cat:"Personality", icon:"😇", name:"Sandbagger", auto:false, spicy:true, desc:"Swore they were bad. Was suspiciously good"},
+  {id:"code-red", cat:"Drinking", icon:"🚨", name:"Code Red", auto:false, spicy:true, desc:"Needed an intervention before the final game"},
+  {id:"deja-vu", cat:"Performance", icon:"🔁", name:"Déjà Vu", auto:false, spicy:true, desc:"Made the exact same mistake over and over"},
+  {id:"fire-hazard", cat:"Personality", icon:"🧯", name:"Fire Hazard", auto:false, spicy:true, desc:"A danger to themselves, their team and nearby property"},
+  {id:"dead-weight", cat:"Performance", icon:"🛶", name:"Dead Weight", auto:false, spicy:true, desc:"Got carried by their teammate all day"},
+  {id:"glow-up", cat:"Performance", icon:"🦋", name:"Glow Up", auto:false, spicy:false, desc:"Started rough and finished the day looking like a pro"},
+  {id:"needs-lifeline", cat:"Personality", icon:"📞", name:"Needs a Lifeline", auto:false, spicy:true, desc:"Kept asking what the rules were"},
+  {id:"five-more-minutes", cat:"Personality", icon:"⏰", name:"Always Five More Minutes", auto:false, spicy:true, desc:"Held up the schedule every single round"},
+  {id:"analytics-guy", cat:"Personality", icon:"📊", name:"Analytics Guy", auto:false, spicy:false, desc:"Had stats, odds and a strategy for everything"},
+  {id:"sly-fox", cat:"Personality", icon:"🦊", name:"Sly Fox", auto:false, spicy:false, desc:"Won with sneaky, clever plays nobody saw coming"},
+  {id:"slot-machine", cat:"Performance", icon:"🎰", name:"Slot Machine", auto:false, spicy:false, desc:"Totally random: red hot one throw, ice cold the next"},
+  {id:"own-goal", cat:"Performance", icon:"🪤", name:"Own Goal", auto:false, spicy:true, desc:"Scored for the other team, or cost their own"},
+  {id:"leaky-bucket", cat:"Performance", icon:"🪣", name:"Leaky Bucket", auto:false, spicy:true, desc:"Gave up points left and right"},
+  {id:"dormant-volcano", cat:"Performance", icon:"🌋", name:"Dormant Volcano", auto:false, spicy:false, desc:"Quiet all day, then erupted when it mattered most"},
+  {id:"prom-royalty", cat:"Personality", icon:"👑", name:"Prom King/Queen", auto:false, spicy:false, desc:"Most popular person at the party"},
+  {id:"drop-the-mic", cat:"Performance", icon:"🎤", name:"Drop the Mic", auto:false, spicy:false, desc:"Ended a match with a legendary final shot"},
+  {id:"the-myth", cat:"Personality", icon:"🌟", name:"The Myth", auto:false, spicy:false, desc:"The stories about their play are already exaggerated"},
+  {id:"diamond-rough", cat:"Performance", icon:"💎", name:"Diamond in the Rough", auto:false, spicy:false, desc:"The surprise standout nobody saw coming"},
+  {id:"committed", cat:"Personality", icon:"🤸", name:"Committed", auto:false, spicy:false, desc:"Went all in: dives, costumes, full send"},
+  {id:"eagle-eye", cat:"Performance", icon:"🦅", name:"Eagle Eye", auto:false, spicy:false, desc:"Deadly accurate all day long"},
+  {id:"pirate", cat:"Drinking", icon:"🏴‍☠️", name:"Pirate", auto:false, spicy:true, desc:"Plundered drinks that were not theirs"},
+  {id:"vampire", cat:"Personality", icon:"🧛", name:"Vampire", auto:false, spicy:false, desc:"Came alive after the sun went down"},
+  {id:"always-on-phone", cat:"Personality", icon:"📱", name:"Always on the Phone", auto:false, spicy:true, desc:"Missed their turn because they were scrolling"},
+  {id:"low-battery", cat:"Drinking", icon:"🔋", name:"Low Battery", auto:false, spicy:true, desc:"Ran out of juice long before the day was over"},
+  {id:"legacy-system", cat:"Personality", icon:"💾", name:"Legacy System", auto:false, spicy:false, desc:"Old-school veteran still running on original hardware"},
+  {id:"error-404", cat:"Personality", icon:"🖨️", name:"Error 404", auto:false, spicy:true, desc:"Went missing. Nobody could find them when it was their turn"},
   {id:'drunk-genius',    cat:'Drinking', icon:'🧠', name:'Drunk Genius',                 auto:false, spicy:false, desc:'Questionable decisions that somehow worked'},
 ];
 
@@ -4864,11 +4916,21 @@ window.sendAnnouncement = async (gameId)=>{
     bids.forEach(bid=>{ newTourneyBadges[p][bid]=true; });
   });
 
-  await update(ref(db,'tournaments/'+currentTourneyId),{
+  const annUpd={
     activeAnnouncement:announcement,
     announcementAcks:{}, // reset acks for new announcement
     tourneyBadges:newTourneyBadges
+  };
+  const _prevTB=S.tourneyBadges||{}, _now=Date.now();
+  Object.entries(window._announceBadges).forEach(([p,bids])=>{
+    bids.forEach((bid,ix)=>{
+      if(_prevTB[p]&&_prevTB[p][bid]) return;
+      const bd=BADGE_DEFS.find(b=>b.id===bid); if(!bd) return;
+      annUpd['badgeFeed/'+feedKey()]={player:p,badgeId:bid,icon:bd.icon,name:bd.name,desc:bd.desc||'',spicy:!!bd.spicy,
+        at:_now+ix,src:'announce',gameId,gameName:game.name};
+    });
   });
+  await update(ref(db,'tournaments/'+currentTourneyId),annUpd);
   closeModal();
   alert('✓ Announcement sent! Players must dismiss before seeing next matchups.');
 };
@@ -4924,7 +4986,7 @@ window.declareTournamentWinner=async()=>{
     if(curr.years>=3&&!curr.wins&&!curr.podiums) earned.push({icon:'😅',name:'Winless Wonder'});
     Object.entries(curr.gameWins||{}).forEach(([g,n])=>{if(n>=2&&((prev.gameWins||{})[g]||0)<2)earned.push({icon:'🎯',name:g+' Specialist'});});
     (S.playerBadges&&S.playerBadges[p]||[]).forEach(bid=>{const b=getBadgeById(bid);if(b)earned.push({icon:b.icon,name:b.name});});
-    (S.customBadges||[]).filter(b=>b.player===p).forEach(b=>earned.push({icon:'✨',name:b.name}));
+    (S.customBadges||[]).filter(b=>b.player===p).forEach(b=>earned.push({icon:b.icon||'✨',name:b.name}));
     if(earned.length) newBadges[p]=earned;
   });
   for(const [uid2,pName] of Object.entries(S.playerUids||{})){
@@ -5000,7 +5062,7 @@ function getPlayerBadgesFromProfile(h,name=''){
     if(count>=2) badges.push({cls:'badge-specialist',icon,text:game+' Champ'+times});
     else badges.push({cls:'badge-gamewinner',icon,text:game+' Champ'});
   });
-  (S?.customBadges||[]).filter(b=>b.player===name).forEach(b=>badges.push({cls:'badge-custom',icon:'✨',text:b.name}));
+  (S?.customBadges||[]).filter(b=>b.player===name).forEach(b=>badges.push({cls:'badge-custom',icon:b.icon||'✨',text:b.name}));
   return badges;
 }
 function renderBadges(badges){ if(!badges||!badges.length)return''; return badges.map(b=>`<span class="badge ${b.cls}">${b.icon} ${b.text}</span>`).join(''); }
@@ -5039,7 +5101,12 @@ function renderHistoryList(){
 
   // ── Custom badges ──
   html+=`<div class="card"><div class="card-title">✨ Custom badges</div>
-    <div class="sec-label">Badge name</div><input type="text" id="custom-badge-name" placeholder="e.g. Commissioner">
+    <div class="sec-label">Badge</div><select id="custom-badge-pick" onchange="onCustomBadgePick()"><option value="">— pick a badge —</option></select>
+    <div id="custom-badge-desc" style="font-size:12px;color:#888;margin:4px 0 8px;min-height:14px"></div>
+    <div id="custom-badge-own" style="display:none">
+      <div class="sec-label">Badge name</div><input type="text" id="custom-badge-name" placeholder="e.g. Commissioner">
+      <div class="sec-label">Description (optional)</div><input type="text" id="custom-badge-owndesc" placeholder="What did they do?">
+    </div>
     <div class="sec-label">Assign to</div><select id="custom-badge-player"><option value="">— select —</option></select>
     <button class="btn btn-primary btn-sm" onclick="addCustomBadge()" style="width:auto">+ Add badge</button>
     <div class="divider"></div><div id="custom-badges-list"></div>
@@ -5080,26 +5147,154 @@ window.saveHistory = async (name)=>{
   await update(ref(db,'tournaments/'+currentTourneyId),{history});
   closeModal();
 };
+function getPickableBadges(){
+  const seen=new Set();
+  return BADGE_DEFS.filter(b=>!b.auto&&!seen.has(b.id)&&seen.add(b.id));
+}
+window.onCustomBadgePick = ()=>{
+  const v=el('custom-badge-pick').value;
+  const own=el('custom-badge-own'), d=el('custom-badge-desc');
+  if(own) own.style.display = v==='__own' ? '' : 'none';
+  const bd=getPickableBadges().find(b=>b.id===v);
+  if(d) d.textContent = bd ? bd.icon+' '+bd.name+': '+bd.desc : '';
+};
 window.addCustomBadge = async ()=>{
-  const name=el('custom-badge-name').value.trim(),player=el('custom-badge-player').value;
-  if(!name||!player){alert('Fill both fields.');return;}
-  const cb=[...(S.customBadges||[]),{name,player}];
-  await update(ref(db,'tournaments/'+currentTourneyId),{customBadges:cb});
-  el('custom-badge-name').value='';el('custom-badge-player').value='';
+  const pick=el('custom-badge-pick').value, player=el('custom-badge-player').value;
+  if(!pick||!player){alert('Pick a badge and a player.');return;}
+  let entry;
+  if(pick==='__own'){
+    const name=el('custom-badge-name').value.trim();
+    if(!name){alert('Enter a badge name.');return;}
+    entry={name,icon:'✨',desc:el('custom-badge-owndesc').value.trim(),player,at:Date.now()};
+  } else {
+    const bd=getPickableBadges().find(b=>b.id===pick); if(!bd) return;
+    if((S.customBadges||[]).some(b=>b.badgeId===bd.id&&b.player===player)){alert(player+' already has '+bd.name+'.');return;}
+    entry={badgeId:bd.id,name:bd.name,icon:bd.icon,desc:bd.desc,spicy:!!bd.spicy,player,at:Date.now()};
+  }
+  const fk=feedKey(); entry.feedKey=fk;
+  const cb=[...(S.customBadges||[]),entry];
+  const feedItem={player:entry.player,icon:entry.icon,name:entry.name,desc:entry.desc||'',spicy:!!entry.spicy,at:entry.at,src:'custom'};
+  if(entry.badgeId) feedItem.badgeId=entry.badgeId;
+  await update(ref(db,'tournaments/'+currentTourneyId),{customBadges:cb,['badgeFeed/'+fk]:feedItem});
+  ['custom-badge-name','custom-badge-owndesc','custom-badge-pick','custom-badge-player'].forEach(id=>{const x=el(id);if(x)x.value='';});
+  onCustomBadgePick();
 };
 window.removeCustomBadge = async (i)=>{
+  const gone=(S.customBadges||[])[i];
   const cb=(S.customBadges||[]).filter((_,idx)=>idx!==i);
-  await update(ref(db,'tournaments/'+currentTourneyId),{customBadges:cb});
+  const upd={customBadges:cb};
+  if(gone&&gone.feedKey) upd['badgeFeed/'+gone.feedKey]=null;
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
 };
 function renderCustomBadges(){
   const e=el('custom-badges-list');if(!e)return;
   if(!(S.customBadges||[]).length){e.innerHTML='<p class="empty">No custom badges.</p>';return;}
-  e.innerHTML=(S.customBadges||[]).map((b,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0ede6"><span class="badge badge-custom">✨ ${b.name}</span><span style="flex:1;font-size:12px;color:#888">→ ${b.player}</span><button class="btn btn-sm btn-danger" onclick="removeCustomBadge(${i})" style="width:auto">✕</button></div>`).join('');
+  e.innerHTML=(S.customBadges||[]).map((b,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0ede6"><span class="badge badge-custom">${b.icon||'✨'} ${b.name}</span><span style="flex:1;font-size:12px;color:#888">→ ${b.player}${b.desc?'<br><span style="font-size:11px;color:#aaa">'+b.desc+'</span>':''}</span><button class="btn btn-sm btn-danger" onclick="removeCustomBadge(${i})" style="width:auto">✕</button></div>`).join('');
 }
 function renderCustomBadgePlayerSelect(){
   const sel=el('custom-badge-player');if(!sel)return;
+  const keepP=sel.value;
   sel.innerHTML='<option value="">— select —</option>'+(S.players||[]).map(p=>`<option value="${esc(p)}">${p}</option>`).join('');
+  sel.value=keepP;
+  const pk=el('custom-badge-pick'); if(!pk) return;
+  const keepB=pk.value, list=getPickableBadges();
+  const cats=[...new Set(list.map(b=>b.cat))];
+  pk.innerHTML='<option value="">— pick a badge —</option>'
+    +cats.map(cat=>'<optgroup label="'+cat+'">'+list.filter(b=>b.cat===cat).map(b=>'<option value="'+b.id+'">'+b.icon+' '+b.name+' — '+esc(b.desc)+'</option>').join('')+'</optgroup>').join('')
+    +'<optgroup label="Other"><option value="__own">✏️ Write your own…</option></optgroup>';
+  pk.value=keepB;
 }
+
+
+// ── BADGE FEED ────────────────────────────────────────────
+const _feedSeen=new Set(); let _feedInitTid=null; const _feedOpen={};
+function feedKey(){ return 'b'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function feedEsc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function feedAgo(t){
+  const s=Math.max(0,(Date.now()-(t||0))/1000);
+  if(s<60) return 'now'; if(s<3600) return Math.floor(s/60)+'m';
+  if(s<86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d';
+}
+function feedMyName(){ return (actingAsName||userProfile?.preferredName||userProfile?.name||'').trim().toLowerCase(); }
+function getBadgeFeed(){
+  return Object.entries((S&&S.badgeFeed)||{}).filter(([,v])=>v&&v.player)
+    .map(([k,v])=>({key:k,...v})).sort((a,b)=>(b.at||0)-(a.at||0));
+}
+function badgeFeedHTML(items,{me='',admin=false,box='x',limit=5}={}){
+  const open=!!_feedOpen[box];
+  const shown=open?items:items.slice(0,limit);
+  let h='<div class="card bfeed"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center">'
+    +'<span>🏅 Badge feed</span><span style="font-size:11px;color:#999;font-weight:500">'+items.length+' given</span></div>';
+  if(!items.length){
+    return h+'<p class="empty" style="margin:4px 0">No badges yet. They show up here the moment they are handed out.</p></div>';
+  }
+  shown.forEach(it=>{
+    const mine=me&&String(it.player).trim().toLowerCase()===me;
+    const first=feedEsc(String(it.player).split(' ')[0]);
+    h+='<div class="bfeed-row'+(it.spicy?' bfeed-spicy':'')+(mine?' bfeed-mine':'')+'">'
+      +'<span class="bfeed-icon">'+feedEsc(it.icon||'🏅')+'</span>'
+      +'<div style="flex:1;min-width:0;line-height:1.3">'
+      +'<div style="font-size:13px"><b>'+(mine?'You 🫵':feedEsc(it.player))+'</b> '+(mine?'earned':'earned')+' '
+      +'<span class="bfeed-name" data-desc="'+feedEsc(it.desc||'')+'" onclick="showBadgeTooltip(this)">'+feedEsc(it.name)+'</span>'
+      +(it.spicy?' 🌶️':'')+'</div>'
+      +(it.gameName?'<div style="font-size:10px;color:#999">'+feedEsc(it.gameName)+' results</div>':'')
+      +'</div>'
+      +'<span style="font-size:11px;color:#999;flex-shrink:0">'+feedAgo(it.at)+'</span>'
+      +(admin?'<button class="btn btn-sm btn-danger" onclick="removeFeedItem(\''+it.key+'\')" style="width:auto;margin-left:6px;padding:2px 8px">✕</button>':'')
+      +'</div>';
+  });
+  if(items.length>limit){
+    h+='<button class="btn btn-sm" onclick="toggleBadgeFeed(\''+box+'\')" style="width:100%;margin-top:6px">'
+      +(open?'Show less ▴':'See all ('+items.length+') ▾')+'</button>';
+  }
+  return h+'</div>';
+}
+function renderBadgeFeeds(){
+  if(!S) return;
+  const items=getBadgeFeed(), me=feedMyName();
+  const p=el('badge-feed-player'); if(p) p.innerHTML=badgeFeedHTML(items,{me,box:'player'});
+  const a=el('badge-feed-admin');  if(a) a.innerHTML=badgeFeedHTML(items,{me,admin:true,box:'admin'});
+}
+window.toggleBadgeFeed=(box)=>{ _feedOpen[box]=!_feedOpen[box]; renderBadgeFeeds(); };
+window.removeFeedItem=async(key)=>{
+  const it=(S.badgeFeed||{})[key]; if(!it) return;
+  if(!confirm('Remove '+it.name+' from '+it.player+'?')) return;
+  const upd={['badgeFeed/'+key]:null};
+  if(it.src==='custom'){
+    upd.customBadges=(S.customBadges||[]).filter(b=>b.feedKey!==key);
+  } else if(it.src==='announce'&&it.badgeId&&S.tourneyBadges&&S.tourneyBadges[it.player]){
+    upd['tourneyBadges/'+it.player+'/'+it.badgeId]=null;
+  }
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
+};
+function checkBadgeToasts(tid){
+  const items=getBadgeFeed();
+  if(_feedInitTid!==tid){ _feedSeen.clear(); items.forEach(i=>_feedSeen.add(i.key)); _feedInitTid=tid; return; }
+  const fresh=items.filter(i=>!_feedSeen.has(i.key));
+  fresh.forEach(i=>_feedSeen.add(i.key));
+  if(!fresh.length) return;
+  const me=feedMyName();
+  const mine=fresh.filter(i=>String(i.player).trim().toLowerCase()===me);
+  const others=fresh.filter(i=>!mine.includes(i));
+  mine.forEach(i=>showBadgeToast(i.icon+' You earned <b>'+feedEsc(i.name)+'</b>!',true));
+  if(others.length>2) showBadgeToast('🏅 '+others.length+' new badges handed out. Check the feed on Now Playing',false);
+  else others.forEach(i=>showBadgeToast(feedEsc(i.icon)+' <b>'+feedEsc(String(i.player).split(' ')[0])+'</b> just earned '+feedEsc(i.name),false));
+}
+let _toastQ=[], _toastBusy=false;
+function showBadgeToast(html,mine){ _toastQ.push({html,mine}); if(!_toastBusy) nextBadgeToast(); }
+function nextBadgeToast(){
+  const t=_toastQ.shift(); if(!t){ _toastBusy=false; return; }
+  _toastBusy=true;
+  const d=document.createElement('div');
+  d.className='bfeed-toast'+(t.mine?' mine':'');
+  d.innerHTML=t.html;
+  d.onclick=()=>{ d.classList.remove('in'); };
+  document.body.appendChild(d);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>d.classList.add('in')));
+  setTimeout(()=>d.classList.remove('in'), 4000);
+  setTimeout(()=>{ d.remove(); nextBadgeToast(); }, 4400);
+}
+setInterval(()=>{ try{ renderBadgeFeeds(); }catch(e){} }, 60000);
 
 // ── PLAYER VIEW ───────────────────────────────────────────
 function renderPlayerView(myName){
@@ -5934,7 +6129,7 @@ window.submitGameRanking = async (btnOrId, myNameOrUndef)=>{
   setTimeout(()=>closeModal(),700);
 };
 async function renderActiveGameTab(myName){
-  const e=el('pview-active');if(!e)return;
+  const e=el('pview-active-main');if(!e)return;
   try {
   // Check for active announcement that player hasn't dismissed
   const ann=S.activeAnnouncement;
