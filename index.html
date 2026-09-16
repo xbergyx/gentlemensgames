@@ -531,7 +531,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v107.16.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v109.16.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -605,7 +605,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v107.16.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v109.16.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -1141,6 +1141,7 @@ window.saveProfile = async ()=>{
 };
 
 function afterSignIn(){
+  setTimeout(()=>recordAppStatus(),1500);
   const displayName=actingAsName||userProfile?.preferredName||userProfile?.name||currentUser.email||currentUser.phoneNumber||'Player';
   el('home-user-label').textContent=isAdmin?'🛡 Admin · '+displayName:displayName;
   if(isAdmin){
@@ -1923,6 +1924,7 @@ window.startActingAs = ()=>{
     const p = snap.val();
     actingAsUid  = uid2;
     actingAsName = p.name;
+    window._actingScope='global';
     show('acting-as-banner');
     el('acting-as-name').textContent = p.name;
     // Update home label
@@ -2208,20 +2210,31 @@ window.doCreateTournament = async ()=>{
 };
 
 // ── OPEN TOURNAMENT ───────────────────────────────────────
+let _tourneyUnsub=null, _tourneyClickWired=false; window._actingScope=null;
+function resetTournamentSession(){
+  if(_tourneyUnsub){ try{ _tourneyUnsub(); }catch(e){} _tourneyUnsub=null; }
+  if((actingAsName||actingAsUid)&&window._actingScope!=='global'){
+    actingAsName=null; actingAsUid=null; window._actingScope=null;
+    try{ hide('acting-as-banner'); }catch(e){}
+    el('admin-role-pill')?.remove();
+  }
+}
 window.openTournament = (tid)=>{
+  resetTournamentSession();
   currentTourneyId=tid;
   const container = el('view-tournament');
   container.innerHTML = buildTournamentShell();
   showView('tournament');
-  // Wire delegated tab clicks
-  container.addEventListener('click', e=>{
+  // Wire delegated tab clicks (once)
+  if(!_tourneyClickWired) { _tourneyClickWired=true; container.addEventListener('click', e=>{
     const tab=e.target.closest('.phase-tab');
     if(tab&&tab.dataset.phase) showAdminPhase(tab.dataset.phase);
     const ptab=e.target.closest('.ptab-btn');
     if(ptab&&ptab.dataset.tab) showPlayerTab(ptab.dataset.tab);
-  });
-  // Listen for real-time updates
-  onValue(ref(db,'tournaments/'+tid), snap=>{
+  }); }
+  // Listen for real-time updates (only this tournament; old listeners are removed)
+  _tourneyUnsub = onValue(ref(db,'tournaments/'+tid), snap=>{
+    if(tid!==currentTourneyId) return;
     S = snap.exists() ? snap.val() : null;
     if(!S){ showView('home'); return; }
     if(!S.bs) S.bs={};
@@ -2259,6 +2272,7 @@ window.openTournament = (tid)=>{
       else { renderPlayerView(myName); updateVoteTabVisibility(myName); }
       try{ ensureGameChampDefs(); renderBadgeFeeds(); checkBadgeToasts(tid); }catch(err){ console.warn('badge feed',err); }
       try{ refreshChats(); checkChatToasts(tid); }catch(err){ console.warn('chat',err); }
+      try{ reconcileTiming(); }catch(err){ console.warn('timing',err); }
       try{ const n=Object.keys(S.joinRequests||{}).length, t=el('atab-players'), l='👥 Players'+(n?' <span class="chat-dot">'+n+'</span>':''); if(t&&t.innerHTML!==l) t.innerHTML=l; }catch(err){}
     });
   });
@@ -2323,6 +2337,7 @@ function buildTournamentShell(){
 }
 
 window.leaveTournament = ()=>{
+  resetTournamentSession();
   currentTourneyId=null; S=null; _globalProfiles={}; _viewingAsPlayer=false;
   showView('home');
 };
@@ -2457,13 +2472,13 @@ function showAdminPhase(phase){
   document.querySelectorAll('.phase-tab').forEach(t=>{ if(t.dataset.phase===phase) t.classList.add('active'); });
   if(phase==='setup')    { renderAdminSetup(); try{ renderIconCard(); }catch(err){ console.warn('icon',err); } }
   if(phase==='chat')     renderChat('a');
-  if(phase==='players')  { renderAdminPlayers(); renderJoinRequestsAdmin(); renderSpectatorAdmin(); }
+  if(phase==='players')  { renderAdminPlayers(); renderJoinRequestsAdmin(); renderSpectatorAdmin(); if(!el('app-status-admin')) renderAppStatusAdmin(); }
   if(phase==='games')    renderAdminGames();
   if(phase==='testing')  renderAdminTesting();
   if(phase==='votes')    renderAdminVotes();
   if(phase==='rankings') renderRankingStatus();
   if(phase==='scores')   renderMatchFeed();
-  if(phase==='board')    { renderLeaderboard(); renderGPB(); updateStats(); renderTiebreakerPanel(); }
+  if(phase==='board')    { renderLeaderboard(); renderGPB(); updateStats(); renderTiebreakerPanel(); try{ appendTimingCard('admin-board',chatMyName()); }catch(err){ console.warn(err); } }
   if(phase==='power')    renderPowerRankings();
   if(phase==='history')  { renderHistoryList(); renderCustomBadges(); renderCustomBadgePlayerSelect(); }
 }
@@ -2794,6 +2809,7 @@ function renderAdminTesting(){
 window.actAsRealPlayer = (btn)=>{
   if(userProfile?.email!==SUPER_ADMIN_EMAIL){alert('Super admin only.');return;}
   const playerName=btn.dataset.name;
+  window._actingScope=currentTourneyId;
   actingAsName=playerName;
   actingAsUid=null;
   // Find the UID for this player from playerUids
@@ -4502,6 +4518,7 @@ window.saveTBMatch = async (key,p1,p2)=>{
   await update(ref(db,'tournaments/'+currentTourneyId),{tiebreaker});
 };
 window.tourneyActAs = (playerName)=>{
+  window._actingScope=currentTourneyId;
   actingAsName=playerName;
   actingAsUid=null;
   // Find UID for this player if possible
@@ -4731,6 +4748,11 @@ const BADGE_DEFS = [
   {id:'clutch-cup',      cat:'Drinking', icon:'🎯', name:'Clutch Cup',                   auto:false, spicy:false, desc:'Best performance while clearly several drinks in'},
   {id:'inverse-corr',    cat:'Drinking', icon:'📈', name:'Inverse Correlation',          auto:false, spicy:false, desc:'Got better with every drink'},
   {id:'spectator', cat:'Tournament', icon:'👀', name:'Spectator', auto:true, spicy:false, desc:'Here for the show: following along from the sidelines'},
+  {id:'chat-jail', cat:'Personality', icon:'🤐', name:'Chat Jail', auto:false, spicy:true, desc:'Silenced by the commissioner for crimes against the group chat'},
+  {id:'speed-demon', cat:'Performance', icon:'⚡', name:'Speed Demon', auto:true, spicy:false, desc:'Fastest average match time of the day'},
+  {id:'slowpoke', cat:'Personality', icon:'🦥', name:'Slowpoke', auto:true, spicy:true, desc:'Slowest average match time of the day. We aged waiting.'},
+  {id:'marathon-match', cat:'Game', icon:'⏳', name:'Marathon Match', auto:true, spicy:false, desc:'Played the longest match of this game'},
+  {id:'quick-draw', cat:'Game', icon:'🏎️', name:'Quick Draw', auto:true, spicy:false, desc:'Won the fastest match of this game'},
   // Added v96 (manual)
   {id:"chatty-kathy", cat:"Personality", icon:"💬", name:"Chatty Kathy", auto:false, spicy:true, desc:"Talked through every throw, including the other team's"},
   {id:"true-gentleman", cat:"Personality", icon:"🎩", name:"True Gentleman", auto:false, spicy:false, desc:"Pure class all day, gracious in victory and in defeat"},
@@ -4800,6 +4822,15 @@ window.openGameAnnouncement = (gameId)=>{
 
   // Pre-assign badges only if not already set (preserve user changes on re-render)
   if(!window._announceOpen||(window._announceOpen&&Object.keys(window._announceBadges).length===0)){
+    try{
+      const gm=computeTiming().matches.filter(x=>x.g.id===gameId);
+      if(gm.length>=2){
+        const addB=(ps,bid)=>ps.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes(bid)) window._announceBadges[p].push(bid); });
+        const srt=gm.slice().sort((a,b)=>a.dur-b.dur);
+        addB(srt[srt.length-1].ps,'marathon-match');
+        const q=srt[0], w=q.m.winner; if(w) addB([w.p1,w.p2,w.p3].filter(Boolean),'quick-draw');
+      }
+    }catch(e){ console.warn('timing badges',e); }
     // Game champ badge to winner
     if(champBadge&&sorted.length){
       const winner=sorted[0];
@@ -5367,6 +5398,11 @@ function chatListHTML(admin){
         +(admin?' <a href="#" class="chat-x" onclick="removeFeedItem(\''+it.k+'\');return false">✕</a>':'')+'</div>';
       prev=null; return;
     }
+    if(it.system){
+      h+='<div class="chat-sys" style="background:rgba(240,80,80,.1);color:#b03a2e;font-weight:600">'+feedEsc(it.text)+' <span class="chat-time">'+feedAgo(it.at)+'</span>'
+        +(admin?' <a href="#" class="chat-x" onclick="deleteChat(\''+it.k+'\');return false">✕</a>':'')+'</div>';
+      prev=null; return;
+    }
     const mine=it.uid===myUid;
     const grouped=prev&&prev.uid===it.uid&&(it.at-prev.at)<180000;
     const atMe=!mine&&it.mentions&&it.mentions[myUid];
@@ -5375,6 +5411,7 @@ function chatListHTML(admin){
       +'<div class="chat-bubble'+(atMe?' at-me':'')+'">'+chatText(it.text)
       +'<span class="chat-time">'+feedAgo(it.at)+'</span>'
       +(admin||mine?' <a href="#" class="chat-x" onclick="deleteChat(\''+it.k+'\');return false">✕</a>':'')
+      +(admin&&isAdmin&&!mine&&it.uid&&!String(it.uid).startsWith('as:')?' <a href="#" class="chat-x" title="Silence" onclick="muteChatUser(\''+it.uid+'\',\''+feedEsc(String(it.name)).replace(/'/g,'')+'\');return false">🔇</a>':'')
       +'</div></div>';
     prev=it;
   });
@@ -5385,7 +5422,9 @@ function renderChat(box){
   const wrap=chatBox(box); if(!wrap||!S) return;
   if(!el('chat-list-'+box)){
     wrap.innerHTML='<div class="card chat-card">'
-      +'<div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>💬 Chat</span><span style="font-size:11px;color:#999;font-weight:500" id="chat-count-'+box+'"></span></div>'
+      +'<div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span>💬 Chat <span style="font-size:11px;color:#999;font-weight:500" id="chat-count-'+box+'"></span></span>'
+      +'<select id="chat-notify-'+box+'" onchange="setChatNotify(this.value)" style="width:auto;margin:0;font-size:11px;padding:3px 6px"><option value="mentions">🔔 @mentions only</option><option value="all">🔔 All messages</option></select></div>'
+      +'<div id="chat-mute-'+box+'"></div>'
       +'<div class="chat-list" id="chat-list-'+box+'"></div>'
       +'<div class="chat-suggest" id="chat-suggest-'+box+'"></div>'
       +'<div class="chat-input-row"><textarea id="chat-input-'+box+'" rows="1" maxlength="500" placeholder="Message… (type @ to mention)" oninput="chatOnInput(\''+box+'\')" onkeydown="chatKey(event,\''+box+'\')"></textarea>'
@@ -5399,7 +5438,10 @@ function renderChat(box){
     list.innerHTML=html; list.dataset.h=html;
     if(nearBottom) list.scrollTop=list.scrollHeight;
   }
-  const cnt=el('chat-count-'+box); if(cnt) cnt.textContent=chatPeople().length+' people';
+  const cnt=el('chat-count-'+box); if(cnt) cnt.textContent='· '+chatPeople().length;
+  const ns=el('chat-notify-'+box); if(ns&&document.activeElement!==ns&&ns.value!==myChatNotify()) ns.value=myChatNotify();
+  const mb=el('chat-mute-'+box); if(mb){ const mh=chatMuteBanner(box); if(mb.innerHTML!==mh) mb.innerHTML=mh; }
+  const inp=el('chat-input-'+box); if(inp){ const muted=!!muteInfo(chatMyUid()); if(inp.disabled!==muted){ inp.disabled=muted; inp.placeholder=muted?'🔇 You are silenced':'Message… (type @ to mention)'; } }
   updateChatBadges();
 }
 function refreshChats(){
@@ -5412,7 +5454,7 @@ function chatUnread(){
   let lr=0; try{ lr=+localStorage.getItem(chatReadKey())||0; }catch(e){ return 0; }
   if(!lr){ chatMarkRead(); return 0; }
   const u=chatMyUid();
-  return Object.values((S&&S.chat)||{}).filter(m=>m&&m.uid!==u&&(m.at||0)>lr).length;
+  return Object.values((S&&S.chat)||{}).filter(m=>m&&m.uid!==u&&!m.system&&(m.at||0)>lr).length;
 }
 function chatIsOpen(){ return ['p','a'].some(b=>{ const w=chatBox(b); return w&&w.offsetParent!==null; }); }
 function updateChatBadges(){
@@ -5445,6 +5487,8 @@ window.sendChat=async(box)=>{
   const inp=el('chat-input-'+box); if(!inp) return;
   const text=inp.value.trim(); if(!text) return;
   if(!currentUser){ alert('Sign in first.'); return; }
+  const mu=muteInfo(chatMyUid());
+  if(mu){ alert('🔇 You\'re silenced for '+Math.ceil((mu.until-Date.now())/60000)+' more minute(s).'); return; }
   const msg={uid:chatMyUid(),name:chatMyName()||'Someone',text:text.slice(0,500),at:Date.now()};
   if(isSpectatorHere()) msg.spectator=true;
   const grp=[], men=findMentions(text,grp);
@@ -5600,6 +5644,235 @@ function teamSetupCardHTML(){
   return '<div class="card"><div class="card-title">👥 How are teams made this year?</div>'
     +'<div style="display:flex;gap:6px">'+b('rankings','🎯 Rankings','players rank each other')+b('random','🎲 Random','no ranking needed')+b('manual','✏️ Manual','you set them')+'</div>'
     +'<div style="font-size:11px;color:#999;margin-top:8px">'+(cur==='rankings'?'Players see the Rankings tab.':'The Rankings tab is hidden from players.')+'</div></div>';
+}
+
+// ── APP STATUS TRACKING ──
+function appPlatform(){
+  const ua=navigator.userAgent||'';
+  if(/iPhone|iPad|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)) return 'iPhone';
+  if(/Android/i.test(ua)) return 'Android';
+  return 'Computer';
+}
+async function recordAppStatus(extra){
+  if(!currentUser) return;
+  try{
+    const env=pushEnv(), plat=appPlatform();
+    const upd={lastSeen:Date.now(),version:(document.body.innerHTML.match(/v\d+\.\d\d\.\d\d\.\d\d/)||[''])[0],platform:plat,
+      notif:env.hasApi?Notification.permission:'unsupported'};
+    if(env.standalone){ upd.installed=true; upd.installedPlatform=plat; upd.lastAppOpen=Date.now(); }
+    if(env.hasApi&&Notification.permission==='granted'&&pushLocalOn()) upd.push=true;
+    if(env.hasApi&&Notification.permission==='denied'&&env.standalone) upd.push=false;
+    Object.assign(upd,extra||{});
+    const u={}; Object.entries(upd).forEach(([k,v])=>{ u['players/'+currentUser.uid+'/appStatus/'+k]=v; });
+    await update(ref(db),u);
+  }catch(e){ console.warn('appStatus',e); }
+}
+function statusAgo(t){ return t?feedAgo(t)+' ago':'never'; }
+async function renderAppStatusAdmin(){
+  const e=el('admin-players'); if(!e||!S) return;
+  let box=el('app-status-admin');
+  if(!box){ box=document.createElement('div'); box.id='app-status-admin'; box.className='card'; e.appendChild(box); }
+  let prof={};
+  try{ prof=(await get(ref(db,'players'))).val()||{}; }catch(err){}
+  const rows=chatPeople().filter(p=>!String(p.uid).startsWith('as:')).map(p=>{
+    const a=(p.uid&&prof[p.uid]&&prof[p.uid].appStatus)||{};
+    const nt=(p.uid&&prof[p.uid]&&prof[p.uid].chatNotify)||'mentions';
+    return {...p,a,nt};
+  }).sort((x,y)=>(!!y.a.push-!!x.a.push)||(!!y.a.installed-!!x.a.installed)||x.name.localeCompare(y.name));
+  const n=rows.length, inst=rows.filter(r=>r.a.installed).length, push=rows.filter(r=>r.a.push).length;
+  const yes='<span style="color:#27500A;font-weight:700">✓</span>', no='<span style="color:#c0392b">✗</span>';
+  let h='<div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>📱 App &amp; alerts</span>'
+    +'<button class="btn btn-sm" onclick="renderAppStatusAdmin()" style="width:auto">↻</button></div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:10px">'
+    +'<div style="flex:1;text-align:center;background:rgba(83,74,183,.08);border-radius:10px;padding:8px"><div style="font-size:20px;font-weight:800">'+inst+'/'+n+'</div><div style="font-size:10px;color:#888">installed app</div></div>'
+    +'<div style="flex:1;text-align:center;background:rgba(39,80,10,.08);border-radius:10px;padding:8px"><div style="font-size:20px;font-weight:800">'+push+'/'+n+'</div><div style="font-size:10px;color:#888">alerts on</div></div></div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">'
+    +'<tr style="color:#888;text-align:left"><th style="padding:4px">Name</th><th>App</th><th>Alerts</th><th>Chat</th><th>Last seen</th></tr>';
+  rows.forEach(r=>{
+    const a=r.a;
+    const alerts=a.push?yes:(a.notif==='denied'?'<span style="color:#c0392b" title="Blocked in phone settings">🚫</span>':no);
+    h+='<tr style="border-top:1px solid rgba(128,128,128,.12)">'
+      +'<td style="padding:6px 4px">'+feedEsc(r.name)+(r.spectator?' 👀':'')+(!r.uid?' <span style="color:#aaa;font-size:10px">not signed up</span>':'')+'</td>'
+      +'<td>'+(a.installed?yes+' <span style="color:#aaa;font-size:10px">'+feedEsc(a.installedPlatform||'')+'</span>':no)+'</td>'
+      +'<td>'+alerts+'</td>'
+      +'<td style="font-size:10px;color:#888">'+(r.nt==='all'?'all':'@ only')+'</td>'
+      +'<td style="font-size:10px;color:#888;white-space:nowrap">'+statusAgo(a.lastSeen)+'</td></tr>';
+  });
+  h+='</table></div><div style="font-size:10px;color:#aaa;margin-top:6px">"Installed" means they\'ve opened it from their home screen at least once. Updates when people open the app.</div>';
+  box.innerHTML=h;
+}
+window.renderAppStatusAdmin=renderAppStatusAdmin;
+
+// ── CHAT ALERT PREFERENCE ──
+function myChatNotify(){ return (userProfile&&userProfile.chatNotify)||'mentions'; }
+window.setChatNotify=async(v)=>{
+  if(!currentUser) return;
+  try{ await update(ref(db,'players/'+currentUser.uid),{chatNotify:v}); if(userProfile) userProfile.chatNotify=v; }
+  catch(err){ alert('Could not save: '+(err&&err.message||err)); }
+  ['p','a'].forEach(b=>{ const s=el('chat-notify-'+b); if(s) s.value=v; });
+};
+
+// ── CHAT MUTES (super admin only) ──
+function muteInfo(uid){
+  const m=S&&S.chatMutes&&S.chatMutes[uid];
+  return m&&m.until>Date.now()?m:null;
+}
+window.muteChatUser=async(uid,name)=>{
+  if(!isAdmin) return;
+  const v=prompt('Silence '+name+' for how many minutes?','10');
+  if(v===null) return;
+  const mins=Math.max(1,Math.min(1440,parseInt(v)||0));
+  if(!mins) return;
+  const now=Date.now(), bd=BADGE_DEFS.find(b=>b.id==='chat-jail');
+  const lines=['has been silenced for','is in timeout for','has been sent to chat jail for','lost chat privileges for'];
+  const upd={
+    ['chatMutes/'+uid]:{until:now+mins*60000,minutes:mins,name,at:now},
+    ['chat/'+feedKey()]:{uid:'system',name:'Commissioner',system:true,text:'🔇 '+name+' '+lines[Math.floor(Math.random()*lines.length)]+' '+mins+' minute'+(mins===1?'':'s')+'.',at:now}
+  };
+  if(bd&&!(S.tourneyBadges&&S.tourneyBadges[name]&&S.tourneyBadges[name]['chat-jail'])){
+    upd['tourneyBadges/'+name+'/chat-jail']=true;
+    upd['badgeFeed/'+feedKey()]={player:name,badgeId:'chat-jail',icon:bd.icon,name:bd.name,desc:bd.desc,spicy:true,at:now+1,src:'mute'};
+  }
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
+};
+window.unmuteChatUser=async(uid)=>{
+  const m=S.chatMutes&&S.chatMutes[uid]; if(!m) return;
+  await update(ref(db,'tournaments/'+currentTourneyId),{['chatMutes/'+uid]:null,
+    ['chat/'+feedKey()]:{uid:'system',name:'Commissioner',system:true,text:'🔊 '+m.name+' has been released early. Behave.',at:Date.now()}});
+};
+function chatMuteBanner(box){
+  const me=muteInfo(chatMyUid());
+  let h='';
+  if(me){ const left=Math.ceil((me.until-Date.now())/60000); h+='<div class="alert alert-warn" style="margin:6px 0;font-size:12px">🔇 You\'re silenced for '+left+' more minute'+(left===1?'':'s')+'.</div>'; }
+  if(box==='a'&&isAdmin){
+    const act=Object.entries(S.chatMutes||{}).filter(([,m])=>m&&m.until>Date.now());
+    if(act.length) h+='<div style="font-size:11px;margin:4px 0">'+act.map(([u,m])=>'🔇 '+feedEsc(m.name)+' ('+Math.ceil((m.until-Date.now())/60000)+'m) <a href="#" onclick="unmuteChatUser(\''+u+'\');return false">unmute</a>').join(' · ')+'</div>';
+  }
+  return h;
+}
+
+// ── TIMING ────────────────────────────────────────────────
+const TIMED_SCORE_FORMATS=['score-low','score-high','multi-round-high','multi-round-low'];
+function isMatchGame(g){ return g&&!TIMED_SCORE_FORMATS.includes(g.format); }
+function fmtDur(ms){
+  if(ms==null||!isFinite(ms)) return '—';
+  const m=Math.round(ms/60000);
+  if(m<60) return m+'m';
+  const h=Math.floor(m/60), r=m%60;
+  return h+'h'+(r?' '+r+'m':'');
+}
+function fmtMin(ms){ return ms==null?'—':(ms/60000).toFixed(1)+' min'; }
+let _timingBusy=false;
+async function reconcileTiming(){
+  if(!S||!isTourneyAdmin||_timingBusy||!currentTourneyId) return;
+  const now=Date.now(), upd={}, gt=S.gameTimes||{}, mt=S.matchTimes||{};
+  (S.games||[]).forEach(g=>{
+    const t=gt[g.id]||{};
+    const active=S.activeGameId===g.id||g.active===true;
+    const fin=!!(S.scores&&S.scores[g.id]&&S.scores[g.id]._fin);
+    if(active&&!t.startedAt) upd['gameTimes/'+g.id+'/startedAt']=now;
+    if(fin&&t.startedAt&&!t.endedAt) upd['gameTimes/'+g.id+'/endedAt']=now;
+    if(!fin&&t.endedAt) upd['gameTimes/'+g.id+'/endedAt']=null;
+    if(!isMatchGame(g)) return;
+    const b=S.bs&&S.bs[g.id]; if(!b) return;
+    getAllMatchesFromBracket(b,g.format).forEach(m=>{
+      if(!m||!m.id) return;
+      const x=(mt[g.id]&&mt[g.id][m.id])||{};
+      if(m.winner&&x.readyAt&&!x.doneAt) upd['matchTimes/'+g.id+'/'+m.id+'/doneAt']=now;
+      if(!m.winner&&x.doneAt) upd['matchTimes/'+g.id+'/'+m.id+'/doneAt']=null;
+    });
+  });
+  if(!Object.keys(upd).length) return;
+  _timingBusy=true;
+  try{ await update(ref(db,'tournaments/'+currentTourneyId),upd); }catch(e){ console.warn('timing',e); }
+  _timingBusy=false;
+}
+function computeTiming(){
+  const now=Date.now(), out={games:[],players:{},matches:[],live:[]};
+  const skip=getSkippedIds();
+  (S.games||[]).forEach(g=>{
+    if(skip.has(g.id)) return;
+    const t=(S.gameTimes||{})[g.id]||{};
+    if(t.startedAt) out.games.push({g,start:t.startedAt,end:t.endedAt||null,dur:(t.endedAt||now)-t.startedAt,running:!t.endedAt});
+    if(!isMatchGame(g)) return;
+    const b=S.bs&&S.bs[g.id]; if(!b) return;
+    const active=(S.activeMatchIds&&S.activeMatchIds[g.id])||{};
+    getAllMatchesFromBracket(b,g.format).forEach(m=>{
+      const x=(S.matchTimes&&S.matchTimes[g.id]&&S.matchTimes[g.id][m.id])||{};
+      if(!x.readyAt||!m.t1||!m.t2) return;
+      const ps=[m.t1.p1,m.t1.p2,m.t1.p3,m.t2.p1,m.t2.p2,m.t2.p3].filter(Boolean);
+      const endAt=x.submittedAt||x.doneAt;
+      if(!endAt){
+        if(!m.winner&&active[m.id]) out.live.push({g,m,since:x.readyAt,ps});
+        return;
+      }
+      const dur=endAt-x.readyAt;
+      if(dur<30000||dur>4*3600000) return;
+      out.matches.push({g,m,dur,ps});
+      ps.forEach(p=>{
+        const r=out.players[p]=out.players[p]||{n:0,total:0,games:{}};
+        r.n++; r.total+=dur;
+        const gg=r.games[g.id]=r.games[g.id]||{n:0,total:0};
+        gg.n++; gg.total+=dur;
+      });
+    });
+  });
+  Object.values(out.players).forEach(r=>{ r.avg=r.total/r.n; Object.values(r.games).forEach(x=>x.avg=x.total/x.n); });
+  return out;
+}
+function timingCardHTML(myName){
+  const T=computeTiming();
+  if(!T.games.length&&!T.matches.length) return '';
+  const me=String(myName||'').trim().toLowerCase();
+  let h='<div class="card" id="timing-card"><div class="card-title">⏱ Timing</div>';
+  if(T.games.length){
+    h+='<div class="sec-label" style="margin-top:0">Game length (start → results final)</div>';
+    T.games.sort((a,b)=>a.start-b.start).forEach(x=>{
+      h+='<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid rgba(128,128,128,.1)"><span>'+feedEsc(x.g.name)+'</span>'
+        +'<b>'+(x.running?'<span style="color:#27500A">● '+fmtDur(x.dur)+' so far</span>':fmtDur(x.dur))+'</b></div>';
+    });
+    const done=T.games.filter(x=>!x.running);
+    if(done.length) h+='<div style="font-size:11px;color:#999;margin-top:4px">Total finished: '+fmtDur(done.reduce((s,x)=>s+x.dur,0))+'</div>';
+  }
+  if(T.live.length){
+    h+='<div class="sec-label">On deck now</div>';
+    T.live.sort((a,b)=>a.since-b.since).forEach(x=>{
+      const nm=t=>[t.p1,t.p2,t.p3].filter(Boolean).map(n=>String(n).split(' ')[0]).join(' & ');
+      h+='<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>'+feedEsc(nm(x.m.t1))+' vs '+feedEsc(nm(x.m.t2))+' <span style="color:#aaa">'+feedEsc(x.g.name)+'</span></span><b>'+fmtDur(Date.now()-x.since)+'</b></div>';
+    });
+  }
+  const rows=Object.entries(T.players).filter(([,r])=>r.n>=1).sort((a,b)=>a[1].avg-b[1].avg);
+  if(rows.length){
+    h+='<div class="sec-label">Avg time per match <span style="font-weight:400;color:#aaa">(fastest first)</span></div>';
+    rows.forEach(([p,r],i)=>{
+      const mine=String(p).trim().toLowerCase()===me;
+      const tag=rows.length>1&&r.n>=2?(i===0?' ⚡':(i===rows.length-1?' 🐢':'')):'';
+      const per=Object.entries(r.games).map(([gid,x])=>{ const g=(S.games||[]).find(z=>z.id===gid); return (g?g.name:'?')+' '+fmtMin(x.avg); }).join(' · ');
+      h+='<div style="padding:5px 6px;border-bottom:1px solid rgba(128,128,128,.1);'+(mine?'background:rgba(83,74,183,.1);border-radius:8px':'')+'">'
+        +'<div style="display:flex;justify-content:space-between;font-size:13px"><span>'+(i+1)+'. '+feedEsc(p)+tag+'</span><b>'+fmtMin(r.avg)+'</b></div>'
+        +'<div style="font-size:10px;color:#999">'+r.n+' match'+(r.n===1?'':'es')+' · '+feedEsc(per)+'</div></div>';
+    });
+    const longest=T.matches.slice().sort((a,b)=>b.dur-a.dur)[0];
+    if(longest){
+      const nm=t=>[t.p1,t.p2,t.p3].filter(Boolean).map(n=>String(n).split(' ')[0]).join(' & ');
+      h+='<div style="font-size:11px;color:#999;margin-top:6px">⏳ Longest match: '+feedEsc(nm(longest.m.t1))+' vs '+feedEsc(nm(longest.m.t2))+' ('+feedEsc(longest.g.name)+'), '+fmtMin(longest.dur)+'</div>';
+    }
+  }
+  h+='<div style="font-size:10px;color:#aaa;margin-top:6px">Match clock starts when a match is called up and stops when the first score is entered. Golf, bowling and other all-together games only get a game clock.</div>';
+  return h+'</div>';
+}
+function appendTimingCard(containerId,myName){
+  const e=el(containerId); if(!e||!S) return;
+  el(containerId+'-timing')?.remove();
+  const h=timingCardHTML(myName); if(!h) return;
+  const d=document.createElement('div'); d.id=containerId+'-timing'; d.innerHTML=h;
+  e.appendChild(d);
+}
+function refreshTimingCards(){
+  try{
+    if(el('pview-lb-timing')&&!el('pview-lb').classList.contains('hidden')) appendTimingCard('pview-lb',chatMyName());
+    if(el('admin-board-timing')&&!el('admin-board').classList.contains('hidden')) appendTimingCard('admin-board',chatMyName());
+  }catch(e){}
 }
 
 // ── YEARLY APP ICON ───────────────────────────────────────
@@ -5759,6 +6032,7 @@ async function savePushToken(){
   if(!token) throw new Error('No push token returned.');
   await set(ref(db,'pushTokens/'+currentUser.uid+'/'+pushTokenKey(token)),{token,at:Date.now(),ua:(navigator.userAgent||'').slice(0,150)});
   try{ localStorage.setItem('gg_push_on',currentUser.uid); }catch(e){}
+  recordAppStatus({push:true,pushAt:Date.now()});
   return token;
 }
 window.enablePush=async(btn)=>{
@@ -5834,6 +6108,14 @@ function computeTournamentAwards(){
     });
   });
   give('sharpshooter',maxBy(diff,1));
+  try{
+    const TT=computeTiming();
+    const el3=Object.entries(TT.players).filter(([,r])=>r.n>=3);
+    if(el3.length>=2){
+      const mn=Math.min(...el3.map(([,r])=>r.avg)), mx=Math.max(...el3.map(([,r])=>r.avg));
+      if(mx>mn){ give('speed-demon',el3.filter(([,r])=>r.avg===mn).map(([p])=>p)); give('slowpoke',el3.filter(([,r])=>r.avg===mx).map(([p])=>p)); }
+    }
+  }catch(e){}
   give('ot-king',maxBy(ot,2));
   const played=games.filter(g=>{ const p=S.points&&S.points[g.id]; return p&&Object.keys(p).length>1; });
   if(played.length){
@@ -6018,7 +6300,7 @@ function nextBadgeToast(){
   setTimeout(()=>d.classList.remove('in'), 4000);
   setTimeout(()=>{ d.remove(); nextBadgeToast(); }, 4400);
 }
-setInterval(()=>{ try{ renderBadgeFeeds(); }catch(e){} }, 60000);
+setInterval(()=>{ try{ renderBadgeFeeds(); refreshTimingCards(); }catch(e){} }, 60000);
 
 // ── PLAYER VIEW ───────────────────────────────────────────
 function renderPlayerView(myName){
@@ -6143,7 +6425,7 @@ function showPlayerTab(tab,myName){
   if(tab==='chat')   renderChat('p');
   if(tab==='games')  renderPlayerGames(myName);
   if(tab==='info')   renderGameInfo();
-  if(tab==='lb')     { renderPlayerLB(myName); renderAllPlayerBadges(); }
+  if(tab==='lb')     { renderPlayerLB(myName); renderAllPlayerBadges(); try{ appendTimingCard('pview-lb',myName||chatMyName()); }catch(err){ console.warn(err); } }
 }
 function renderGameInfo(){
   const e=el('pview-info'); if(!e) return;
