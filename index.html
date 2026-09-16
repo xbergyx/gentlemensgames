@@ -50,6 +50,20 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .badge-founder{background:#FDF2F8;color:#9d174d;border-color:#f9a8d4}
 .badge-winless{background:#F9FAFB;color:#374151;border-color:#d1d5db}
 .badge-specialist{background:#ECFDF5;color:#065f46;border-color:#6ee7b7}.badge-gamewinner{background:#EAF3DE;color:#27500A;border-color:#97C459}
+.recap{background:linear-gradient(170deg,#0d0a2a,#1e1650 60%,#2a2170);border-radius:18px;padding:14px;color:#e8e6ff}
+.recap-hero{text-align:center;padding:10px 0 14px;border-bottom:1px solid rgba(255,255,255,.1)}
+.recap-sec{font-size:11px;font-weight:800;letter-spacing:1.5px;color:#9f97f5;margin:16px 0 8px;text-transform:uppercase}
+.recap-nums{display:flex;gap:6px}
+.recap-nums div{flex:1;background:rgba(255,255,255,.07);border-radius:12px;padding:8px 4px;text-align:center}
+.recap-nums b{display:block;font-size:18px;color:#fff}
+.recap-nums span{font-size:10px;color:#b8b2f0}
+.recap-pod{display:flex;justify-content:space-between;padding:7px 10px;background:rgba(255,255,255,.06);border-radius:10px;margin-bottom:4px;font-size:14px;color:#fff}
+.recap-row{display:flex;gap:10px;align-items:flex-start;padding:8px 4px;border-bottom:1px solid rgba(255,255,255,.07)}
+.recap-ic{font-size:24px;width:32px;text-align:center;flex-shrink:0}
+.recap-t{font-size:10px;font-weight:700;letter-spacing:1px;color:#9f97f5;text-transform:uppercase}
+.recap-w{font-size:15px;font-weight:700;color:#fff}
+.recap-d{font-size:12px;color:#c8c0ff}
+.recap-me{background:rgba(159,151,245,.12);border-radius:14px;padding:10px}
 .no-rank #ptab-rank{display:none!important}
 .is-spectator #ptab-teams,.is-spectator #ptab-rank,.is-spectator #ptab-vote{display:none!important}
 .chat-card{padding:.8rem .8rem .7rem}
@@ -531,7 +545,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v109.16.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v110.16.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -605,7 +619,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v109.16.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v110.16.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2478,7 +2492,7 @@ function showAdminPhase(phase){
   if(phase==='votes')    renderAdminVotes();
   if(phase==='rankings') renderRankingStatus();
   if(phase==='scores')   renderMatchFeed();
-  if(phase==='board')    { renderLeaderboard(); renderGPB(); updateStats(); renderTiebreakerPanel(); try{ appendTimingCard('admin-board',chatMyName()); }catch(err){ console.warn(err); } }
+  if(phase==='board')    { renderLeaderboard(); renderGPB(); updateStats(); renderTiebreakerPanel(); try{ appendTimingCard('admin-board',chatMyName()); prependRecapCard('admin-board'); }catch(err){ console.warn(err); } }
   if(phase==='power')    renderPowerRankings();
   if(phase==='history')  { renderHistoryList(); renderCustomBadges(); renderCustomBadgePlayerSelect(); }
 }
@@ -5727,6 +5741,7 @@ window.muteChatUser=async(uid,name)=>{
   const lines=['has been silenced for','is in timeout for','has been sent to chat jail for','lost chat privileges for'];
   const upd={
     ['chatMutes/'+uid]:{until:now+mins*60000,minutes:mins,name,at:now},
+    ['chatMuteLog/'+feedKey()]:{uid,name,minutes:mins,at:now},
     ['chat/'+feedKey()]:{uid:'system',name:'Commissioner',system:true,text:'🔇 '+name+' '+lines[Math.floor(Math.random()*lines.length)]+' '+mins+' minute'+(mins===1?'':'s')+'.',at:now}
   };
   if(bd&&!(S.tourneyBadges&&S.tourneyBadges[name]&&S.tourneyBadges[name]['chat-jail'])){
@@ -5873,6 +5888,213 @@ function refreshTimingCards(){
     if(el('pview-lb-timing')&&!el('pview-lb').classList.contains('hidden')) appendTimingCard('pview-lb',chatMyName());
     if(el('admin-board-timing')&&!el('admin-board').classList.contains('hidden')) appendTimingCard('admin-board',chatMyName());
   }catch(e){}
+}
+
+// ── TOURNAMENT RECAP ──────────────────────────────────────
+function recapFirst(n){ return String(n||'').trim().split(/\s+/)[0]; }
+function recapTeam(t){ return t?[t.p1,t.p2,t.p3].filter(Boolean):[]; }
+function recapTeamName(t){ return recapTeam(t).map(recapFirst).join(' & '); }
+function recapTop(obj,min){
+  const e=Object.entries(obj).filter(([,v])=>v>=(min||1));
+  if(!e.length) return null;
+  const mx=Math.max(...e.map(([,v])=>v));
+  return {who:e.filter(([,v])=>v===mx).map(([k])=>k),val:mx};
+}
+function computeRecap(){
+  const skip=getSkippedIds(), now=Date.now(), R={};
+  const players=S.players||[];
+  const sorted=players.slice().sort((a,b)=>getTotalPts(b)-getTotalPts(a));
+  R.standings=sorted.map((p,i)=>({p,place:i+1,pts:getTotalPts(p)}));
+  const T=computeTiming(); R.T=T;
+  // games
+  const done=T.games.filter(x=>!x.running);
+  R.gamesTimed=done;
+  if(T.games.length){
+    const first=Math.min(...T.games.map(x=>x.start));
+    const last=Math.max(...T.games.map(x=>x.end||now));
+    R.dayLength=last-first;
+  }
+  if(done.length){
+    R.longestGame=done.reduce((a,b)=>b.dur>a.dur?b:a);
+    R.shortestGame=done.reduce((a,b)=>b.dur<a.dur?b:a);
+  }
+  // matches
+  const all=[];
+  (S.games||[]).forEach((g,gi)=>{
+    if(skip.has(g.id)||!isMatchGame(g)) return;
+    const b=S.bs&&S.bs[g.id]; if(!b) return;
+    getAllMatchesFromBracket(b,g.format).forEach((m,mi)=>{
+      if(!m||!m.winner||!m.t1||!m.t2||m.score1==null||m.score2==null) return;
+      const x=(S.matchTimes&&S.matchTimes[g.id]&&S.matchTimes[g.id][m.id])||{};
+      const t1w=m.winner.id===m.t1.id;
+      all.push({g,m,win:t1w?m.t1:m.t2,lose:t1w?m.t2:m.t1,ws:t1w?m.score1:m.score2,ls:t1w?m.score2:m.score1,
+        order:(x.submittedAt||x.doneAt||0)||(gi*1000+mi)});
+    });
+  });
+  R.matchCount=all.length;
+  const rec={}, ot={}, heart={}, streakBest={};
+  const bump=(o,p,n)=>{ o[p]=(o[p]||0)+(n==null?1:n); };
+  all.slice().sort((a,b)=>a.order-b.order).forEach(x=>{
+    recapTeam(x.win).forEach(p=>{ rec[p]=rec[p]||{w:0,l:0,cur:0}; rec[p].w++; rec[p].cur++; streakBest[p]=Math.max(streakBest[p]||0,rec[p].cur); });
+    recapTeam(x.lose).forEach(p=>{ rec[p]=rec[p]||{w:0,l:0,cur:0}; rec[p].l++; rec[p].cur=0; });
+    if(x.m.wasOT) [...recapTeam(x.win),...recapTeam(x.lose)].forEach(p=>bump(ot,p));
+    if(x.ws-x.ls<=2&&x.ws!==x.ls) recapTeam(x.lose).forEach(p=>bump(heart,p));
+  });
+  R.record=rec;
+  if(all.length){
+    const bl=all.reduce((a,b)=>(b.ws-b.ls)>(a.ws-a.ls)?b:a);
+    if(bl.ws-bl.ls>0) R.blowout=bl;
+    const ug=all.filter(x=>x.ws>0).reduce((a,b)=>(!a||b.ws<a.ws)?b:a,null);
+    if(ug) R.ugliest=ug;
+  }
+  R.ot=recapTop(ot,2); R.heart=recapTop(heart,2); R.streak=recapTop(streakBest,3);
+  // speed
+  const sp=Object.entries(T.players).filter(([,r])=>r.n>=3);
+  if(sp.length>=2){
+    const mn=Math.min(...sp.map(([,r])=>r.avg)), mx=Math.max(...sp.map(([,r])=>r.avg));
+    if(mx>mn){ R.fastest={who:sp.filter(([,r])=>r.avg===mn).map(([p])=>p),val:mn}; R.slowest={who:sp.filter(([,r])=>r.avg===mx).map(([p])=>p),val:mx}; }
+  }
+  if(T.matches.length>=2){
+    const s=T.matches.slice().sort((a,b)=>a.dur-b.dur);
+    R.quickMatch=s[0]; R.longMatch=s[s.length-1];
+  }
+  // disputes
+  const dc={}; Object.values(S.disputeLog||{}).forEach(d=>{ if(d&&d.player) bump(dc,d.player); });
+  R.disputes=recapTop(dc,1);
+  // chat
+  const msgs=Object.values(S.chat||{}).filter(m=>m&&m.text&&!m.system);
+  R.chatCount=msgs.length;
+  const chatty={}, ment={};
+  msgs.forEach(m=>{ bump(chatty,m.name||'?'); if(!m.group) Object.keys(m.mentions||{}).forEach(u=>bump(ment,u)); });
+  R.chatty=recapTop(chatty,3);
+  const nameOf={}; chatPeople().forEach(p=>{ if(p.uid) nameOf[p.uid]=p.name; });
+  const mt=recapTop(ment,2); if(mt) R.mentioned={who:mt.who.map(u=>nameOf[u]||'?'),val:mt.val};
+  const jail={}, jmin={};
+  Object.values(S.chatMuteLog||{}).forEach(j=>{ if(j&&j.name){ bump(jail,j.name); bump(jmin,j.name,j.minutes||0); } });
+  const jt=recapTop(jail,1); if(jt) R.jail={who:jt.who,val:jt.val,mins:jt.who.reduce((s,n)=>s+(jmin[n]||0),0)};
+  // badges
+  const bc={}, spicy={};
+  const addB=(p,name,sp)=>{ bc[p]=bc[p]||new Set(); bc[p].add(name); if(sp){ spicy[p]=spicy[p]||new Set(); spicy[p].add(name); } };
+  Object.entries(S.tourneyBadges||{}).forEach(([p,o])=>Object.keys(o||{}).forEach(bid=>{ const bd=BADGE_DEFS.find(b=>b.id===bid); if(bd) addB(p,bd.name,bd.spicy); }));
+  (S.customBadges||[]).forEach(b=>{ if(b&&b.player) addB(b.player,b.name,b.spicy); });
+  R.badgeTotal=Object.keys(S.badgeFeed||{}).length;
+  const bcount={}; Object.entries(bc).forEach(([p,s])=>{ if(p!=='undefined') bcount[p]=s.size; });
+  const scount={}; Object.entries(spicy).forEach(([p,s])=>{ scount[p]=s.size; });
+  R.collector=recapTop(bcount,2); R.spicy=recapTop(scount,2);
+  R.badgesByPlayer=bc;
+  return R;
+}
+function recapWho(x){ return x.who.map(feedEsc).join(' & '); }
+function recapRow(icon,title,who,detail){
+  return '<div class="recap-row"><div class="recap-ic">'+icon+'</div><div style="flex:1;min-width:0"><div class="recap-t">'+title+'</div>'
+    +'<div class="recap-w">'+who+'</div>'+(detail?'<div class="recap-d">'+detail+'</div>':'')+'</div></div>';
+}
+function recapHTML(myName){
+  const R=computeRecap(), yr=S.tourneyYear||new Date().getFullYear();
+  const champ=R.standings[0];
+  let h='<div class="recap">';
+  h+='<div class="recap-hero"><div style="font-size:11px;letter-spacing:2px;color:#c8c0ff;font-weight:700">TOURNAMENT RECAP</div>'
+    +'<div style="font-size:22px;font-weight:800;color:#fff;margin:4px 0">'+feedEsc(S.tourneyName||'Gentleman\'s Games')+'</div>'
+    +(champ?'<div style="font-size:40px;margin-top:6px">🏆</div><div style="font-size:20px;font-weight:800;color:#f6e2a8">'+feedEsc(champ.p)+'</div><div style="font-size:12px;color:#c8c0ff">'+yr+' Champion · '+champ.pts+' pts</div>':'')
+    +'</div>';
+  // numbers
+  const nums=[];
+  if(R.dayLength) nums.push([fmtDur(R.dayLength),'of games']);
+  nums.push([R.matchCount,'matches']);
+  nums.push([R.chatCount,'chat messages']);
+  nums.push([R.badgeTotal,'badges given']);
+  h+='<div class="recap-sec">📊 The day in numbers</div><div class="recap-nums">'+nums.map(([v,l])=>'<div><b>'+v+'</b><span>'+l+'</span></div>').join('')+'</div>';
+  if(R.longestGame) h+='<div class="recap-d" style="text-align:center;margin-top:6px">Longest game: <b>'+feedEsc(R.longestGame.g.name)+'</b> ('+fmtDur(R.longestGame.dur)+')'+(R.shortestGame&&R.shortestGame!==R.longestGame?' · Quickest: <b>'+feedEsc(R.shortestGame.g.name)+'</b> ('+fmtDur(R.shortestGame.dur)+')':'')+'</div>';
+  // podium
+  h+='<div class="recap-sec">🥇 Podium</div>';
+  R.standings.slice(0,3).forEach((s,i)=>{ h+='<div class="recap-pod"><span>'+['🥇','🥈','🥉'][i]+' '+feedEsc(s.p)+'</span><b>'+s.pts+' pts</b></div>'; });
+  const last=R.standings[R.standings.length-1];
+  if(R.standings.length>3&&last) h+='<div class="recap-pod" style="opacity:.8"><span>💀 '+feedEsc(last.p)+' <span style="font-size:11px">(someone had to)</span></span><b>'+last.pts+' pts</b></div>';
+  // superlatives
+  let s='';
+  if(R.fastest) s+=recapRow('⚡','Fastest player',recapWho(R.fastest),fmtMin(R.fastest.val)+' per match');
+  if(R.slowest) s+=recapRow('🦥','Slowest player',recapWho(R.slowest),fmtMin(R.slowest.val)+' per match. We aged waiting.');
+  if(R.longMatch) s+=recapRow('⏳','Longest match',feedEsc(recapTeamName(R.longMatch.m.t1))+' vs '+feedEsc(recapTeamName(R.longMatch.m.t2)),feedEsc(R.longMatch.g.name)+', '+fmtMin(R.longMatch.dur));
+  if(R.quickMatch) s+=recapRow('🏎️','Quickest match',feedEsc(recapTeamName(R.quickMatch.m.t1))+' vs '+feedEsc(recapTeamName(R.quickMatch.m.t2)),feedEsc(R.quickMatch.g.name)+', '+fmtMin(R.quickMatch.dur));
+  if(R.blowout) s+=recapRow('💣','Biggest blowout',feedEsc(recapTeamName(R.blowout.win))+' over '+feedEsc(recapTeamName(R.blowout.lose)),feedEsc(R.blowout.g.name)+', '+R.blowout.ws+'–'+R.blowout.ls);
+  if(R.streak) s+=recapRow('🔥','Longest win streak',recapWho(R.streak),R.streak.val+' straight wins');
+  if(R.ot) s+=recapRow('🧊','Overtime addict',recapWho(R.ot),R.ot.val+' match'+(R.ot.val===1?'':'es')+' went to OT');
+  if(R.heart) s+=recapRow('😬','Heartbreaker',recapWho(R.heart),R.heart.val+' losses by 1 or 2 points');
+  if(R.ugliest) s+=recapRow('🍀','Ugliest win',feedEsc(recapTeamName(R.ugliest.win)),'Won '+feedEsc(R.ugliest.g.name)+' with just '+R.ugliest.ws+' points');
+  if(R.disputes) s+=recapRow('🚩','Most disputes',recapWho(R.disputes),R.disputes.val+' score dispute'+(R.disputes.val===1?'':'s')+' filed');
+  if(R.chatty) s+=recapRow('💬','Chattiest',recapWho(R.chatty),R.chatty.val+' messages');
+  if(R.mentioned) s+=recapRow('📣','Most @mentioned',recapWho(R.mentioned),R.mentioned.val+' mentions. Popular or blamed?');
+  if(R.jail) s+=recapRow('🤐','Chat jail regular',recapWho(R.jail),R.jail.val+' time'+(R.jail.val===1?'':'s')+' silenced, '+R.jail.mins+' minutes served');
+  if(R.collector) s+=recapRow('🏅','Badge collector',recapWho(R.collector),R.collector.val+' badges');
+  if(R.spicy) s+=recapRow('🌶️','Spiciest collection',recapWho(R.spicy),R.spicy.val+' spicy badges');
+  if(s) h+='<div class="recap-sec">🎖️ Superlatives</div>'+s;
+  // your day
+  const me=(S.players||[]).find(p=>String(p).trim().toLowerCase()===String(myName||'').trim().toLowerCase());
+  if(me){
+    const st=R.standings.find(x=>x.p===me)||{}, rc=R.record[me]||{w:0,l:0}, tp=R.T.players[me];
+    let best=null;
+    (S.games||[]).forEach(g=>{ const v=S.points&&S.points[g.id]&&S.points[g.id][me]; if(v!=null&&(!best||v>best.v)) best={g,v}; });
+    const bl=[...((R.badgesByPlayer[me])||[])];
+    h+='<div class="recap-sec">🫵 Your day</div><div class="recap-me">'
+      +'<div class="recap-nums"><div><b>#'+(st.place||'—')+'</b><span>finish</span></div><div><b>'+rc.w+'–'+rc.l+'</b><span>record</span></div><div><b>'+(tp?(tp.avg/60000).toFixed(1):'—')+'</b><span>min / match</span></div></div>'
+      +(best?'<div class="recap-d" style="margin-top:6px">Best game: <b>'+feedEsc(best.g.name)+'</b> ('+best.v+' pts)</div>':'')
+      +(bl.length?'<div class="recap-d" style="margin-top:4px">Badges: '+bl.map(feedEsc).join(', ')+'</div>':'')
+      +'</div>';
+  }
+  h+='</div>';
+  return h;
+}
+function recapText(){
+  const R=computeRecap(), yr=S.tourneyYear||new Date().getFullYear(), L=[];
+  L.push('🏆 '+(S.tourneyName||'Gentleman\'s Games')+' '+yr+' Recap');
+  if(R.standings[0]) L.push('Champion: '+R.standings[0].p+' ('+R.standings[0].pts+' pts)');
+  R.standings.slice(1,3).forEach((s,i)=>L.push(['🥈','🥉'][i]+' '+s.p+' ('+s.pts+')'));
+  L.push('');
+  if(R.dayLength) L.push('⏱ '+fmtDur(R.dayLength)+' of games, '+R.matchCount+' matches, '+R.chatCount+' chat messages');
+  const w=x=>x.who.join(' & ');
+  if(R.fastest) L.push('⚡ Fastest: '+w(R.fastest)+' ('+fmtMin(R.fastest.val)+'/match)');
+  if(R.slowest) L.push('🦥 Slowest: '+w(R.slowest)+' ('+fmtMin(R.slowest.val)+'/match)');
+  if(R.blowout) L.push('💣 Biggest blowout: '+recapTeamName(R.blowout.win)+' '+R.blowout.ws+'–'+R.blowout.ls+' ('+R.blowout.g.name+')');
+  if(R.longMatch) L.push('⏳ Longest match: '+recapTeamName(R.longMatch.m.t1)+' vs '+recapTeamName(R.longMatch.m.t2)+' ('+fmtMin(R.longMatch.dur)+')');
+  if(R.streak) L.push('🔥 Win streak: '+w(R.streak)+' ('+R.streak.val+')');
+  if(R.heart) L.push('😬 Heartbreaker: '+w(R.heart));
+  if(R.disputes) L.push('🚩 Most disputes: '+w(R.disputes)+' ('+R.disputes.val+')');
+  if(R.chatty) L.push('💬 Chattiest: '+w(R.chatty)+' ('+R.chatty.val+' msgs)');
+  if(R.jail) L.push('🤐 Chat jail: '+w(R.jail)+' ('+R.jail.mins+' min served)');
+  if(R.collector) L.push('🏅 Most badges: '+w(R.collector)+' ('+R.collector.val+')');
+  L.push('', APP_DOMAIN);
+  return L.join('\n');
+}
+window.openRecap=()=>{
+  if(!S) return;
+  el('modal-area').innerHTML='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-height:92vh;overflow-y:auto;padding-top:10px">'
+    +'<div class="modal-handle"></div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:6px"><button class="btn btn-sm btn-primary" onclick="shareRecap()" style="width:auto">📤 Share</button><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
+    +recapHTML(chatMyName())+'</div></div>';
+};
+window.shareRecap=async()=>{
+  const text=recapText();
+  try{
+    if(navigator.share){ await navigator.share({title:'Tournament Recap',text}); return; }
+  }catch(e){ if(e&&e.name==='AbortError') return; }
+  try{ await navigator.clipboard.writeText(text); alert('Recap copied. Paste it into the group text!'); }
+  catch(e){ prompt('Copy this recap:',text); }
+};
+window.publishRecap=async()=>{ await update(ref(db,'tournaments/'+currentTourneyId),{recapReady:true}); };
+function recapButtonCard(){
+  if(!S) return '';
+  const ready=S.recapReady||S.tournamentFinalized;
+  if(!ready&&!isTourneyAdmin) return '';
+  return '<div class="card" style="background:linear-gradient(135deg,#1e1650,#534AB7);border:none;color:#fff;cursor:pointer" onclick="openRecap()">'
+    +'<div style="display:flex;align-items:center;gap:12px"><div style="font-size:30px">🏆</div><div style="flex:1"><div style="font-weight:800;font-size:15px">Tournament Recap</div>'
+    +'<div style="font-size:12px;opacity:.8">'+(ready?'Highlights, superlatives and your day':'Admin preview (players see this after final awards)')+'</div></div><div style="font-size:20px">›</div></div></div>';
+}
+function prependRecapCard(containerId){
+  const e=el(containerId); if(!e) return;
+  el(containerId+'-recap')?.remove();
+  const h=recapButtonCard(); if(!h) return;
+  const d=document.createElement('div'); d.id=containerId+'-recap'; d.innerHTML=h;
+  e.insertBefore(d,e.firstChild);
 }
 
 // ── YEARLY APP ICON ───────────────────────────────────────
@@ -6201,6 +6423,7 @@ window.sendTournamentAwards=async()=>{
   upd.activeAnnouncement={gameId:'__final',gameName:'🏆 Final Results '+yr,at:now,msg:window._tAwardsMsg||'',
     standings:sorted.map((p,i)=>({place:i+1,label:p,pts:getTotalPts(p)})),badges:byP,existingBadges:prev};
   upd.announcementAcks=null;
+  upd.recapReady=true;
   if(S.tournamentFinalized){
     const nb=JSON.parse(JSON.stringify(S.newBadgesEarned||{}));
     Object.entries(byP).forEach(([p,bids])=>{ nb[p]=nb[p]||[]; bids.forEach(bid=>{ const bd=BADGE_DEFS.find(b=>b.id===bid); if(bd&&!nb[p].some(x=>x.name===bd.name)) nb[p].push({icon:bd.icon,name:bd.name}); }); });
@@ -6425,7 +6648,7 @@ function showPlayerTab(tab,myName){
   if(tab==='chat')   renderChat('p');
   if(tab==='games')  renderPlayerGames(myName);
   if(tab==='info')   renderGameInfo();
-  if(tab==='lb')     { renderPlayerLB(myName); renderAllPlayerBadges(); try{ appendTimingCard('pview-lb',myName||chatMyName()); }catch(err){ console.warn(err); } }
+  if(tab==='lb')     { renderPlayerLB(myName); renderAllPlayerBadges(); try{ appendTimingCard('pview-lb',myName||chatMyName()); prependRecapCard('pview-lb'); }catch(err){ console.warn(err); } }
 }
 function renderGameInfo(){
   const e=el('pview-info'); if(!e) return;
@@ -8763,7 +8986,9 @@ window.showBadgeTooltip = (el)=>{
 window.dismissAnnouncement = async ()=>{
   const myName=actingAsName||(userProfile?.name)||'';
   if(!myName) return;
+  const wasFinal=S&&S.activeAnnouncement&&S.activeAnnouncement.gameId==='__final';
   await update(ref(db,'tournaments/'+currentTourneyId),{['announcementAcks/'+myName]:true});
+  if(wasFinal) setTimeout(()=>openRecap(),400);
 };
 
 window.submitOTWinner = async (btn)=>{
