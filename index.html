@@ -500,7 +500,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v98.16.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v99.16.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -574,7 +574,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v98.16.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v99.16.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -674,6 +674,8 @@ import { getAuth, signInWithPhoneNumber, signInWithEmailLink,
          RecaptchaVerifier, onAuthStateChanged, signOut as fbSignOut,
          GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult }
                                     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getMessaging, getToken, isSupported as fcmSupported }
+                                    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js';
 
 // ── CONFIG ────────────────────────────────────────────────
 const firebaseConfig = {
@@ -688,6 +690,8 @@ const firebaseConfig = {
 const SUPER_ADMIN_EMAIL = 'bergman.bryant@gmail.com';
 const APP_DOMAIN        = 'https://gentlemen-games.com';
 const SMS_DAILY_LIMIT   = 20;
+// Firebase console → Project settings → Cloud Messaging → Web Push certificates → Key pair
+const VAPID_KEY         = 'BNgKvHvghDili1sVzdUk4_e1V9GGjiWDmcYf1YAypjdQm5_kOQx9b4I-5b93E8cWOWkPnDdDepamO_7Ek6JqTBU';
 const fmtL = {'single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools',
   'round-robin':'Round robin','pool-playoff':'Pools+playoff','score-low':'Low score',
   'score-high':'High score','multi-round-high':'Multi-round hi','multi-round-low':'Multi-round lo',
@@ -2220,7 +2224,7 @@ function buildTournamentShell(){
     <div id="admin-players" class="hidden"></div>
     <div id="admin-games" class="hidden"></div>
     <div id="admin-rankings" class="hidden"></div>
-    <div id="admin-scores" class="hidden"><div id="admin-scores-main"></div><div id="badge-feed-admin" style="margin-top:4px"></div></div>
+    <div id="admin-scores" class="hidden"><div id="push-prompt-admin"></div><div id="admin-scores-main"></div><div id="badge-feed-admin" style="margin-top:4px"></div></div>
     <div id="admin-board" class="hidden"></div>
     <div id="admin-power" class="hidden"></div>
     <div id="admin-history" class="hidden"></div>
@@ -2239,7 +2243,7 @@ function buildTournamentShell(){
       <div class="ptab-btn" id="ptab-rank" data-tab="rank">🎯 Rankings</div>
       <div class="ptab-btn" id="ptab-vote" data-tab="vote" style="display:none">🗳️ Vote</div>
     </div>
-    <div id="pview-active"><div id="pview-active-main"></div><div id="badge-feed-player" style="margin-top:4px"></div></div>
+    <div id="pview-active"><div id="push-prompt-player"></div><div id="pview-active-main"></div><div id="badge-feed-player" style="margin-top:4px"></div></div>
     <div id="pview-lb" class="hidden"></div>
     <div id="pview-games" class="hidden"></div>
     <div id="pview-info" class="hidden"></div>
@@ -5220,6 +5224,68 @@ function renderCustomBadgePlayerSelect(){
 
 
 
+
+// ── PUSH ALERTS ───────────────────────────────────────────
+function pushEnv(){
+  const ua=navigator.userAgent||'';
+  const ios=/iPhone|iPad|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const standalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+  const hasApi=('Notification' in window)&&('serviceWorker' in navigator)&&('PushManager' in window);
+  return {ios,standalone,hasApi};
+}
+function pushLocalOn(){ try{ return !!currentUser&&localStorage.getItem('gg_push_on')===currentUser.uid; }catch(e){ return false; } }
+function pushTokenKey(t){ let h=5381; for(let i=0;i<t.length;i++) h=((h*33)^t.charCodeAt(i))>>>0; return 't'+h.toString(36)+t.length; }
+function pushPromptHTML(){
+  if(!currentUser) return '';
+  const env=pushEnv();
+  const box=(inner)=>'<div class="card" style="padding:10px 12px;display:flex;align-items:center;gap:10px;background:rgba(83,74,183,.08);border-color:rgba(83,74,183,.25)">'+inner+'</div>';
+  if(env.hasApi&&Notification.permission==='granted'&&pushLocalOn()) return '';
+  if(env.ios&&!env.standalone){
+    return box('<span style="font-size:22px">📲</span><div style="font-size:12px;line-height:1.35"><b>Want alerts on your phone?</b><br>Tap Share → <b>Add to Home Screen</b>, then open the app from your home screen.</div>');
+  }
+  if(!env.hasApi) return '';
+  if(Notification.permission==='denied'){
+    return box('<span style="font-size:22px">🔕</span><div style="font-size:12px">Alerts are blocked for this site. Turn them on in your phone or browser settings.</div>');
+  }
+  return box('<span style="font-size:22px">🔔</span><div style="flex:1;font-size:12px;line-height:1.35"><b>Get alerts</b><br>Badges, scores to approve, next game.</div>'
+    +'<button class="btn btn-primary btn-sm" onclick="enablePush(this)" style="width:auto">Turn on</button>');
+}
+function renderPushPrompts(){
+  ['push-prompt-player','push-prompt-admin'].forEach(id=>{ const e=el(id); if(e){ const h=pushPromptHTML(); if(e.innerHTML!==h) e.innerHTML=h; } });
+}
+async function savePushToken(){
+  if(VAPID_KEY.startsWith('PASTE')) throw new Error('Push alerts are not set up yet (web push key missing).');
+  if(!(await fcmSupported())) throw new Error('This browser does not support push alerts.');
+  const reg=await navigator.serviceWorker.register('/sw.js');
+  await navigator.serviceWorker.ready;
+  const token=await getToken(getMessaging(app),{vapidKey:VAPID_KEY,serviceWorkerRegistration:reg});
+  if(!token) throw new Error('No push token returned.');
+  await set(ref(db,'pushTokens/'+currentUser.uid+'/'+pushTokenKey(token)),{token,at:Date.now(),ua:(navigator.userAgent||'').slice(0,150)});
+  try{ localStorage.setItem('gg_push_on',currentUser.uid); }catch(e){}
+  return token;
+}
+window.enablePush=async(btn)=>{
+  if(btn){ btn.disabled=true; btn.textContent='…'; }
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){ renderPushPrompts(); return; }
+    await savePushToken();
+    renderPushPrompts();
+    alert('🔔 Alerts are on for this device.');
+  }catch(err){
+    alert('Could not turn on alerts: '+(err&&err.message||err));
+    if(btn){ btn.disabled=false; btn.textContent='Turn on'; }
+  }
+};
+let _pushRefreshed=false;
+function refreshPushToken(){
+  if(_pushRefreshed||!currentUser) return;
+  const env=pushEnv();
+  if(!env.hasApi||Notification.permission!=='granted'||!pushLocalOn()) return;
+  _pushRefreshed=true;
+  savePushToken().catch(err=>console.warn('push refresh',err));
+}
+
 // ── AUTO BADGES: live + end-of-day awards ─────────────────
 function ensureGameChampDefs(){
   const presets=['cornhole','kanjam','kan jam','beer die','beer darts','bowling','golf','spikeball','cocaine','bucketball'];
@@ -5411,6 +5477,7 @@ function badgeFeedHTML(items,{me='',admin=false,box='x',limit=5}={}){
 }
 function renderBadgeFeeds(){
   if(!S) return;
+  try{ renderPushPrompts(); refreshPushToken(); }catch(e){}
   const items=getBadgeFeed(), me=feedMyName();
   const p=el('badge-feed-player'); if(p) p.innerHTML=badgeFeedHTML(items,{me,box:'player'});
   const a=el('badge-feed-admin');  if(a) a.innerHTML=badgeFeedHTML(items,{me,admin:true,box:'admin'});
