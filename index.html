@@ -167,6 +167,23 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .ig-caption{position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:11px;font-weight:700}
 .fc-opt{display:flex;align-items:center;gap:8px;padding:10px 6px;border-bottom:1px solid rgba(128,128,128,.12);font-size:14px}
 .fc-opt input{width:auto;margin:0}
+.bf-chk{display:flex;gap:8px;align-items:center;font-size:13px;margin:8px 0}
+.bf-chk input{width:auto}
+.bf-card{background:linear-gradient(160deg,#14331f,#0c2417);border-radius:16px;overflow:hidden;margin-bottom:10px}
+.bf-head{padding:13px 16px 10px;border-bottom:1px solid rgba(255,255,255,.08)}
+.bf-kicker{font-size:10px;font-weight:700;color:#8fd6a5;letter-spacing:1.2px;margin-bottom:3px}
+.bf-title{font-size:19px;font-weight:800;color:#fff;line-height:1.15}
+.bf-rows{padding:6px 16px 2px}
+.bf-row{display:flex;gap:10px;align-items:flex-start;padding:7px 0}
+.bf-row>span{font-size:16px;line-height:1.2}
+.bf-l{font-size:10px;font-weight:700;color:#8fd6a5;letter-spacing:.8px;text-transform:uppercase;margin-bottom:2px}
+.bf-v{font-size:14px;font-weight:600;color:#fff;line-height:1.3}
+.bf-sec{padding:8px 16px 4px;border-top:1px solid rgba(255,255,255,.07)}
+.bf-order{display:flex;flex-wrap:wrap;gap:5px;margin:5px 0 4px}
+.bf-chip{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.09);color:#fff;font-size:12px;font-weight:600;padding:5px 9px;border-radius:999px}
+.bf-chip b{color:#8fd6a5;font-size:10px}
+.bf-note{font-size:12.5px;color:rgba(255,255,255,.82);line-height:1.45;margin:4px 0}
+.bf-admin{padding:10px 12px;display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .chat-notice{background:rgba(26,115,232,.08);border-color:rgba(26,115,232,.4);color:#174ea6}
 [data-theme="dark"] .chat-notice{color:#8ab4f8}
 .chat-jail{display:flex;align-items:center;gap:10px;align-self:stretch;background:rgba(192,57,43,.1);border:1.5px solid rgba(192,57,43,.45);border-radius:14px;padding:8px 10px;margin:8px 0;font-size:13px;color:#8e2a1f}
@@ -663,7 +680,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v122.17.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v123.17.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -737,7 +754,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v122.17.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v123.17.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2445,7 +2462,7 @@ function buildTournamentShell(){
     <div id="admin-players" class="hidden"></div>
     <div id="admin-games" class="hidden"></div>
     <div id="admin-rankings" class="hidden"></div>
-    <div id="admin-scores" class="hidden"><div id="push-prompt-admin"></div><div id="next-game-admin"></div><div id="boards-admin"></div><div id="admin-scores-main"></div></div>
+    <div id="admin-scores" class="hidden"><div id="push-prompt-admin"></div><div id="next-game-admin"></div><div id="brief-admin"></div><div id="boards-admin"></div><div id="admin-scores-main"></div></div>
     <div id="admin-board" class="hidden"></div>
     <div id="admin-power" class="hidden"></div>
     <div id="admin-history" class="hidden"></div>
@@ -2456,6 +2473,7 @@ function buildTournamentShell(){
   </div>
   <div id="player-area" class="hidden">
     <div class="card hidden" id="player-header-card"></div>
+    <div id="brief-player"></div>
     <div class="ptab">
       <div class="ptab-btn active" id="ptab-active" data-tab="active"><span class="pi">🎯</span>Now</div>
       <div class="ptab-btn" id="ptab-lb" data-tab="lb"><span class="pi">🏅</span>Standings</div>
@@ -3009,7 +3027,8 @@ function renderStartTourneyCard(){
   const e=el('start-tourney-body'); if(!e) return;
   const started=S.tournamentStarted;
   const pc=(S.players||[]).length, gc=(S.games||[]).length;
-  if(started){ e.innerHTML=`<div class="alert alert-success">🚀 Tournament started! ${pc} players · ${gc} games</div>`; return; }
+  if(started){ e.innerHTML=`<div class="alert alert-success">🚀 Tournament started! ${pc} players · ${gc} games</div>
+    <button class="btn" onclick="openBriefSheet()" style="margin-top:8px">📣 ${(S.brief&&S.brief.at)?'Edit game day plan':'Send game day plan'}</button>`; return; }
   const ready=pc>=4&&gc>=1;
   e.innerHTML=`<div style="font-size:12px;color:#888;margin-bottom:10px">
     <span style="${pc>=4?'color:#27500A;font-weight:600':''}">${pc>=4?'✓':'○'} ${pc} players${pc<4?' (need 4+)':''}</span><br>
@@ -3024,7 +3043,14 @@ window.startTournament = async ()=>{
   if(!confirm('Start the tournament?')) return;
   const games=(S.games||[]).map(g=>({...g,status:'ranking'}));
   await update(ref(db,'tournaments/'+currentTourneyId),{tournamentStarted:true,games});
-  setTimeout(()=>openNextGamePrompt(),400);
+  if(!(S.brief&&S.brief.at)){
+    setTimeout(()=>{
+      try{ openBriefSheet(); }catch(e){ openNextGamePrompt(); return; }
+      const iv=setInterval(()=>{ if(!el('modal-area')?.innerHTML){ clearInterval(iv); try{ openNextGamePrompt(); }catch(e){} } },500);
+      setTimeout(()=>clearInterval(iv),10*60000);
+    },400);
+  }
+  else setTimeout(()=>openNextGamePrompt(),400);
 };
 
 // ── GAMES ─────────────────────────────────────────────────
@@ -5609,7 +5635,7 @@ function chatListHTML(admin){
     if(it.system){
       const txt=String(it.text||'');
       if(it.kind==='notice'){
-        h+='<div class="chat-jail chat-notice"><div class="chat-jail-ic">📣</div><div style="flex:1;min-width:0"><div class="chat-jail-t">'+feedEsc(it.title||'ANNOUNCEMENT')+'</div><div>'+feedEsc(txt)+'</div></div>'
+        h+='<div class="chat-jail chat-notice"><div class="chat-jail-ic">📣</div><div style="flex:1;min-width:0"><div class="chat-jail-t">'+feedEsc(it.title||'ANNOUNCEMENT')+'</div><div style="white-space:pre-line">'+feedEsc(txt)+'</div>'+(it.brief?'<button class="btn btn-sm" onclick="openBriefView()" style="width:auto;margin-top:6px">See the full plan</button>':'')+'</div>'
           +'<span class="chat-time">'+feedAgo(it.at)+'</span>'+(admin?' <a href="#" class="chat-x" onclick="deleteChat(\''+it.k+'\');return false">✕</a>':'')+'</div>';
         prev=null; return;
       }
@@ -6767,7 +6793,8 @@ window.openMoreSheet=()=>{
   const spec=isSpectatorHere(), vote=el('ptab-vote')&&el('ptab-vote').style.display!=='none';
   const it=(ic,l,fn)=>'<button class="more-item" onclick="closeModal();'+fn+'"><span>'+ic+'</span>'+l+'</button>';
   ggSheet('Menu',
-    it('📋','Game rules',"goPTab('info')")
+    ((S.brief&&S.brief.at)?it('📣','Game day info','openBriefView()'):'')
+    +it('📋','Game rules',"goPTab('info')")
     +(spec?'':it('👥','My teams',"goPTab('teams')"))
     +(!spec&&rankingsNeeded()?it('🎯','Rankings',"goPTab('rank')"):'')
     +(vote?it('🗳️','Vote',"goPTab('vote')"):'')
@@ -6867,12 +6894,114 @@ window.changeMyPhoto=()=>{
 };
 function renderUXCards(){
   if(!S) return;
+  try{ renderBriefCards(); }catch(e){}
   const mm=el('my-match-player'); if(mm){ const h=myMatchCardHTML(); if(mm.dataset.h!==h){ mm.innerHTML=h; mm.dataset.h=h; } }
   const bc=el('boards-admin'); if(bc){ const h=isTourneyAdmin?boardsCardHTML():''; if(bc.dataset.h!==h){ bc.innerHTML=h; bc.dataset.h=h; } }
   const su=el('admin-setup'); if(su&&!su.classList.contains('hidden')) renderChecklist();
   syncMoreTab();
 }
 setInterval(()=>{ try{ renderUXCards(); }catch(e){} },30000);
+
+// ── GAME DAY BRIEFING ─────────────────────────────────────
+function briefDefaults(){
+  const b=S.brief||{};
+  const order=b.order!=null?b.order:(S.games||[]).map((g,i)=>(i+1)+'. '+g.name).join('\n');
+  return {where:b.where||'',when:b.when||'',order:order,notes:b.notes||'',fmtNote:b.fmtNote!==false,betaNote:b.betaNote!==false};
+}
+function briefLines(b){
+  const L=[];
+  if(b.where) L.push(['📍','Where',b.where]);
+  if(b.when) L.push(['🕐','Start',b.when]);
+  return L;
+}
+function briefOrderList(b){
+  return String(b.order||'').split('\n').map(s=>s.trim()).filter(Boolean);
+}
+function briefNoteList(b){
+  const n=[];
+  if(b.notes) String(b.notes).split('\n').map(s=>s.trim()).filter(Boolean).forEach(s=>n.push(s));
+  if(b.fmtNote) n.push('If we start running long, the format for games we haven’t played yet may get trimmed down — you’ll get an alert if that happens.');
+  if(b.betaNote) n.push('First year running this on the app. If you see anything broken or confusing, tell '+(briefBy()||'the commissioner')+'.');
+  return n;
+}
+function briefBy(){ try{ return (S.brief&&S.brief.by)||''; }catch(e){ return ''; } }
+window.openBriefSheet=()=>{
+  if(!isTourneyAdmin) return;
+  const d=briefDefaults(), sent=!!(S.brief&&S.brief.at);
+  ggSheet('📣 Game day briefing',
+    '<div style="font-size:12px;color:#888;margin-bottom:10px">'+(sent?'Sent '+ngFmtClock(S.brief.at)+'. Update it and everyone gets a fresh alert.':'A quick rundown everyone sees when they open the app — where to meet, when we start, and the game order.')+'</div>'
+    +'<div class="sec-label" style="margin-top:0">📍 Where are we meeting?</div>'
+    +'<input type="text" id="bf-where" maxlength="140" value="'+feedEsc(d.where)+'" placeholder="e.g. My place — 141 Elm St, back yard">'
+    +'<div class="sec-label">🕐 What time do we start?</div>'
+    +'<input type="text" id="bf-when" maxlength="90" value="'+feedEsc(d.when)+'" placeholder="e.g. Doors 9:30, first throw 10:00 sharp">'
+    +'<div class="sec-label">🎯 Game order</div>'
+    +'<textarea id="bf-order" style="height:92px;resize:none" placeholder="One game per line">'+feedEsc(d.order)+'</textarea>'
+    +'<div class="sec-label">📝 Anything else? (one per line)</div>'
+    +'<textarea id="bf-notes" style="height:70px;resize:none" placeholder="e.g. BYOB, bring a chair. Lunch around noon.">'+feedEsc(d.notes)+'</textarea>'
+    +'<label class="bf-chk"><input type="checkbox" id="bf-fmt"'+(d.fmtNote?' checked':'')+'> Add: formats may get trimmed if we run long</label>'
+    +'<label class="bf-chk"><input type="checkbox" id="bf-beta"'+(d.betaNote?' checked':'')+'> Add: first year on the app, report anything broken</label>'
+    +'<button class="btn btn-primary" onclick="sendBrief(true)" style="margin-top:12px">'+(sent?'📣 Update &amp; re-announce':'📣 Send to everyone')+'</button>'
+    +'<button class="btn" onclick="sendBrief(false)" style="margin-top:6px">Save quietly (no alert)</button>'
+    +(sent?'<button class="btn btn-sm" onclick="briefPreview()" style="margin-top:6px">👀 See what they see</button>':''));
+};
+window.briefPreview=()=>{ const b=S.brief||{}; ggSheet('📣 Game day',briefBodyHTML(b,false)); };
+window.sendBrief=async(announce)=>{
+  const where=(el('bf-where')?.value||'').trim(), when=(el('bf-when')?.value||'').trim();
+  const order=(el('bf-order')?.value||'').trim(), notes=(el('bf-notes')?.value||'').trim();
+  const fmtNote=!!el('bf-fmt')?.checked, betaNote=!!el('bf-beta')?.checked;
+  if(!where&&!when&&!order&&!notes&&!fmtNote&&!betaNote){ alert('Add at least a meeting spot or a start time.'); return; }
+  const now=Date.now(), prev=S.brief||{};
+  const brief={where,when,order,notes,fmtNote,betaNote,at:now,by:prev.by||chatMyName()||'Commissioner',v:(prev.v||0)+1};
+  const upd={brief};
+  if(announce){
+    upd.briefAcks=null;
+    const k=feedKey();
+    const bits=[]; if(where) bits.push('Meet: '+where); if(when) bits.push('Start: '+when);
+    const gl=briefOrderList(brief); if(gl.length) bits.push('Games: '+gl.map(s=>s.replace(/^\d+[.)]\s*/,'')).join(' → '));
+    upd['chat/'+k]={uid:'system',name:'Commissioner',system:true,kind:'notice',brief:true,title:(prev.at?'GAME DAY PLAN — UPDATED':'GAME DAY PLAN'),text:bits.join('\n')||'Tap for the details.',at:now};
+    upd['notices/'+k]={title:(prev.at?'📣 Game day plan updated':'📣 Game day plan'),body:[when,where].filter(Boolean).join(' · ')||'Tap to read the rundown',at:now,brief:true};
+  }
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
+  closeModal();
+  showBadgeToast(announce?'📣 Game day plan sent to everyone':'✓ Game day plan saved',true);
+};
+function briefBodyHTML(b,withAck){
+  const lines=briefLines(b), gl=briefOrderList(b), notes=briefNoteList(b);
+  let h='<div class="bf-card">';
+  h+='<div class="bf-head"><div class="bf-kicker">📣 GAME DAY</div><div class="bf-title">'+feedEsc((S.tourneyName||'Gentleman’s Games'))+'</div></div>';
+  if(lines.length) h+='<div class="bf-rows">'+lines.map(([ic,l,v])=>'<div class="bf-row"><span>'+ic+'</span><div><div class="bf-l">'+l+'</div><div class="bf-v">'+feedEsc(v)+'</div></div></div>').join('')+'</div>';
+  if(gl.length) h+='<div class="bf-sec"><div class="bf-l">🎯 Game order</div><div class="bf-order">'+gl.map((s,i)=>'<span class="bf-chip"><b>'+(i+1)+'</b>'+feedEsc(s.replace(/^\d+[.)]\s*/,''))+'</span>').join('')+'</div></div>';
+  if(notes.length) h+='<div class="bf-sec"><div class="bf-l">📝 Heads up</div>'+notes.map(n=>'<div class="bf-note">'+feedEsc(n)+'</div>').join('')+'</div>';
+  if(withAck) h+='<button class="btn btn-primary" onclick="ackBrief()" style="margin:12px 14px 14px;width:calc(100% - 28px)">Got it 👍</button>';
+  h+='</div>';
+  return h;
+}
+window.openBriefView=()=>{ if(!S.brief) return; ggSheet('📣 Game day',briefBodyHTML(S.brief,false)); };
+window.ackBrief=async()=>{
+  const n=chatMyName(); if(!n||!currentTourneyId) return;
+  try{ await update(ref(db,'tournaments/'+currentTourneyId),{['briefAcks/'+n]:true}); }catch(e){}
+  try{ renderBriefCards(); }catch(e){}
+};
+function renderBriefCards(){
+  if(!S) return;
+  const b=S.brief, pe=el('brief-player');
+  if(pe){
+    const acks=S.briefAcks||{}, me=chatMyName();
+    const h=(b&&b.at&&!acks[me])?briefBodyHTML(b,true):'';
+    if(pe.dataset.h!==h){ pe.innerHTML=h; pe.dataset.h=h; }
+  }
+  const ae=el('brief-admin');
+  if(ae){
+    let h='';
+    if(isTourneyAdmin){
+      const n=Object.keys(S.briefAcks||{}).length;
+      h=b&&b.at
+        ?'<div class="card bf-admin"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">📣 Game day plan sent</div><div style="font-size:11px;color:#888">'+ngFmtClock(b.at)+' · '+n+' read it</div></div><button class="btn btn-sm" onclick="openBriefSheet()" style="width:auto">Edit</button></div>'
+        :'<div class="card bf-admin"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">📣 Send a game day plan</div><div style="font-size:11px;color:#888">Where to meet, start time, game order</div></div><button class="btn btn-sm btn-primary" onclick="openBriefSheet()" style="width:auto">Write it</button></div>';
+    }
+    if(ae.dataset.h!==h){ ae.innerHTML=h; ae.dataset.h=h; }
+  }
+}
 
 // ── INSTALL GUIDE (browser) ───────────────────────────────
 function igPlatform(){
