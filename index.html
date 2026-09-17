@@ -64,6 +64,24 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .recap-w{font-size:15px;font-weight:700;color:#fff}
 .recap-d{font-size:12px;color:#c8c0ff}
 .recap-me{background:rgba(159,151,245,.12);border-radius:14px;padding:10px}
+.chat-bubble{position:relative}
+.react-btn{border:1px solid rgba(128,128,128,.35);background:rgba(255,255,255,.7);cursor:pointer;font-size:11px;opacity:.75;padding:0 5px;margin-left:4px;vertical-align:middle;border-radius:10px;line-height:16px}
+.react-btn b{font-size:10px;margin-left:1px;color:#534AB7}
+.react-btn:hover{opacity:1}
+.chat-row.mine .react-btn{background:rgba(255,255,255,.9)}
+.react-row{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}
+.chat-row.mine .react-row{justify-content:flex-end}
+.react-chip{border:1px solid rgba(128,128,128,.3);background:#fff;border-radius:12px;padding:1px 7px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;line-height:20px}
+.react-chip span{font-size:11px;font-weight:700;color:#666}
+.react-chip.mine{border-color:#534AB7;background:#EEEDFE}
+.react-chip.who{opacity:.5;font-size:11px}
+.react-pop{position:fixed;z-index:10002;background:#fff;border-radius:18px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:8px}
+.react-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px}
+.react-grid button{border:none;background:none;font-size:22px;padding:4px 0;border-radius:10px;cursor:pointer}
+.react-grid button.on{background:#EEEDFE}
+[data-theme="dark"] .react-chip{background:#23232c;color:#e6e6ec}
+[data-theme="dark"] .react-chip.mine{background:#2d2766}
+[data-theme="dark"] .react-pop{background:#1c1c24}
 .chat-badge{display:flex;align-items:center;gap:10px;align-self:stretch;background:rgba(83,74,183,.08);border:1.5px solid rgba(83,74,183,.35);border-radius:14px;padding:8px 10px;margin:8px 0;font-size:13px;color:#3C3489}
 .chat-badge.spicy{background:rgba(230,126,34,.1);border-color:rgba(211,84,0,.45);color:#9a3d06}
 .chat-badge.spec{background:rgba(128,128,128,.07);border-color:rgba(128,128,128,.3);color:#555}
@@ -566,7 +584,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v116.17.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v117.17.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -640,7 +658,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v116.17.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v117.17.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2741,7 +2759,7 @@ window.addPlayerFromGlobal=async(playerUid,playerName)=>{
         gameWins:p.gameWins||{},gameStats:p.gameStats||{}};
   }
   await update(ref(db,'tournaments/'+currentTourneyId),updates);
-  el('player-search-results').innerHTML='';
+  if(el('player-search-results')) el('player-search-results').innerHTML='';
   if(el('player-search-input')) el('player-search-input').value='';
 };
 
@@ -2759,7 +2777,7 @@ window.addPlayerFromPre=async(preKey,playerName)=>{
       gameWins:p.gameWins||{},gameStats:p.gameStats||{}};
   }
   await update(ref(db,'tournaments/'+currentTourneyId),updates);
-  el('player-search-results').innerHTML='';
+  if(el('player-search-results')) el('player-search-results').innerHTML='';
   if(el('player-search-input')) el('player-search-input').value='';
 };
 
@@ -5430,7 +5448,15 @@ function renderCustomBadgePlayerSelect(){
 
 
 // ── CHAT + SPECTATORS ─────────────────────────────────────
-function chatMyUid(){ if(actingAsName) return actingAsUid||('as:'+String(actingAsName).trim()); return currentUser?.uid||''; }
+function chatMyUid(){
+  if(actingAsName){
+    if(actingAsUid) return actingAsUid;
+    const nm=String(actingAsName).trim().toLowerCase();
+    const sp=S&&Object.entries(S.spectators||{}).find(([,v])=>v&&String(v.name).trim().toLowerCase()===nm);
+    return sp?sp[0]:('as:'+String(actingAsName).trim());
+  }
+  return currentUser?.uid||'';
+}
 function chatMyName(){ return String(actingAsName||userProfile?.preferredName||userProfile?.name||'').trim(); }
 function isSpectatorHere(){
   if(!S) return false;
@@ -5525,11 +5551,12 @@ function chatListHTML(admin){
     const atMe=!mine&&it.mentions&&it.mentions[myUid];
     h+='<div class="chat-row'+(mine?' mine':'')+(grouped?' grouped':'')+'">'
       +(!mine&&!grouped?'<div class="chat-name">'+feedEsc(it.name)+(it.spectator?' <span class="chat-spec">👀</span>':'')+'</div>':'')
-      +'<div class="chat-bubble'+(atMe?' at-me':'')+'">'+chatText(it.text)
+      +'<div class="chat-bubble'+(atMe?' at-me':'')+'" ondblclick="openReactPicker(\''+it.k+'\',event)">'+chatText(it.text)
       +'<span class="chat-time">'+feedAgo(it.at)+'</span>'
       +(admin||mine?' <a href="#" class="chat-x" onclick="deleteChat(\''+it.k+'\');return false">✕</a>':'')
       +(admin&&isAdmin&&!mine&&it.uid&&!String(it.uid).startsWith('as:')?' <a href="#" class="chat-x" title="Silence" onclick="muteChatUser(\''+it.uid+'\',\''+feedEsc(String(it.name)).replace(/'/g,'')+'\');return false"><span class="mute-btn"><span class="mute-ic">💬</span>Mute</span></a>':'')
-      +'</div></div>';
+      +' <button class="react-btn" title="React" onclick="openReactPicker(\''+it.k+'\',event)">😀<b>+</b></button>'
+      +'</div>'+reactionChipsHTML(it.k,it.reactions)+'</div>';
     prev=it;
   });
   return h;
@@ -5837,8 +5864,8 @@ function muteInfo(uid){
 window.muteChatUser=async(uid,name)=>{
   if(!isAdmin) return;
   const v=prompt('Silence '+name+' for how many minutes?','10');
-  if(v===null) return;
-  const mins=Math.max(1,Math.min(1440,parseInt(v)||0));
+  if(v===null||!(parseInt(v)>0)) return;
+  const mins=Math.max(1,Math.min(1440,parseInt(v)));
   if(!mins) return;
   const now=Date.now(), bd=BADGE_DEFS.find(b=>b.id==='chat-jail');
   const lines=['has been silenced for','is in timeout for','has been sent to chat jail for','lost chat privileges for'];
@@ -6047,7 +6074,8 @@ function computeRecap(){
   if(all.length){
     const bl=all.reduce((a,b)=>(b.ws-b.ls)>(a.ws-a.ls)?b:a);
     if(bl.ws-bl.ls>0) R.blowout=bl;
-    const ug=all.filter(x=>x.ws>0).reduce((a,b)=>(!a||b.ws<a.ws)?b:a,null);
+    const topW=Math.max(...all.map(x=>x.ws));
+    const ug=all.filter(x=>x.ws>0&&x.ws<topW).reduce((a,b)=>(!a||b.ws<a.ws)?b:a,null);
     if(ug) R.ugliest=ug;
   }
   R.ot=recapTop(ot,2); R.heart=recapTop(heart,2); R.streak=recapTop(streakBest,3);
@@ -6102,12 +6130,12 @@ function recapHTML(myName){
     +'</div>';
   // numbers
   const nums=[];
-  if(R.dayLength) nums.push([fmtDur(R.dayLength),'of games']);
+  if(R.dayLength>=60000) nums.push([fmtDur(R.dayLength),'of games']);
   nums.push([R.matchCount,'matches']);
   nums.push([R.chatCount,'chat messages']);
   nums.push([R.badgeTotal,'badges given']);
   h+='<div class="recap-sec">📊 The day in numbers</div><div class="recap-nums">'+nums.map(([v,l])=>'<div><b>'+v+'</b><span>'+l+'</span></div>').join('')+'</div>';
-  if(R.longestGame) h+='<div class="recap-d" style="text-align:center;margin-top:6px">Longest game: <b>'+feedEsc(R.longestGame.g.name)+'</b> ('+fmtDur(R.longestGame.dur)+')'+(R.shortestGame&&R.shortestGame!==R.longestGame?' · Quickest: <b>'+feedEsc(R.shortestGame.g.name)+'</b> ('+fmtDur(R.shortestGame.dur)+')':'')+'</div>';
+  if(R.longestGame&&R.longestGame.dur>=60000) h+='<div class="recap-d" style="text-align:center;margin-top:6px">Longest game: <b>'+feedEsc(R.longestGame.g.name)+'</b> ('+fmtDur(R.longestGame.dur)+')'+(R.shortestGame&&R.shortestGame!==R.longestGame?' · Quickest: <b>'+feedEsc(R.shortestGame.g.name)+'</b> ('+fmtDur(R.shortestGame.dur)+')':'')+'</div>';
   // podium
   h+='<div class="recap-sec">🥇 Podium</div>';
   R.standings.slice(0,3).forEach((s,i)=>{ h+='<div class="recap-pod"><span>'+['🥇','🥈','🥉'][i]+' '+feedEsc(s.p)+'</span><b>'+s.pts+' pts</b></div>'; });
@@ -6153,7 +6181,7 @@ function recapText(){
   if(R.standings[0]) L.push('Champion: '+R.standings[0].p+' ('+R.standings[0].pts+' pts)');
   R.standings.slice(1,3).forEach((s,i)=>L.push(['🥈','🥉'][i]+' '+s.p+' ('+s.pts+')'));
   L.push('');
-  if(R.dayLength) L.push('⏱ '+fmtDur(R.dayLength)+' of games, '+R.matchCount+' matches, '+R.chatCount+' chat messages');
+  if(R.dayLength>=60000) L.push('⏱ '+fmtDur(R.dayLength)+' of games, '+R.matchCount+' matches, '+R.chatCount+' chat messages');
   const w=x=>x.who.join(' & ');
   if(R.fastest) L.push('⚡ Fastest: '+w(R.fastest)+' ('+fmtMin(R.fastest.val)+'/match)');
   if(R.slowest) L.push('🦥 Slowest: '+w(R.slowest)+' ('+fmtMin(R.slowest.val)+'/match)');
@@ -6306,8 +6334,9 @@ window.downloadGGIcons=async()=>{
 // ── DEEP LINKS FROM PUSH ALERTS ───────────────────────────
 window._pendingNav=null;
 function parseNav(url){
-  try{ const u=new URL(url,location.origin); const t=u.searchParams.get('t'), tab=u.searchParams.get('tab'); return t?{t,tab:tab||'active'}:null; }catch(e){ return null; }
+  try{ const u=new URL(url,location.origin); const t=u.searchParams.get('t'), tab=u.searchParams.get('tab'); return t?{t,tab:tab||'active',v:u.searchParams.get('v')||'player'}:null; }catch(e){ return null; }
 }
+window.goNav=(nav)=>goNav(nav);
 function goNav(nav){
   if(!nav||!nav.t) return;
   if(!currentUser){ try{ sessionStorage.setItem('gg_nav',JSON.stringify(nav)); }catch(e){} return; }
@@ -6319,15 +6348,20 @@ function applyPendingNav(){
   const nav=window._pendingNav; if(!nav||!S||nav.t!==currentTourneyId) return;
   window._pendingNav=null;
   closeModal();
-  const adminView=isTourneyAdmin&&!_viewingAsPlayer&&!(actingAsName&&actingAsName!==(userProfile?.preferredName||userProfile?.name||''));
-  if(adminView){
-    const map={chat:'chat',active:'scores',lb:'board',players:'players'};
-    showAdminPhase(map[nav.tab]||'scores');
+  const myN=String(userProfile?.preferredName||userProfile?.name||'').trim().toLowerCase();
+  const amPlayer=(S.players||[]).some(p=>String(p).trim().toLowerCase()===myN)||Object.keys(S.playerUids||{}).includes(currentUser?.uid)||!!(S.spectators&&S.spectators[currentUser?.uid]);
+  const toAdmin=isTourneyAdmin&&(nav.v==='admin'||!amPlayer);
+  const ptab=['chat','active','lb','games','info','teams','rank'].includes(nav.tab)?nav.tab:'active';
+  if(toAdmin){
+    const map={chat:'chat',active:'scores',lb:'board',players:'players',scores:'scores'};
+    _phase=map[nav.tab]||'scores';
+    switchToAdminView();
+  } else if(isTourneyAdmin){
+    _tab=ptab;
+    switchToPlayerView();
   } else {
-    let tab=['chat','active','lb','games','info','teams','rank'].includes(nav.tab)?nav.tab:'active';
-    if(tab==='players') tab='active';
-    _tab=tab;
-    showPlayerTab(tab,chatMyName());
+    _tab=ptab;
+    showPlayerTab(ptab,chatMyName());
   }
   window.scrollTo(0,0);
 }
@@ -6438,6 +6472,64 @@ function renderNextGameCards(){
 setInterval(()=>{
   document.querySelectorAll('.gg-cd').forEach(x=>{ const at=+x.dataset.at; const t=ngFmtLeft(at-Date.now()); if(x.textContent!==t) x.textContent=t; });
 },1000);
+
+// ── CHAT REACTIONS ────────────────────────────────────────
+const REACTIONS=[
+  ['❤️','Loved'],['👍','Liked'],['👎','Disliked'],['😂','Laughed at'],['‼️','Emphasized'],['❓','Questioned'],
+  ['🍺','Cheersed'],['🧂','Called salty'],['🗑️','Trashed'],['🤡','Clowned'],['💀','Died at'],['🔥','Fire'],
+  ['🐐','GOATed'],['🫡','Saluted'],['🙄','Eye-rolled'],['🧢','Called cap on']
+];
+function reactionSummary(r){
+  const byE={};
+  Object.entries(r||{}).forEach(([u,x])=>{ const e=x&&x.e; if(!e) return; (byE[e]=byE[e]||[]).push({u,n:x.n||''}); });
+  return Object.entries(byE).sort((a,b)=>b[1].length-a[1].length);
+}
+function reactionChipsHTML(k,r){
+  const me=chatMyUid(), list=reactionSummary(r);
+  if(!list.length) return '';
+  return '<div class="react-row">'+list.map(([e,us])=>{
+    const mine=us.some(x=>x.u===me);
+    return '<button class="react-chip'+(mine?' mine':'')+'" onclick="toggleReaction(\''+k+'\',\''+e+'\')" title="'+feedEsc(us.map(x=>x.n).join(', '))+'">'+e+(us.length>1?'<span>'+us.length+'</span>':'')+'</button>';
+  }).join('')+'<button class="react-chip who" onclick="showReactors(\''+k+'\')">👀</button></div>';
+}
+window.openReactPicker=(k,ev)=>{
+  if(ev) ev.stopPropagation();
+  document.querySelectorAll('.react-pop').forEach(p=>p.remove());
+  const m=(S.chat||{})[k]; if(!m) return;
+  if(muteInfo(chatMyUid())){ alert('🤐 You\'re silenced. No reacting either.'); return; }
+  const mineE=m.reactions&&m.reactions[chatMyUid()]&&m.reactions[chatMyUid()].e;
+  const pop=document.createElement('div');
+  pop.className='react-pop';
+  pop.innerHTML='<div class="react-grid">'+REACTIONS.map(([e,l])=>'<button class="'+(mineE===e?'on':'')+'" title="'+l+'" onclick="toggleReaction(\''+k+'\',\''+e+'\');this.closest(\'.react-pop\').remove()">'+e+'</button>').join('')+'</div>';
+  document.body.appendChild(pop);
+  const src=ev&&ev.currentTarget&&ev.currentTarget.getBoundingClientRect?ev.currentTarget.getBoundingClientRect():null;
+  const w=Math.min(300,window.innerWidth-24);
+  pop.style.width=w+'px';
+  let top=src?src.top-pop.offsetHeight-8:window.innerHeight/2;
+  if(top<10) top=(src?src.bottom+8:80);
+  let left=src?Math.min(Math.max(12,src.left+src.width/2-w/2),window.innerWidth-w-12):12;
+  pop.style.top=top+'px'; pop.style.left=left+'px';
+  setTimeout(()=>document.addEventListener('click',function close(e){ if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('click',close); } }),0);
+};
+window.toggleReaction=async(k,e)=>{
+  const me=chatMyUid(); if(!me||!currentUser) return;
+  if(muteInfo(me)){ alert('🤐 You\'re silenced. No reacting either.'); return; }
+  const m=(S.chat||{})[k]; if(!m) return;
+  const cur=m.reactions&&m.reactions[me]&&m.reactions[me].e;
+  const val=cur===e?null:{e,n:chatMyName()||'Someone',at:Date.now()};
+  try{ await set(ref(db,'tournaments/'+currentTourneyId+'/chat/'+k+'/reactions/'+me),val); }
+  catch(err){ alert('Could not react: '+(err&&err.message||err)); }
+};
+window.showReactors=(k)=>{
+  const m=(S.chat||{})[k]; if(!m) return;
+  const list=reactionSummary(m.reactions);
+  const lbl=Object.fromEntries(REACTIONS);
+  el('modal-area').innerHTML='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
+    +'<div class="modal-handle"></div><div class="modal-title"><span>Reactions</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
+    +'<div style="font-size:12px;color:#888;margin-bottom:8px">"'+feedEsc(String(m.text).slice(0,80))+'"</div>'
+    +list.map(([e,us])=>'<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.12)"><span style="font-size:22px">'+e+'</span><div><div style="font-size:11px;color:#999">'+feedEsc(lbl[e]||'')+'</div><div style="font-size:14px;font-weight:600">'+us.map(x=>feedEsc(x.n)).join(', ')+'</div></div></div>').join('')
+    +'</div></div>';
+};
 
 // ── PUSH ALERTS ───────────────────────────────────────────
 function pushEnv(){
@@ -6746,7 +6838,7 @@ function checkBadgeToasts(tid){
   const mine=fresh.filter(i=>String(i.player).trim().toLowerCase()===me);
   const others=fresh.filter(i=>!mine.includes(i));
   mine.forEach(i=>showBadgeToast(i.icon+' You earned <b>'+feedEsc(i.name)+'</b>!',true));
-  if(others.length>2) showBadgeToast('🏅 '+others.length+' new badges handed out. Check the feed on Now Playing',false);
+  if(others.length>2) showBadgeToast('🏅 '+others.length+' new badges handed out. See them in Chat',false);
   else others.forEach(i=>showBadgeToast(feedEsc(i.icon)+' <b>'+feedEsc(String(i.player).split(' ')[0])+'</b> just earned '+feedEsc(i.name),false));
 }
 let _toastQ=[], _toastBusy=false;
@@ -8170,7 +8262,7 @@ function renderMyTeams(myName){
   const e=el('pview-teams');if(!e)return;
   const locked=(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring'||g.status==='done'||g.status==='skipped');
   if(!locked.length){e.innerHTML='<div class="card"><p class="empty">Teams appear once rankings are locked.</p></div>';return;}
-  const fmtL={'h2h-points':'H2H points','h2h-wins':'H2H wins','score-low':'Low score','score-high':'High score','multi-round-high':'Multi-round high','multi-round-low':'Multi-round low','round-robin':'Round robin','single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools','pool-playoff':'Pool + knockout'};
+  const fmtL={'h2h-points':'H2H points','h2h-wins':'H2H wins','score-low':'Low score','score-high':'High score','multi-round-high':'Multi-round high','multi-round-low':'Multi-round low','round-robin':'Round robin','single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools','partial-rr':'RR + finals','pool-playoff':'Pool + knockout'};
   let html='<div class="card"><div class="card-title">👥 My Teams</div>';
   let found=false;
   locked.forEach(g=>{
@@ -9301,7 +9393,7 @@ if(inviteKey) localStorage.setItem('gg_invite_key', inviteKey);
 if(joinCode)  localStorage.setItem('gg_join_code', joinCode);
 const watchTid  = urlParams.get('watch');
 if(urlParams.get('t')){
-  try{ sessionStorage.setItem('gg_nav',JSON.stringify({t:urlParams.get('t'),tab:urlParams.get('tab')||'active'})); }catch(e){}
+  try{ sessionStorage.setItem('gg_nav',JSON.stringify({t:urlParams.get('t'),tab:urlParams.get('tab')||'active',v:urlParams.get('v')||'player'})); }catch(e){}
   try{ window.history.replaceState({},'','/'); }catch(e){}
 }
 if(watchTid){ try{ localStorage.setItem('gg_watch', watchTid); }catch(e){} }
