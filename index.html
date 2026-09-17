@@ -77,6 +77,15 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .stepper.big input{width:64px!important;font-size:26px!important;padding:10px 0!important}
 .gg-undo{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;z-index:10003;background:#1e1a3a;color:#fff;border-radius:14px;padding:10px 10px 10px 16px;display:flex;align-items:center;gap:14px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 .gg-undo button{background:#9f97f5;color:#1e1a3a;border:none;border-radius:10px;padding:6px 14px;font-weight:800;cursor:pointer}
+.mm-inline{border-radius:14px;padding:12px 14px;margin-bottom:12px}
+.am-sec{margin-top:10px;border:1px solid #e8e6df;border-radius:12px;padding:0 10px}
+.am-sec summary{list-style:none;cursor:pointer;padding:11px 2px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+.am-sec summary::-webkit-details-marker{display:none}
+.am-sec summary span{background:#EEEDFE;color:#534AB7;border-radius:10px;padding:1px 8px;font-size:11px}
+.am-sec summary::after{content:'▾';margin-left:auto;color:#999;transition:transform .2s}
+.am-sec[open] summary::after{transform:rotate(180deg)}
+.am-sec[open]{padding-bottom:8px}
+[data-theme="dark"] .am-sec{border-color:#2e2e38}
 .mm-card{background:linear-gradient(135deg,#f3f1ff,#fff);border:2px solid #cfcaf5;cursor:pointer}
 .mm-card.up{background:linear-gradient(135deg,#534AB7,#7F77DD);color:#fff;border:none;box-shadow:0 6px 18px rgba(83,74,183,.35)}
 .mm-card.done{background:#EAF3DE;border-color:#b2d88a;color:#27500A}
@@ -628,7 +637,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v120.17.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v121.17.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -702,7 +711,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v120.17.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v121.17.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -6673,19 +6682,21 @@ function myMatchInfo(){
   const t=(S.matchTimes&&S.matchTimes[g.id]&&S.matchTimes[g.id][next.id])||{};
   return {g,myT,next,opp,side,active:!!act[next.id],board:boardOf(g.id,next.id),pend,readyAt:t.readyAt,w,l,idx:mine.filter(m=>m.winner).length+1,total:mine.length};
 }
-function myMatchCardHTML(){
+function myMatchCardHTML(inline){
   const I=myMatchInfo(); if(!I) return '';
+  if(!inline) return '';
   const nm=t=>[t.p1,t.p2,t.p3].filter(Boolean).map(x=>feedEsc(String(x).split(' ')[0])).join(' & ');
-  if(I.done) return '<div class="card mm-card done"><div class="mm-k">✅ YOU\'RE DONE WITH '+feedEsc(I.g.name).toUpperCase()+'</div><div class="mm-big">'+I.w+'–'+I.l+'</div><div class="mm-s">Hang tight for results and the next game.</div></div>';
+  if(I.done) return '<div class="mm-card mm-inline done"><div class="mm-k">✅ YOU\'RE DONE WITH '+feedEsc(I.g.name).toUpperCase()+'</div><div class="mm-big">'+I.w+'–'+I.l+'</div><div class="mm-s">Hang tight for results and the next game.</div></div>';
   let status='', cls='';
   if(I.pend&&I.pend._disputed){ status='⚠️ Score disputed. The host is sorting it out.'; cls='warn'; }
   else if(I.pend&&I.pend[I.side==='t1'?'t2':'t1']&&!I.pend[I.side]){ status='✅ They entered a score. Confirm it below.'; cls='warn'; }
   else if(I.pend&&I.pend[I.side]){ status='⏳ Waiting for them to confirm your score.'; }
   else if(I.active) status='When you finish, enter the score below.';
   const head=I.active?('🎯 YOU\'RE UP'+(typeof I.board==='number'?' · BOARD '+I.board:'')):'⏳ ON DECK';
-  return '<div class="card mm-card'+(I.active?' up':'')+'" onclick="el(\'pview-active-main\').scrollIntoView({behavior:\'smooth\'})">'
+  return '<div class="mm-card mm-inline'+(I.active?' up':'')+'">'
     +'<div class="mm-k">'+head+'</div>'
     +'<div class="mm-big">vs '+nm(I.opp)+'</div>'
+    +'<div class="mm-s" style="margin-bottom:2px">Your team: '+nm(I.myT)+'</div>'
     +'<div class="mm-s">'+feedEsc(I.g.name)+' · match '+I.idx+' of '+I.total+(I.active&&I.readyAt?' · ⏱ '+fmtDur(Date.now()-I.readyAt):'')+(!I.active?' · waiting for a free board':'')+'</div>'
     +(status?'<div class="mm-st '+cls+'">'+status+'</div>':'')+'</div>';
 }
@@ -8180,10 +8191,7 @@ async function renderActiveGameTab(myName){
 
   if(myTeam && b){
     const partners=[myTeam.p1,myTeam.p2,myTeam.p3].filter(p=>p&&p!==myName);
-    html+='<div style="background:#EEEDFE;border-radius:10px;padding:10px;margin-bottom:10px">';
-    html+='<div style="font-size:11px;color:#534AB7;font-weight:700;margin-bottom:4px">YOUR TEAM</div>';
-    html+='<div style="font-size:16px;font-weight:700">'+nameSpan(myName)+(partners.length?' & '+partners.map(p=>nameSpan(p)).join(' & '):'')+'</div>';
-    html+='</div>';
+    html+=myMatchCardHTML(true);
 
     // Match by player name AND team ID for robustness
     const myPlayerNames=[myTeam.p1,myTeam.p2,myTeam.p3].filter(Boolean);
@@ -8238,9 +8246,7 @@ async function renderActiveGameTab(myName){
     }
     const cpAll=new Set(); // populated later when board computes
 
-    if(myTotalMatches>0){
-      html+='<div style="font-size:11px;color:#888;margin-bottom:8px">Match '+(myDoneMatches.length+1)+' of '+myTotalMatches+'</div>';
-    }
+
     if(myMatchIsPlaying){
       const myMatch=myActiveMatch||myNextMatch;
       const myIsT1=myMatch.t1.id===myTeam.id||myPlayerNames.some(p=>myMatch.t1.p1===p||myMatch.t1.p2===p||myMatch.t1.p3===p);
@@ -8255,11 +8261,6 @@ async function renderActiveGameTab(myName){
       const mySubmission=pending&&pending[myTeamSide];
       const theirSubmission=pending&&pending[otherSide];
 
-      html+='<div style="font-size:12px;color:#888;margin-bottom:6px;text-align:center">vs</div>';
-      html+='<div style="background:#f8f7f4;border-radius:10px;padding:10px;margin-bottom:12px">';
-      html+='<div style="font-size:11px;color:#888;font-weight:700;margin-bottom:4px">OPPONENTS</div>';
-      html+='<div style="font-size:16px;font-weight:700">'+tLabel(oppTeam)+'</div>';
-      html+='</div>';
 
       if(myMatch.winner){
         // Match done
@@ -8363,7 +8364,6 @@ async function renderActiveGameTab(myName){
           +oppPlayerNames.join(' & ')
           +'</strong> — they are currently playing. You will be called up when they finish.</div>';
       } else if(myNextMatch){
-        html+='<div class="alert alert-info" style="font-size:11px">⏳ Waiting for a court to open up.</div>';
       } else {
         html+='<div class="alert alert-info" style="font-size:11px">Waiting for other matches to complete.</div>';
       }
@@ -8518,27 +8518,27 @@ async function renderActiveGameTab(myName){
       playing.slice().sort((a,c2)=>((+boardOf(activeGame.id,a.id))||99)-((+boardOf(activeGame.id,c2.id))||99)).forEach((m,mi)=>{ const bn=boardOf(activeGame.id,m.id); html+=renderMatchCard(m,mi,'Board '+(typeof bn==='number'?bn:(mi+1)),false); });
     }
 
-    if(onDeck.length){
-      html+='<div style="font-size:10px;font-weight:700;color:#534AB7;margin:'+(playing.length?'10':'0')+'px 0 6px">⏭ ON DECK — playing next when a court opens</div>';
-      sortForDisplay(onDeck).forEach((m,mi)=>{ html+=renderMatchCard(m,mi,'Next up '+(mi+1),true); });
+    if(!window._amOpen) window._amOpen={};
+    const leftList=[...onDeck,...waiting];
+    if(leftList.length){
+      html+='<details class="am-sec"'+(window._amOpen.left?' open':'')+' ontoggle="window._amOpen.left=this.open"><summary>⏭ Matches left <span>'+leftList.length+'</span></summary>';
+      onDeck.forEach((m,mi)=>{ html+=renderMatchCard(m,mi,'Up next '+(mi+1),true); });
+      waiting.forEach((m,mi)=>{ html+=renderMatchCard(m,mi,'Later',true); });
+      html+='</details>';
     }
-
-    if(waiting.length){
-      html+='<div style="font-size:10px;color:#aaa;margin-top:8px">+'+waiting.length+' more match'+(waiting.length!==1?'es':'')+' waiting</div>';
-    }
-
     if(done2.length){
-      html+='<div style="font-size:10px;font-weight:700;color:#888;margin:'+(playing.length||onDeck.length?'10':'0')+'px 0 6px">✓ COMPLETED</div>';
+      html+='<details class="am-sec"'+(window._amOpen.played?' open':'')+' ontoggle="window._amOpen.played=this.open"><summary>✓ Played <span>'+done2.length+'</span></summary>';
       done2.slice().reverse().forEach(m=>{
         const isMyMatch=myTeam&&(m.t1.id===myTeam.id||m.t2.id===myTeam.id);
         const _bS1=Number(m.score1),_bS2=Number(m.score2);
         const _bHas=!isNaN(_bS1)&&!isNaN(_bS2)&&m.score1!==undefined&&m.score2!==undefined;
         const wScore=_bS1>_bS2?_bS1:_bS2;
         const lScore=_bS1>_bS2?_bS2:_bS1;
-        html+='<div style="padding:6px 8px;font-size:11px;color:#444;border-bottom:1px solid #f0ede6;'+(isMyMatch?'background:#EAF3DE;border-radius:6px;margin-bottom:2px':'')+'">';
+        html+='<div style="padding:6px 8px;font-size:12px;color:#444;border-bottom:1px solid #f0ede6;'+(isMyMatch?'background:#EAF3DE;border-radius:6px;margin-bottom:2px':'')+'">';
         html+='<span style="font-weight:600;color:#27500A">✓ '+tLabel(m.winner)+'</span>'+(_bHas?' '+wScore+'–'+lScore+' def. ':' beat ')+tLabel(m.t1.id===m.winner.id?m.t2:m.t1);
         html+='</div>';
       });
+      html+='</details>';
     }
 
     if(!playing.length&&!done2.length) html+='<p class="empty">No matches yet.</p>';
