@@ -685,7 +685,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v124.17.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v125.17.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -759,7 +759,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v124.17.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v125.17.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3169,7 +3169,7 @@ window.toggleRoundsOption = ()=>{
       'score-high':'• Highest total score wins\n• All players complete all frames\n• Ties broken by admin',
       'multi-round-high':'• Highest combined score across all rounds wins\n• All rounds must be completed',
       'multi-round-low':'• Lowest combined score across all rounds wins\n• All rounds must be completed',
-      'round-robin':'• Every team plays every other team once\n• Ties broken by point differential then H2H',
+      'round-robin':'• Every team plays every other team once\n• Ties broken by head-to-head first, then point differential',
       'partial-rr':'• Each team plays 3 different opponents (not everyone)\n• Then seeded 1–6 by record: #1 vs #2 for the title, #3 vs #4 for 3rd, #5 vs #6 for 5th\n• 4 games per team',
       'single-elim':'• Single elimination bracket\n• Lose once = eliminated',
       'double-elim':'• Double elimination bracket\n• Two losses = eliminated',
@@ -7698,16 +7698,16 @@ function renderGameInfo(){
     'pool-playoff':'Pool stage + knockout'
   };
   const tbFull={
-    'auto':'Point differential → H2H',
+    'auto':'Head-to-head → point differential',
     'host-score':'Host enters tiebreaker score',
     'host-pick':'Host manually picks winner'
   };
   const tbSteps={
     'auto': [
       '1. Most overall wins',
-      '2. Head-to-head record among tied teams',
-      '3. Point differential in H2H matches',
-      '4. Points scored in H2H matches',
+      '2. Head-to-head record between the tied teams',
+      '3. Point differential in those head-to-head games',
+      '4. Points scored in those head-to-head games',
       '5. Overall point differential',
       '6. Overall points scored'
     ],
@@ -7791,7 +7791,7 @@ function renderPlayerGames(myName){
   // Show pending games as info cards if no results yet
   if(!activeGames.length){
     const fmtFull={'h2h-points':'Head-to-head points (e.g. cornhole)','h2h-wins':'Head-to-head wins (e.g. kan jam)','score-low':'Lowest score wins (e.g. golf)','score-high':'Highest score wins (e.g. bowling)','multi-round-high':'Multi-round high score','multi-round-low':'Multi-round low score','round-robin':'Round robin','single-elim':'Single elimination bracket','double-elim':'Double elimination bracket','two-pool':'2 pools → crossover finals','pool-playoff':'Pool stage + knockout'};
-    const tbFull={'auto':'Automatic (point diff → H2H)','host-score':'Host enters tiebreaker score','host-pick':'Host manually picks winner'};
+    const tbFull={'auto':'Automatic (head-to-head → point diff)','host-score':'Host enters tiebreaker score','host-pick':'Host manually picks winner'};
     const tbModeFull={'restart':'Start over after each place','stayon':'Cascading (one criterion for all)'};
     let html='';
     allGames.forEach(g=>{
