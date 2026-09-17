@@ -64,6 +64,15 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .recap-w{font-size:15px;font-weight:700;color:#fff}
 .recap-d{font-size:12px;color:#c8c0ff}
 .recap-me{background:rgba(159,151,245,.12);border-radius:14px;padding:10px}
+.chat-jail{display:flex;align-items:center;gap:10px;align-self:stretch;background:rgba(192,57,43,.1);border:1.5px solid rgba(192,57,43,.45);border-radius:14px;padding:8px 10px;margin:8px 0;font-size:13px;color:#8e2a1f}
+.chat-jail.free{background:rgba(39,80,10,.08);border-color:rgba(39,80,10,.35);color:#27500A}
+.chat-jail-ic{width:38px;height:38px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.chat-jail-t{font-size:10px;font-weight:800;letter-spacing:1.2px}
+.mute-ic.big{font-size:20px}
+.mute-ic.big::after{height:3px;left:-4px;right:-4px}
+[data-theme="dark"] .chat-jail{color:#f3a79d}
+[data-theme="dark"] .chat-jail.free{color:#a7d98a}
+[data-theme="dark"] .chat-jail-ic{background:#23232c}
 .mute-btn{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:#c0392b;border:1px solid rgba(192,57,43,.45);border-radius:10px;padding:1px 6px 1px 4px;margin-left:4px;vertical-align:middle;background:rgba(255,255,255,.6)}
 .mute-ic{position:relative;font-size:11px;line-height:1}
 .mute-ic::after{content:'';position:absolute;left:-2px;right:-2px;top:50%;height:2px;background:#e74c3c;transform:rotate(-40deg);border-radius:2px}
@@ -549,7 +558,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v114.17.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v115.17.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -623,7 +632,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v114.17.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v115.17.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -5484,6 +5493,16 @@ function chatListHTML(admin){
       prev=null; return;
     }
     if(it.system){
+      const txt=String(it.text||'');
+      const isMute=it.kind==='mute'||txt.startsWith('🔇'), isFree=it.kind==='unmute'||txt.startsWith('🔊');
+      const body=feedEsc(txt.replace(/^(🔇|🔊)\s*/,''));
+      if(isMute||isFree){
+        h+='<div class="chat-jail'+(isFree?' free':'')+'"><div class="chat-jail-ic">'+(isFree?'🗣️':'<span class="mute-ic big">💬</span>')+'</div>'
+          +'<div style="flex:1;min-width:0"><div class="chat-jail-t">'+(isFree?'RELEASED FROM CHAT JAIL':'SILENCED')+'</div><div>'+body+'</div></div>'
+          +'<span class="chat-time">'+feedAgo(it.at)+'</span>'
+          +(admin?' <a href="#" class="chat-x" onclick="deleteChat(\''+it.k+'\');return false">✕</a>':'')+'</div>';
+        prev=null; return;
+      }
       h+='<div class="chat-sys" style="background:rgba(240,80,80,.1);color:#b03a2e;font-weight:600">'+feedEsc(it.text)+' <span class="chat-time">'+feedAgo(it.at)+'</span>'
         +(admin?' <a href="#" class="chat-x" onclick="deleteChat(\''+it.k+'\');return false">✕</a>':'')+'</div>';
       prev=null; return;
@@ -5526,7 +5545,7 @@ function renderChat(box){
   const cnt=el('chat-count-'+box); if(cnt) cnt.textContent='· '+chatPeople().length;
   const ns=el('chat-notify-'+box); if(ns&&document.activeElement!==ns&&ns.value!==myChatNotify()) ns.value=myChatNotify();
   const mb=el('chat-mute-'+box); if(mb){ const mh=chatMuteBanner(box); if(mb.innerHTML!==mh) mb.innerHTML=mh; }
-  const inp=el('chat-input-'+box); if(inp){ const muted=!!muteInfo(chatMyUid()); if(inp.disabled!==muted){ inp.disabled=muted; inp.placeholder=muted?'🔇 You are silenced':'Message… (type @ to mention)'; } }
+  const inp=el('chat-input-'+box); if(inp){ const muted=!!muteInfo(chatMyUid()); if(inp.disabled!==muted){ inp.disabled=muted; inp.placeholder=muted?'🤐 You are silenced':'Message… (type @ to mention)'; } }
   updateChatBadges();
 }
 function refreshChats(){
@@ -5573,7 +5592,7 @@ window.sendChat=async(box)=>{
   const text=inp.value.trim(); if(!text) return;
   if(!currentUser){ alert('Sign in first.'); return; }
   const mu=muteInfo(chatMyUid());
-  if(mu){ alert('🔇 You\'re silenced for '+Math.ceil((mu.until-Date.now())/60000)+' more minute(s).'); return; }
+  if(mu){ alert('🤐 You\'re silenced for '+Math.ceil((mu.until-Date.now())/60000)+' more minute(s).'); return; }
   const msg={uid:chatMyUid(),name:chatMyName()||'Someone',text:text.slice(0,500),at:Date.now()};
   if(isSpectatorHere()) msg.spectator=true;
   const grp=[], men=findMentions(text,grp);
@@ -5813,7 +5832,7 @@ window.muteChatUser=async(uid,name)=>{
   const upd={
     ['chatMutes/'+uid]:{until:now+mins*60000,minutes:mins,name,at:now},
     ['chatMuteLog/'+feedKey()]:{uid,name,minutes:mins,at:now},
-    ['chat/'+feedKey()]:{uid:'system',name:'Commissioner',system:true,text:'🔇 '+name+' '+lines[Math.floor(Math.random()*lines.length)]+' '+mins+' minute'+(mins===1?'':'s')+'.',at:now}
+    ['chat/'+feedKey()]:{uid:'system',name:'Commissioner',system:true,kind:'mute',text:name+' '+lines[Math.floor(Math.random()*lines.length)]+' '+mins+' minute'+(mins===1?'':'s')+'.',at:now}
   };
   if(bd&&!(S.tourneyBadges&&S.tourneyBadges[name]&&S.tourneyBadges[name]['chat-jail'])){
     upd['tourneyBadges/'+name+'/chat-jail']=true;
@@ -5824,15 +5843,15 @@ window.muteChatUser=async(uid,name)=>{
 window.unmuteChatUser=async(uid)=>{
   const m=S.chatMutes&&S.chatMutes[uid]; if(!m) return;
   await update(ref(db,'tournaments/'+currentTourneyId),{['chatMutes/'+uid]:null,
-    ['chat/'+feedKey()]:{uid:'system',name:'Commissioner',system:true,text:'🔊 '+m.name+' has been released early. Behave.',at:Date.now()}});
+    ['chat/'+feedKey()]:{uid:'system',name:'Commissioner',system:true,kind:'unmute',text:m.name+' has been released early. Behave.',at:Date.now()}});
 };
 function chatMuteBanner(box){
   const me=muteInfo(chatMyUid());
   let h='';
-  if(me){ const left=Math.ceil((me.until-Date.now())/60000); h+='<div class="alert alert-warn" style="margin:6px 0;font-size:12px">🔇 You\'re silenced for '+left+' more minute'+(left===1?'':'s')+'.</div>'; }
+  if(me){ const left=Math.ceil((me.until-Date.now())/60000); h+='<div class="chat-jail" style="margin:6px 0"><div class="chat-jail-ic"><span class="mute-ic big">💬</span></div><div style="flex:1"><div class="chat-jail-t">YOU\'RE SILENCED</div>You\'re silenced for '+left+' more minute'+(left===1?'':'s')+'.</div></div></div>'; }
   if(box==='a'&&isAdmin){
     const act=Object.entries(S.chatMutes||{}).filter(([,m])=>m&&m.until>Date.now());
-    if(act.length) h+='<div style="font-size:11px;margin:4px 0">'+act.map(([u,m])=>'🔇 '+feedEsc(m.name)+' ('+Math.ceil((m.until-Date.now())/60000)+'m) <a href="#" onclick="unmuteChatUser(\''+u+'\');return false">unmute</a>').join(' · ')+'</div>';
+    if(act.length) h+='<div style="font-size:11px;margin:4px 0">'+act.map(([u,m])=>'<span class="mute-ic">💬</span> '+feedEsc(m.name)+' ('+Math.ceil((m.until-Date.now())/60000)+'m) <a href="#" onclick="unmuteChatUser(\''+u+'\');return false">unmute</a>').join(' · ')+'</div>';
   }
   return h;
 }
