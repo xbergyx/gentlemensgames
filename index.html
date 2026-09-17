@@ -64,6 +64,10 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .recap-w{font-size:15px;font-weight:700;color:#fff}
 .recap-d{font-size:12px;color:#c8c0ff}
 .recap-me{background:rgba(159,151,245,.12);border-radius:14px;padding:10px}
+.mute-btn{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:#c0392b;border:1px solid rgba(192,57,43,.45);border-radius:10px;padding:1px 6px 1px 4px;margin-left:4px;vertical-align:middle;background:rgba(255,255,255,.6)}
+.mute-ic{position:relative;font-size:11px;line-height:1}
+.mute-ic::after{content:'';position:absolute;left:-2px;right:-2px;top:50%;height:2px;background:#e74c3c;transform:rotate(-40deg);border-radius:2px}
+.ng-card{background:linear-gradient(135deg,#1e1650,#534AB7);color:#fff;border:none}
 .no-rank #ptab-rank{display:none!important}
 .is-spectator #ptab-teams,.is-spectator #ptab-rank,.is-spectator #ptab-vote{display:none!important}
 .chat-card{padding:.8rem .8rem .7rem}
@@ -545,7 +549,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v112.16.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v114.17.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -557,7 +561,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
         <span style="font-size:11px;color:#aaa">or</span>
         <div style="flex:1;height:1px;background:#e0ddd6"></div>
       </div>
-      <div class="alert alert-info" style="font-size:11px;margin-bottom:12px">Enter your phone number or email address. We'll send you a one-time code.</div>
+      <div class="alert alert-info" style="font-size:11px;margin-bottom:12px">Phone number: we'll text you a 6-digit code (best in the installed app).<br>Email: we'll send a sign-in <b>link</b> from noreply@gentlemans-games.firebaseapp.com. Check spam/junk, and open the link on this same phone.</div>
       <div class="sec-label">Phone number or email</div>
       <input type="text" id="auth-contact" placeholder="+1 555 000 0000 or email@example.com" autocomplete="tel email">
       <button class="btn btn-primary" onclick="startAuth()">→ Continue</button>
@@ -619,7 +623,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v112.16.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v114.17.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -994,7 +998,7 @@ window.startAuth = async ()=>{
       };
       await sendSignInLinkToEmail(auth, raw, actionCodeSettings);
       localStorage.setItem('gg_email_signin', raw);
-      el('auth-step-2-desc').textContent = `Magic link sent to ${raw}. Check your email and tap the link.`;
+      el('auth-step-2-desc').textContent = `Sign-in link sent to ${raw}. It can take a minute. Not there? Check spam/junk for noreply@gentlemans-games.firebaseapp.com, or go back and use your phone number instead.`;
       hide('auth-step-1'); show('auth-step-2');
       el('otp-inputs').innerHTML='<div class="alert alert-info" style="font-size:12px">Check your email and tap the sign-in link. This tab will update automatically.</div>';
     } catch(e){ showErr(errEl,'Could not send email: '+e.message); }
@@ -2291,6 +2295,7 @@ window.openTournament = (tid)=>{
       try{ ensureGameChampDefs(); renderBadgeFeeds(); checkBadgeToasts(tid); }catch(err){ console.warn('badge feed',err); }
       try{ refreshChats(); checkChatToasts(tid); }catch(err){ console.warn('chat',err); }
       try{ reconcileTiming(); }catch(err){ console.warn('timing',err); }
+      try{ renderNextGameCards(); }catch(err){ console.warn('nextgame',err); }
       try{ if(window._pendingNav) setTimeout(applyPendingNav,50); }catch(err){}
       try{ const n=Object.keys(S.joinRequests||{}).length, t=el('atab-players'), l='👥 Players'+(n?' <span class="chat-dot">'+n+'</span>':''); if(t&&t.innerHTML!==l) t.innerHTML=l; }catch(err){}
     });
@@ -2323,7 +2328,7 @@ function buildTournamentShell(){
     <div id="admin-players" class="hidden"></div>
     <div id="admin-games" class="hidden"></div>
     <div id="admin-rankings" class="hidden"></div>
-    <div id="admin-scores" class="hidden"><div id="push-prompt-admin"></div><div id="admin-scores-main"></div></div>
+    <div id="admin-scores" class="hidden"><div id="push-prompt-admin"></div><div id="next-game-admin"></div><div id="admin-scores-main"></div></div>
     <div id="admin-board" class="hidden"></div>
     <div id="admin-power" class="hidden"></div>
     <div id="admin-history" class="hidden"></div>
@@ -2344,7 +2349,7 @@ function buildTournamentShell(){
       <div class="ptab-btn" id="ptab-chat" data-tab="chat">💬 Chat</div>
       <div class="ptab-btn" id="ptab-vote" data-tab="vote" style="display:none">🗳️ Vote</div>
     </div>
-    <div id="pview-active"><div id="push-prompt-player"></div><div id="pview-active-main"></div></div>
+    <div id="pview-active"><div id="push-prompt-player"></div><div id="next-game-player"></div><div id="pview-active-main"></div></div>
     <div id="pview-chat" class="hidden"></div>
     <div id="pview-lb" class="hidden"></div>
     <div id="pview-games" class="hidden"></div>
@@ -2900,6 +2905,7 @@ window.startTournament = async ()=>{
   if(!confirm('Start the tournament?')) return;
   const games=(S.games||[]).map(g=>({...g,status:'ranking'}));
   await update(ref(db,'tournaments/'+currentTourneyId),{tournamentStarted:true,games});
+  setTimeout(()=>openNextGamePrompt(),400);
 };
 
 // ── GAMES ─────────────────────────────────────────────────
@@ -3139,7 +3145,7 @@ window.activateGame = async (btnOrId)=>{
   // Clear stale activeMatchIds for this game before reinitializing
   const clearedActive={...(S.activeMatchIds||{})};
   delete clearedActive[gameId];
-  await update(ref(db,'tournaments/'+currentTourneyId),{games, activeGameId:gameId, activeMatchIds:clearedActive});
+  await update(ref(db,'tournaments/'+currentTourneyId),{games, activeGameId:gameId, activeMatchIds:clearedActive, nextGame:null});
   await initMatchScheduler(gameId);
 };
 window.deactivateGame = async (btnOrId)=>{
@@ -4277,6 +4283,7 @@ window.finalizeGame = async (gameId)=>{
   const newPts={};
   teams.forEach(team=>{const place=pl[team.id]||n,pts=Math.max(1,n-place+1);[team.p1,team.p2].filter(Boolean).forEach(p=>{newPts[p]=pts;});});
   await update(ref(db,'tournaments/'+currentTourneyId),{['scores/'+gameId]:{_fin:true},['points/'+gameId]:newPts});
+  setTimeout(()=>openNextGamePrompt(gameId),400);
 };
 window.lockGameScores = async (gameId)=>{
   const games=(S.games||[]).map(g=>g.id===gameId?{...g,scoresLocked:true}:g);
@@ -4502,7 +4509,7 @@ window.saveScoreGame = async (gid)=>{
         await activateGame(remaining[idx2].id);
         alert('✓ '+remaining[idx2].name+' is now active!');
       }
-    }
+    } else setTimeout(()=>openNextGamePrompt(gid),300);
   } else {
     alert('All games complete!');
   }
@@ -5489,7 +5496,7 @@ function chatListHTML(admin){
       +'<div class="chat-bubble'+(atMe?' at-me':'')+'">'+chatText(it.text)
       +'<span class="chat-time">'+feedAgo(it.at)+'</span>'
       +(admin||mine?' <a href="#" class="chat-x" onclick="deleteChat(\''+it.k+'\');return false">✕</a>':'')
-      +(admin&&isAdmin&&!mine&&it.uid&&!String(it.uid).startsWith('as:')?' <a href="#" class="chat-x" title="Silence" onclick="muteChatUser(\''+it.uid+'\',\''+feedEsc(String(it.name)).replace(/'/g,'')+'\');return false">🔇</a>':'')
+      +(admin&&isAdmin&&!mine&&it.uid&&!String(it.uid).startsWith('as:')?' <a href="#" class="chat-x" title="Silence" onclick="muteChatUser(\''+it.uid+'\',\''+feedEsc(String(it.name)).replace(/'/g,'')+'\');return false"><span class="mute-btn"><span class="mute-ic">💬</span>Mute</span></a>':'')
       +'</div></div>';
     prev=it;
   });
@@ -6297,6 +6304,108 @@ if('serviceWorker' in navigator){
     if(e.data&&e.data.type==='gg-nav') goNav(parseNav(e.data.url));
   });
 }
+
+// ── NEXT GAME COUNTDOWN ───────────────────────────────────
+function ngRemaining(excludeId){
+  return (S.games||[]).filter(g=>g.id!==excludeId&&g.status!=='skipped'&&!(S.scores&&S.scores[g.id]&&S.scores[g.id]._fin)&&!(S.activeGameId===g.id));
+}
+function ngFmtClock(t){ try{ return new Date(t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } }
+function ngFmtLeft(ms){
+  if(ms<=0) return 'any minute now';
+  const s=Math.floor(ms/1000), h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
+  if(h) return h+'h '+String(m).padStart(2,'0')+'m';
+  return m+':'+String(sec).padStart(2,'0');
+}
+window.openNextGamePrompt=(excludeId)=>{
+  if(!S||!isTourneyAdmin) return;
+  const rem=ngRemaining(excludeId);
+  if(!rem.length) return;
+  window._ngAt=null;
+  const cur=S.nextGame;
+  const quick=[[10,'10m'],[15,'15m'],[20,'20m'],[30,'30m'],[45,'45m'],[60,'1h'],[90,'1½h'],[120,'2h']];
+  el('modal-area').innerHTML='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
+    +'<div class="modal-handle"></div>'
+    +'<div class="modal-title"><span>⏰ Next game start</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
+    +'<div class="sec-label" style="margin-top:0">Which game?</div>'
+    +'<select id="ng-game">'+rem.map(g=>'<option value="'+g.id+'"'+(cur&&cur.gameId===g.id?' selected':'')+'>'+feedEsc(g.name)+'</option>').join('')+'</select>'
+    +'<div class="sec-label">Starts in…</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:5px" id="ng-quick">'+quick.map(([m,l])=>'<button class="btn btn-sm" style="width:auto;min-width:52px" data-m="'+m+'" onclick="ngQuick(this)">'+l+'</button>').join('')+'</div>'
+    +'<div class="sec-label">…or a custom amount</div>'
+    +'<div style="display:flex;gap:6px"><input type="number" id="ng-amt" min="1" placeholder="e.g. 25" style="flex:1;margin:0" oninput="ngClearQuick()">'
+    +'<select id="ng-unit" style="width:auto;margin:0"><option value="1">minutes</option><option value="60">hours</option></select></div>'
+    +'<div class="sec-label">…or at a set time</div>'
+    +'<input type="time" id="ng-time" style="margin:0" oninput="ngClearQuick()">'
+    +'<div class="sec-label">Note (optional)</div>'
+    +'<input type="text" id="ng-note" maxlength="80" placeholder="e.g. Grab food, refill drinks" value="'+feedEsc((cur&&cur.note)||'')+'">'
+    +'<div id="ng-preview" style="font-size:12px;color:#888;margin:8px 0;min-height:16px"></div>'
+    +'<button class="btn btn-primary" onclick="saveNextGame()">⏰ Start countdown</button>'
+    +(cur?'<button class="btn btn-danger" onclick="clearNextGame()" style="margin-top:6px">Clear current countdown</button>':'')
+    +'<button class="btn" onclick="closeModal()" style="margin-top:6px">Skip</button>'
+    +'</div></div>';
+};
+window.ngQuick=(btn)=>{
+  document.querySelectorAll('#ng-quick button').forEach(b=>b.classList.remove('btn-primary'));
+  btn.classList.add('btn-primary');
+  window._ngAt=Date.now()+parseInt(btn.dataset.m)*60000;
+  if(el('ng-amt')) el('ng-amt').value=''; if(el('ng-time')) el('ng-time').value='';
+  el('ng-preview').textContent='Starts around '+ngFmtClock(window._ngAt);
+};
+window.ngClearQuick=()=>{
+  document.querySelectorAll('#ng-quick button').forEach(b=>b.classList.remove('btn-primary'));
+  window._ngAt=null;
+  const at=ngReadCustom();
+  el('ng-preview').textContent=at?'Starts around '+ngFmtClock(at):'';
+};
+function ngReadCustom(){
+  const amt=parseFloat(el('ng-amt')?.value), unit=parseInt(el('ng-unit')?.value||'1');
+  if(amt>0) return Date.now()+amt*unit*60000;
+  const tv=el('ng-time')?.value;
+  if(tv){
+    const [h,m]=tv.split(':').map(Number), d=new Date(); d.setHours(h,m,0,0);
+    if(d.getTime()<Date.now()-60000) d.setDate(d.getDate()+1);
+    return d.getTime();
+  }
+  return null;
+}
+window.saveNextGame=async()=>{
+  const at=window._ngAt||ngReadCustom();
+  if(!at){ alert('Pick a time first.'); return; }
+  const gid=el('ng-game')?.value, g=(S.games||[]).find(x=>x.id===gid);
+  await update(ref(db,'tournaments/'+currentTourneyId),{nextGame:{at,gameId:gid||'',gameName:g?g.name:'Next game',note:(el('ng-note')?.value||'').trim(),setAt:Date.now(),atLabel:ngFmtClock(at)}});
+  closeModal();
+};
+window.clearNextGame=async()=>{ await update(ref(db,'tournaments/'+currentTourneyId),{nextGame:null}); closeModal(); };
+function ngActive(){
+  const n=S&&S.nextGame;
+  if(!n||!n.at) return null;
+  if(n.gameId&&S.activeGameId===n.gameId) return null;
+  if(Date.now()-n.at>45*60000) return null;
+  return n;
+}
+function nextGameCardHTML(admin){
+  const n=ngActive();
+  if(!n) return admin?'<div class="card" style="padding:10px 12px;display:flex;align-items:center;gap:8px"><span style="font-size:20px">⏰</span><span style="flex:1;font-size:12px;color:#888">No countdown set</span><button class="btn btn-sm" onclick="openNextGamePrompt()" style="width:auto">Set next game time</button></div>':'';
+  return '<div class="card ng-card"><div style="display:flex;align-items:center;gap:12px">'
+    +'<div style="font-size:30px">⏰</div><div style="flex:1;min-width:0">'
+    +'<div style="font-size:11px;letter-spacing:1px;font-weight:700;opacity:.8">UP NEXT</div>'
+    +'<div style="font-size:17px;font-weight:800">'+feedEsc(n.gameName||'Next game')+'</div>'
+    +'<div style="font-size:12px;opacity:.85">Starts around '+feedEsc(ngFmtClock(n.at))+(n.note?' · '+feedEsc(n.note):'')+'</div></div>'
+    +'<div class="gg-cd" data-at="'+n.at+'" style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap">'+ngFmtLeft(n.at-Date.now())+'</div></div>'
+    +(admin?'<div style="display:flex;gap:6px;margin-top:8px"><button class="btn btn-sm" onclick="openNextGamePrompt()" style="flex:1;background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)">Change</button><button class="btn btn-sm" onclick="clearNextGame()" style="flex:1;background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)">Clear</button></div>':'')
+    +'</div>';
+}
+function renderNextGameCards(){
+  if(!S) return;
+  [['next-game-player',false],['next-game-admin',true]].forEach(([id,adm])=>{
+    const e=el(id); if(!e) return;
+    const h=(adm&&!isTourneyAdmin)?'':nextGameCardHTML(adm);
+    const key=h.replace(/<div class="gg-cd"[^>]*>[^<]*<\/div>/,'');
+    if(e.dataset.k!==key){ e.innerHTML=h; e.dataset.k=key; }
+  });
+}
+setInterval(()=>{
+  document.querySelectorAll('.gg-cd').forEach(x=>{ const at=+x.dataset.at; const t=ngFmtLeft(at-Date.now()); if(x.textContent!==t) x.textContent=t; });
+},1000);
 
 // ── PUSH ALERTS ───────────────────────────────────────────
 function pushEnv(){
