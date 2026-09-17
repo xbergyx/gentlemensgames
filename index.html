@@ -167,6 +167,11 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .ig-caption{position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:11px;font-weight:700}
 .fc-opt{display:flex;align-items:center;gap:8px;padding:10px 6px;border-bottom:1px solid rgba(128,128,128,.12);font-size:14px}
 .fc-opt input{width:auto;margin:0}
+.eg-lock{font-size:11px;color:#7a4f00;background:#FEF3E2;border:1px solid #f5cc80;border-radius:8px;padding:7px 9px;margin-bottom:4px}
+.eg-cur{font-size:13px;font-weight:700;padding:2px 0 2px}
+.eg-hint{font-size:11px;color:#888;margin-top:4px}
+.eg-chk{display:flex;gap:8px;align-items:center;font-size:13px;margin:8px 0}
+.eg-chk input{width:auto}
 .bf-chk{display:flex;gap:8px;align-items:center;font-size:13px;margin:8px 0}
 .bf-chk input{width:auto}
 .bf-card{background:linear-gradient(160deg,#14331f,#0c2417);border-radius:16px;overflow:hidden;margin-bottom:10px}
@@ -680,7 +685,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v123.17.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v124.17.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -754,7 +759,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v123.17.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v124.17.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2795,9 +2800,8 @@ function renderAdminGames(){
 
       <div class="sec-label" id="tbmode-label" style="display:none">Tiebreaker method</div>
       <select id="game-tbmode" style="display:none">
-        <option value="">— select tiebreaker method —</option>
-        <option value="stayon">Straight Progression / Cascading Method</option>
-        <option value="restart">Re-sorting / Start-Over Method</option>
+        <option value="restart" selected>Start over — one place at a time (recommended)</option>
+        <option value="stayon">Cascading — rank all tied teams at once</option>
       </select>
 
       <div class="sec-label">Game rules <span style="font-size:10px;color:#aaa;font-weight:400">— edit as needed, each line = one bullet</span></div>
@@ -3057,54 +3061,54 @@ window.startTournament = async ()=>{
 // ── GAME PRESETS ─────────────────────────────────────────
 const GAME_PRESETS = {
   cornhole: {
-    name:'Cornhole', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    name:'Cornhole', format:'', teamSize:'2', tiebreak:'auto', tbMode:'restart',
     winScore:21, exactScore:false, hasRebuttal:true, hasInstaWin:false, tbDesc:'',
     rules:'• First to or above 21 wins (can go over)\n• Bags in hole = 3 pts, on board = 1 pt\n• Bags cancel — only net score counts each round\n• Bag must land and stay on board to count\n• Foul line: front edge of board — no stepping over\n• Knocked-off bags score nothing'
   },
   kanjam: {
-    name:'KanJam', format:'', teamSize:'2', tiebreak:'host-pick', tbMode:'stayon',
+    name:'KanJam', format:'', teamSize:'2', tiebreak:'host-pick', tbMode:'restart',
     winScore:21, exactScore:true, hasRebuttal:true, hasInstaWin:true, tbDesc:'',
     rules:'• Play to exactly 21 — going over resets to 11\n• 3 pts = partner deflects your throw into the can, 2 pts = you hit the can yourself (unassisted), 1 pt = partner deflects your throw to hit the outside of the can\n• InstaWin: throw it unassisted into the kan — through the front slot or the top — InstaWin regardless of score\n• Rebuttal only applies if you went second — if team 2 hits 21 after team 1, sudden death\n• Sudden death: each team throws one round, most points wins\n• Both players must throw each round\n• Can must stay upright to count points'
   },
   beerdie: {
-    name:'Beer Die', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    name:'Beer Die', format:'', teamSize:'2', tiebreak:'auto', tbMode:'restart',
     winScore:7, exactScore:false, winBy2:true, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• Play to 7, must win by 2\n• In cup = 3 pts, off cup = 2 pts, off table = 1 pt\n• Die must break table plane before catch — one hand, no trap\n• Must make it past the tape in the middle\n• Die must be thrown above head height of all players\n• No gripping the die\n• Must drink after every point your opponent scores'
   },
   beerdarts: {
-    name:'Beer Darts', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    name:'Beer Darts', format:'', teamSize:'2', tiebreak:'auto', tbMode:'restart',
     winScore:6, exactScore:true, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• Exactly 6 pierces to win\n• Each team member has their own can — 2 cans per team, 3 pierces per can\n• First hole in top of can = can eliminated (counts as 3 pierces)\n• Any hole in bottom silver ring = can eliminated (counts as 3 pierces)\n• Drink when your can is pierced'
   },
   bowling: {
-    name:'Bowling', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'stayon',
+    name:'Bowling', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'restart',
     winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasInstaWin:false,
     tbDesc:'Tiebreaker game — highest combined score wins',
     rules:'• Two games each teammate — total team pins\n• Alternate frames on second game\n• Team with highest combined pin total wins\n• Standard 10-pin bowling rules apply'
   },
   golf: {
-    name:'Golf', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'stayon',
+    name:'Golf', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'restart',
     winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasInstaWin:false,
     tbDesc:'Closest putt to the pin',
     rules:'• Two man scramble — both hit from each spot, pick best ball and continue\n• One club length to improve lie, no improvement to rough\n• Two mulligans per team per round\n• Lowest total score wins\n• Each teammate must have at least one shot per hole'
   },
   spikeball: {
-    name:'Spikeball', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    name:'Spikeball', format:'', teamSize:'2', tiebreak:'auto', tbMode:'restart',
     winScore:21, exactScore:false, winBy2:true, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• Gentleman\'s serve to start — both teams agree on who goes first\n• Play to 21, must win by 2\n• Max 3 touches per team before hitting net, must alternate players\n• Serve must be hit cleanly — no spinning serves\n• Rim shots are replayed (let)\n• Scoring team serves next point\n• Switch sides after first team hits 11\n• No carrying or catching the ball\n• Body shots count if ball stays in play'
   },
   cocaine: {
-    name:'Cocaine', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    name:'Cocaine', format:'', teamSize:'2', tiebreak:'auto', tbMode:'restart',
     winScore:7, exactScore:true, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• 6 cups per team — line up 3 in a row across table from partner\n• Shoot ball into cup — on a make, pass cup to other team who must drink and flip before continuing\n• Once all 6 cups are cleared, double bounce (or 17) to center bowl to win\n• Winning score = exactly 7 (6 cups and one bowl)\n• Flip must be completed before next throw can happen'
   },
   bucketball: {
-    name:'Bucketball', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    name:'Bucketball', format:'', teamSize:'2', tiebreak:'auto', tbMode:'restart',
     winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• Standard Bucketball rules\n• Eliminate all opponent buckets to win\n• Each ball scored stays out of play'
   },
   custom: {
-    name:'', format:'', teamSize:'2', tiebreak:'auto', tbMode:'stayon',
+    name:'', format:'', teamSize:'2', tiebreak:'auto', tbMode:'restart',
     winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasInstaWin:false, tbDesc:'', rules:''
   }
 };
@@ -3206,7 +3210,7 @@ window.addGame = async ()=>{
   if(!format){ alert('Select a format.'); return; }
   if(!tb){ alert('Select a tiebreaker.'); return; }
   const teamSize=parseInt(el('game-teamsize')?.value||'2');
-  const tbMode=el('game-tbmode')?.value||'stayon';
+  const tbMode=el('game-tbmode')?.value||'restart';
   const rules=(el('game-rules')?.value||'').trim();
   const tbDesc=(el('game-tb-desc')?.value||'').trim();
   const winScore=parseFloat(el('game-min-score')?.value)||null;
@@ -3331,6 +3335,7 @@ function renderGames(){
       ${!isLocked?`<button class="btn btn-sm" onclick="toggleSkipGame('${g.id}',${!isSkipped})" style="width:auto;border-color:${isSkipped?'#97C459':'#f5cc80'};color:${isSkipped?'#27500A':'#7a4f00'}">${isSkipped?'↩ Unskip':'⏭ Skip'}</button>`:''}
       ${isLocked?`<button class="btn btn-sm ${isActive?'btn-danger':'btn-success'}" onclick="${isActive?'deactivateGame':'activateGame'}('${g.id}')" style="width:auto">${isActive?'⏸ Deactivate':'▶ Activate'}</button>`:''}
       ${S.tournamentStarted&&canChangeFormat(g)?`<button class="btn btn-sm" onclick="openFormatChange('${g.id}')" style="width:auto">🔁 Format</button>`:''}
+      <button class="btn btn-sm" onclick="openEditGame('${g.id}')" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">✏️ Edit</button>
       <button class="btn btn-sm btn-danger" onclick="removeGame('${g.id}')">✕</button>
     </div>`;
   }).join('');
@@ -6902,6 +6907,87 @@ function renderUXCards(){
 }
 setInterval(()=>{ try{ renderUXCards(); }catch(e){} },30000);
 
+// ── EDIT GAME ─────────────────────────────────────────────
+function gameTeams(gid){ return (S.teams&&S.teams[gid])||[]; }
+window.openEditGame=(gid)=>{
+  const g=(S.games||[]).find(x=>x.id===gid); if(!g) return;
+  const hasRes=gameHasResults(g), teams=gameTeams(gid), started=!!S.tournamentStarted;
+  const fam=FMT_SCORE.includes(g.format)?FMT_SCORE:FMT_MATCH;
+  const opt=(v,l,cur)=>'<option value="'+v+'"'+(cur===v?' selected':'')+'>'+l+'</option>';
+  const lock=(txt)=>'<div class="eg-lock">🔒 '+txt+'</div>';
+  let h='<div class="sec-label" style="margin-top:0">Game name</div>'
+    +'<input type="text" id="eg-name" maxlength="40" value="'+feedEsc(g.name||'')+'">';
+  h+='<div class="sec-label">Format</div>';
+  h+= hasRes
+    ? lock('This game already has scores. Unlock and clear its results to change the format.')+'<div class="eg-cur">'+feedEsc(FMT_NICE[g.format]||g.format)+'</div>'
+    : '<select id="eg-format">'+fam.map(f=>opt(f,FMT_NICE[f]||f,g.format)).join('')+'</select>'
+      +(teams.length?'<div class="eg-hint">Teams stay the same — the schedule gets rebuilt.</div>':'');
+  h+='<div class="sec-label">Team size</div>';
+  h+= teams.length
+    ? lock('Teams are already made. Remove the teams to change team size.')+'<div class="eg-cur">'+(g.teamSize||2)+' players per team</div>'
+    : '<select id="eg-teamsize">'+[2,3].map(n=>opt(n,n+' players per team',+(g.teamSize||2))).join('')+'</select>';
+  h+='<div class="sec-label">Tiebreaker rules</div>'
+    +'<select id="eg-tiebreak" onchange="egToggleMode()">'
+    +opt('auto','Auto tiebreaker',g.tiebreak)+opt('host-score','You enter a tiebreaker score',g.tiebreak)+opt('host-pick','You pick the winner',g.tiebreak)+'</select>';
+  h+='<div id="eg-mode-wrap"'+(g.tiebreak==='auto'?'':' style="display:none"')+'>'
+    +'<div class="sec-label">Tiebreaker method</div>'
+    +'<select id="eg-tbmode">'
+    +opt('restart','Start over — one place at a time, recheck H2H after each (recommended)',g.tbMode||'restart')
+    +opt('stayon','Cascading — rank everyone by the first step that separates them',g.tbMode||'restart')
+    +'</select></div>';
+  h+='<div class="sec-label">Tiebreaker description (shown in results)</div>'
+    +'<input type="text" id="eg-tbdesc" maxlength="90" value="'+feedEsc(g.tbDesc||'')+'" placeholder="e.g. Closest putt to the pin">';
+  h+='<div class="sec-label">Score to win (blank = none)</div>'
+    +'<input type="number" id="eg-winscore" inputmode="numeric" pattern="[0-9]*" value="'+(g.winScore==null?'':g.winScore)+'">'
+    +'<label class="eg-chk"><input type="checkbox" id="eg-exact"'+(g.exactScore?' checked':'')+'> Must land on it exactly</label>'
+    +'<label class="eg-chk"><input type="checkbox" id="eg-winby2"'+(g.winBy2?' checked':'')+'> Must win by 2</label>'
+    +'<label class="eg-chk"><input type="checkbox" id="eg-rebuttal"'+(g.hasRebuttal?' checked':'')+'> Rebuttal rule (tied score → overtime)</label>'
+    +'<label class="eg-chk"><input type="checkbox" id="eg-instawin"'+(g.hasInstaWin?' checked':'')+'> InstaWin rule</label>';
+  h+='<div class="sec-label">Game rules <span style="font-size:10px;color:#aaa;font-weight:400">— one per line</span></div>'
+    +'<textarea id="eg-rules" rows="6" style="font-size:12px;resize:vertical" onkeydown="autoRuleBullet(event,this)">'+feedEsc(g.rules||'')+'</textarea>';
+  if(started) h+='<label class="eg-chk"><input type="checkbox" id="eg-ann" checked> Tell everyone what changed (chat + alert)</label>';
+  if(hasRes) h+='<div class="eg-hint" style="margin-top:8px">Changing the tiebreaker now will re-sort the standings for this game.</div>';
+  h+='<button class="btn btn-primary" onclick="saveGameEdit(\''+gid+'\')" style="margin-top:12px">Save changes</button>';
+  ggSheet('✏️ Edit '+feedEsc(g.name),h);
+  try{ numpadify(el('modal-area')); }catch(e){}
+};
+window.egToggleMode=()=>{ const w=el('eg-mode-wrap'); if(w) w.style.display=(el('eg-tiebreak')?.value==='auto')?'':'none'; };
+window.saveGameEdit=async(gid)=>{
+  const g=(S.games||[]).find(x=>x.id===gid); if(!g) return;
+  const name=(el('eg-name')?.value||'').trim(); if(!name){ alert('Give the game a name.'); return; }
+  const teams=gameTeams(gid), hasRes=gameHasResults(g);
+  const nf=hasRes?g.format:(el('eg-format')?.value||g.format);
+  const ts=teams.length?(g.teamSize||2):(parseInt(el('eg-teamsize')?.value||'2')||2);
+  const tb=el('eg-tiebreak')?.value||g.tiebreak||'auto';
+  const tbMode=tb==='auto'?(el('eg-tbmode')?.value||'restart'):(g.tbMode||'restart');
+  const ws=el('eg-winscore')?.value;
+  const ng={...g,name,format:nf,teamSize:ts,tiebreak:tb,tbMode,
+    tbDesc:(el('eg-tbdesc')?.value||'').trim(),
+    winScore:(ws===''||ws==null)?null:parseFloat(ws),
+    exactScore:!!el('eg-exact')?.checked, winBy2:!!el('eg-winby2')?.checked,
+    hasRebuttal:!!el('eg-rebuttal')?.checked, hasInstaWin:!!el('eg-instawin')?.checked,
+    rules:(el('eg-rules')?.value||'').trim()};
+  const fmtChanged=nf!==g.format;
+  if(fmtChanged){ ng.formatChangedAt=Date.now(); ng.formatWas=g.format; }
+  const upd={games:(S.games||[]).map(x=>x.id===gid?ng:x)};
+  if(fmtChanged&&teams.length){ upd['bs/'+gid]=buildBracket(ng,teams); upd['activeMatchIds/'+gid]=null; }
+  const changes=[];
+  if(name!==g.name) changes.push('renamed from '+g.name);
+  if(fmtChanged) changes.push('now '+(FMT_NICE[nf]||nf));
+  if(tb!==g.tiebreak||tbMode!==(g.tbMode||'restart')) changes.push('tiebreaker updated');
+  if((ng.winScore||null)!==(g.winScore||null)) changes.push('plays to '+(ng.winScore==null?'no set score':ng.winScore));
+  if(ng.rules!==(g.rules||'').trim()) changes.push('rules updated');
+  if(S.tournamentStarted&&el('eg-ann')?.checked&&changes.length){
+    const now=Date.now(), k=feedKey();
+    upd['chat/'+k]={uid:'system',name:'Commissioner',system:true,kind:'notice',title:'GAME UPDATED',text:name+': '+changes.join(' · '),at:now};
+    upd['notices/'+k]={title:'📣 '+name+' updated',body:changes.join(' · '),at:now,gameId:gid};
+  }
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
+  closeModal();
+  if(fmtChanged&&S.activeGameId===gid) setTimeout(()=>advanceMatchScheduler(gid),500);
+  showBadgeToast('✓ '+feedEsc(name)+' updated',true);
+};
+
 // ── GAME DAY BRIEFING ─────────────────────────────────────
 function briefDefaults(){
   const b=S.brief||{};
@@ -7638,8 +7724,8 @@ function renderGameInfo(){
     ]
   };
   const tbMethodFull={
-    'restart':'Re-sorting / Start-Over Method — pick one winner at a time, restart tiebreaker from step 1 for remaining teams',
-    'stayon':'Straight Progression / Cascading Method — rank all tied teams by whichever step first separates them'
+    'restart':'Start-Over Method — settle one place at a time, then recheck head-to-head among whoever is left',
+    'stayon':'Cascading Method — rank all tied teams by whichever step first separates them'
   };
 
   let html='';
@@ -7682,7 +7768,7 @@ function renderGameInfo(){
       html+='<div style="font-size:11px;padding:2px 0;color:#7a4f00">'+s+'</div>';
     });
     html+='</div>';
-    if(g.tiebreak==='auto') html+='<div style="font-size:10px;color:#aaa">Method: '+(tbMethodFull[g.tbMode||'stayon'])+'</div>';
+    if(g.tiebreak==='auto') html+='<div style="font-size:10px;color:#aaa">Method: '+(tbMethodFull[g.tbMode||'restart'])+'</div>';
     html+='</div>';
   });
   e.innerHTML=html;
@@ -7706,7 +7792,7 @@ function renderPlayerGames(myName){
   if(!activeGames.length){
     const fmtFull={'h2h-points':'Head-to-head points (e.g. cornhole)','h2h-wins':'Head-to-head wins (e.g. kan jam)','score-low':'Lowest score wins (e.g. golf)','score-high':'Highest score wins (e.g. bowling)','multi-round-high':'Multi-round high score','multi-round-low':'Multi-round low score','round-robin':'Round robin','single-elim':'Single elimination bracket','double-elim':'Double elimination bracket','two-pool':'2 pools → crossover finals','pool-playoff':'Pool stage + knockout'};
     const tbFull={'auto':'Automatic (point diff → H2H)','host-score':'Host enters tiebreaker score','host-pick':'Host manually picks winner'};
-    const tbModeFull={'restart':'H2H first, restart after each pick','stayon':'Stay on step (rank all by one criterion)'};
+    const tbModeFull={'restart':'Start over after each place','stayon':'Cascading (one criterion for all)'};
     let html='';
     allGames.forEach(g=>{
       html+='<div class="card">'
