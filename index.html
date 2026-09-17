@@ -143,6 +143,32 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 [data-theme="dark"] .chat-badge{color:#c8c0ff}
 [data-theme="dark"] .chat-badge.spicy{color:#f5b27a}
 [data-theme="dark"] .chat-badge.spec{color:#bbb}
+.ig-phone{width:220px;height:200px;margin:0 auto;border:6px solid #1c1c1e;border-radius:26px;overflow:hidden;position:relative;background:#f2f2f7;text-align:left;box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.ig-page{position:absolute;inset:0;background:repeating-linear-gradient(#fff 0 14px,#eee 14px 16px);opacity:.9}
+.ig-page.dim{filter:brightness(.55)}
+.ig-bar{position:absolute;left:0;right:0;bottom:0;height:40px;background:#f7f7f9;border-top:1px solid #ddd;display:flex;align-items:center;justify-content:space-around;font-size:16px;color:#1a73e8;z-index:2}
+.ig-bar.top{top:0;bottom:auto;border-top:none;border-bottom:1px solid #ddd;justify-content:space-between;padding:0 10px;font-size:13px}
+.ig-url{background:#e9e9ee;border-radius:8px;padding:3px 8px;font-size:10px;color:#555}
+.ig-hl{position:relative;display:inline-flex;align-items:center;justify-content:center;padding:3px 5px;border-radius:10px;background:rgba(26,115,232,.12)}
+.ig-hl::after{content:'';position:absolute;inset:-6px;border:3px solid #e74c3c;border-radius:14px;animation:igpulse 1.2s ease-in-out infinite}
+@keyframes igpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(1.12)}}
+.ig-sheet,.ig-menu{position:absolute;left:8px;right:8px;bottom:8px;background:#fff;border-radius:14px;overflow:hidden;z-index:2}
+.ig-menu{top:30px;bottom:auto;left:auto;right:6px;width:140px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.ig-row{padding:9px 12px;font-size:12px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;color:#222}
+.ig-row.hl{background:#fdecea;font-weight:800;box-shadow:inset 0 0 0 2px #e74c3c}
+.ig-add{position:absolute;top:44px;left:10px;right:10px;background:#fff;border-radius:10px;padding:8px;display:flex;gap:8px;align-items:center;z-index:2;font-size:12px}
+.ig-add img{width:36px;height:36px;border-radius:9px}
+.ig-dialog{position:absolute;left:16px;right:16px;top:60px;background:#fff;border-radius:12px;padding:12px;z-index:2;font-size:12px}
+.ig-home{position:absolute;inset:0;background:linear-gradient(160deg,#5b4bc4,#e86ea0);display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:18px 16px;align-content:start}
+.ig-home i{width:36px;height:36px;border-radius:9px;display:block;opacity:.85}
+.ig-home i.gg{position:relative;background:#1e1650;color:#f6e2a8;font:800 11px sans-serif;display:flex;align-items:center;justify-content:center;opacity:1}
+.ig-home i.gg img{width:36px;height:36px;border-radius:9px}
+.ig-home i.gg::after{content:'';position:absolute;inset:-5px;border:3px solid #fff;border-radius:13px;animation:igpulse 1.2s ease-in-out infinite}
+.ig-caption{position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:11px;font-weight:700}
+.fc-opt{display:flex;align-items:center;gap:8px;padding:10px 6px;border-bottom:1px solid rgba(128,128,128,.12);font-size:14px}
+.fc-opt input{width:auto;margin:0}
+.chat-notice{background:rgba(26,115,232,.08);border-color:rgba(26,115,232,.4);color:#174ea6}
+[data-theme="dark"] .chat-notice{color:#8ab4f8}
 .chat-jail{display:flex;align-items:center;gap:10px;align-self:stretch;background:rgba(192,57,43,.1);border:1.5px solid rgba(192,57,43,.45);border-radius:14px;padding:8px 10px;margin:8px 0;font-size:13px;color:#8e2a1f}
 .chat-jail.free{background:rgba(39,80,10,.08);border-color:rgba(39,80,10,.35);color:#27500A}
 .chat-jail-ic{width:38px;height:38px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.12)}
@@ -637,7 +663,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v121.17.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v122.17.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -711,7 +737,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v121.17.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v122.17.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -1010,6 +1036,7 @@ window.addEventListener('beforeinstallprompt', e=>{
 });
 window.installPWA = ()=>{
   if(_pwaPrompt){ _pwaPrompt.prompt(); _pwaPrompt.userChoice.then(()=>{ _pwaPrompt=null; hide('install-prompt'); }); return; }
+  if(typeof openInstallGuide==='function'){ openInstallGuide(); return; }
   const ua=navigator.userAgent||'';
   const ios=/iPhone|iPad|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
   const inApp=/FBAN|FBAV|Instagram|Line\/|GSA\/|Snapchat|Twitter/i.test(ua);
@@ -2383,7 +2410,7 @@ window.openTournament = (tid)=>{
       try{ ensureGameChampDefs(); renderBadgeFeeds(); checkBadgeToasts(tid); }catch(err){ console.warn('badge feed',err); }
       try{ refreshChats(); checkChatToasts(tid); }catch(err){ console.warn('chat',err); }
       try{ reconcileTiming(); }catch(err){ console.warn('timing',err); }
-      try{ renderNextGameCards(); renderUXCards(); }catch(err){ console.warn('nextgame',err); }
+      try{ renderNextGameCards(); renderUXCards(); checkNotices(tid); }catch(err){ console.warn('nextgame',err); }
       try{ if(window._pendingNav) setTimeout(applyPendingNav,50); }catch(err){}
       try{ const n=Object.keys(S.joinRequests||{}).length, t=el('atab-players'), l='👥 Players'+(n?' <span class="chat-dot">'+n+'</span>':''); if(t&&t.innerHTML!==l) t.innerHTML=l; }catch(err){}
     });
@@ -3277,6 +3304,7 @@ function renderGames(){
       </div>`:''}
       ${!isLocked?`<button class="btn btn-sm" onclick="toggleSkipGame('${g.id}',${!isSkipped})" style="width:auto;border-color:${isSkipped?'#97C459':'#f5cc80'};color:${isSkipped?'#27500A':'#7a4f00'}">${isSkipped?'↩ Unskip':'⏭ Skip'}</button>`:''}
       ${isLocked?`<button class="btn btn-sm ${isActive?'btn-danger':'btn-success'}" onclick="${isActive?'deactivateGame':'activateGame'}('${g.id}')" style="width:auto">${isActive?'⏸ Deactivate':'▶ Activate'}</button>`:''}
+      ${S.tournamentStarted&&canChangeFormat(g)?`<button class="btn btn-sm" onclick="openFormatChange('${g.id}')" style="width:auto">🔁 Format</button>`:''}
       <button class="btn btn-sm btn-danger" onclick="removeGame('${g.id}')">✕</button>
     </div>`;
   }).join('');
@@ -5580,6 +5608,11 @@ function chatListHTML(admin){
     }
     if(it.system){
       const txt=String(it.text||'');
+      if(it.kind==='notice'){
+        h+='<div class="chat-jail chat-notice"><div class="chat-jail-ic">📣</div><div style="flex:1;min-width:0"><div class="chat-jail-t">'+feedEsc(it.title||'ANNOUNCEMENT')+'</div><div>'+feedEsc(txt)+'</div></div>'
+          +'<span class="chat-time">'+feedAgo(it.at)+'</span>'+(admin?' <a href="#" class="chat-x" onclick="deleteChat(\''+it.k+'\');return false">✕</a>':'')+'</div>';
+        prev=null; return;
+      }
       const isMute=it.kind==='mute'||txt.startsWith('🔇'), isFree=it.kind==='unmute'||txt.startsWith('🔊');
       const body=feedEsc(txt.replace(/^(🔇|🔊)\s*/,''));
       if(isMute||isFree){
@@ -6780,24 +6813,27 @@ const TOUR=[
 ];
 window.openTour=(force)=>{
   let i=0;
-  const done=()=>{ try{ localStorage.setItem('gg_tour_v1','1'); }catch(e){} closeModal(); };
+  const inApp=pushEnv().standalone;
+  const T=inApp?TOUR.filter((_,k)=>k!==1):TOUR;
+  const done=()=>{ try{ localStorage.setItem('gg_tour_v1','1'); }catch(e){} closeModal(); if(inApp) setTimeout(()=>{ _autoPushAsked=false; try{ maybeAutoPushPrompt(); }catch(e){} },400); };
   const draw=()=>{
-    const [ic,t,d]=TOUR[i];
+    const [ic,t,d]=T[i];
     el('modal-area').innerHTML='<div class="modal-bg"><div class="modal" style="text-align:center">'
       +'<div style="font-size:54px;margin:10px 0 6px">'+ic+'</div><div style="font-size:19px;font-weight:800;margin-bottom:8px">'+t+'</div>'
       +'<div style="font-size:14px;color:#777;line-height:1.45;margin-bottom:16px">'+d+'</div>'
-      +(i===1?'<button class="btn" style="margin-bottom:8px" onclick="enablePush()">🔔 Turn on alerts</button>':'')
-      +'<div style="display:flex;justify-content:center;gap:6px;margin-bottom:14px">'+TOUR.map((_,k)=>'<span style="width:8px;height:8px;border-radius:50%;background:'+(k===i?'#534AB7':'#ddd')+'"></span>').join('')+'</div>'
-      +'<button class="btn btn-primary" id="tour-next">'+(i<TOUR.length-1?'Next':'Let\'s go')+'</button>'
-      +(i<TOUR.length-1?'<button class="btn" style="margin-top:6px" id="tour-skip">Skip</button>':'')
+      +(!inApp&&i===1?'<button class="btn" style="margin-bottom:8px" onclick="openInstallGuide()">📲 Show me how</button>':'')
+      +'<div style="display:flex;justify-content:center;gap:6px;margin-bottom:14px">'+T.map((_,k)=>'<span style="width:8px;height:8px;border-radius:50%;background:'+(k===i?'#534AB7':'#ddd')+'"></span>').join('')+'</div>'
+      +'<button class="btn btn-primary" id="tour-next">'+(i<T.length-1?'Next':'Let\'s go')+'</button>'
+      +(i<T.length-1?'<button class="btn" style="margin-top:6px" id="tour-skip">Skip</button>':'')
       +'</div></div>';
-    el('tour-next').onclick=()=>{ if(i<TOUR.length-1){ i++; draw(); } else done(); };
+    el('tour-next').onclick=()=>{ if(i<T.length-1){ i++; draw(); } else done(); };
     if(el('tour-skip')) el('tour-skip').onclick=done;
   };
   draw();
 };
 function maybeTour(){
   try{ if(localStorage.getItem('gg_tour_v1')) return; }catch(e){ return; }
+  try{ if(!pushEnv().standalone&&igPlatform()!=='desktop'&&!localStorage.getItem('gg_install_v1')) return; }catch(e){}
   if(el('modal-area')?.innerHTML) return;
   setTimeout(()=>{ if(!el('modal-area')?.innerHTML&&!el('player-area')?.classList.contains('hidden')) openTour(); },700);
 }
@@ -6838,6 +6874,134 @@ function renderUXCards(){
 }
 setInterval(()=>{ try{ renderUXCards(); }catch(e){} },30000);
 
+// ── INSTALL GUIDE (browser) ───────────────────────────────
+function igPlatform(){
+  const ua=navigator.userAgent||'';
+  if(/FBAN|FBAV|Instagram|Line\/|Snapchat|GSA\//i.test(ua)) return 'inapp';
+  if(/iPhone|iPad|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)) return /CriOS/.test(ua)?'ios-chrome':'ios';
+  if(/Android/i.test(ua)) return 'android';
+  return 'desktop';
+}
+const IG_SHARE='<svg width="22" height="26" viewBox="0 0 22 26" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 16V2M6 7l5-5 5 5"/><path d="M6 11H3v13h16V11h-3"/></svg>';
+function igFrame(inner){ return '<div class="ig-phone">'+inner+'</div>'; }
+function igSteps(pf){
+  const iosBar=(top)=>top
+    ?'<div class="ig-bar top"><span class="ig-url">gentlemen-games.com</span><span class="ig-hl">'+IG_SHARE+'</span></div><div class="ig-page"></div>'
+    :'<div class="ig-page"></div><div class="ig-bar"><span>‹</span><span>›</span><span class="ig-hl">'+IG_SHARE+'</span><span>📖</span><span>⧉</span></div>';
+  const sheet='<div class="ig-page dim"></div><div class="ig-sheet"><div class="ig-row">Copy <span>⧉</span></div><div class="ig-row">Add to Favorites <span>☆</span></div><div class="ig-row hl">Add to Home Screen <span>⊞</span></div><div class="ig-row">Find on Page <span>🔍</span></div></div>';
+  const addBar='<div class="ig-bar top"><span style="color:#1a73e8">Cancel</span><b style="font-size:12px">Add to Home Screen</b><span class="ig-hl" style="color:#1a73e8;font-weight:700">Add</span></div><div class="ig-add"><img src="/icon-192.png" onerror="this.style.visibility=\'hidden\'"><div><b>GG</b><div style="font-size:10px;color:#888">gentlemen-games.com</div></div></div><div class="ig-page"></div>';
+  const home='<div class="ig-home">'+['#f39c12','#27ae60','#2980b9','#8e44ad','#e74c3c','#16a085','#d35400'].map(c=>'<i style="background:'+c+'"></i>').join('')+'<i class="gg"><img src="/icon-192.png" onerror="this.parentNode.textContent=\'GG\'"></i></div><div class="ig-caption">GG</div>';
+  const dots='<div class="ig-page"></div><div class="ig-bar top"><span class="ig-url">gentlemen-games.com</span><span class="ig-hl" style="font-size:20px;font-weight:900">⋮</span></div>';
+  const menu='<div class="ig-page dim"></div><div class="ig-menu"><div class="ig-row">New tab</div><div class="ig-row">Bookmarks</div><div class="ig-row hl">Install app</div><div class="ig-row">Settings</div></div>';
+  const install='<div class="ig-page dim"></div><div class="ig-dialog"><b>Install app?</b><div style="font-size:11px;color:#666;margin:6px 0 10px">GG · gentlemen-games.com</div><div style="text-align:right"><span style="margin-right:14px;color:#1a73e8">Cancel</span><span class="ig-hl" style="color:#1a73e8;font-weight:700">Install</span></div></div>';
+  if(pf==='inapp') return [
+    ['Open this in your real browser','You opened the link inside another app (like Facebook or Instagram), which can\'t install apps. Tap the <b>⋯</b> menu and choose <b>Open in Safari</b> (iPhone) or <b>Open in Chrome</b> (Android).', igFrame('<div class="ig-bar top"><span>✕</span><span class="ig-url">gentlemen-games.com</span><span class="ig-hl" style="font-weight:900">⋯</span></div><div class="ig-page"></div>')]];
+  if(pf==='android') return [
+    ['Tap the ⋮ menu','It\'s in the top right corner of Chrome.',igFrame(dots)],
+    ['Tap "Install app"','It might say <b>Add to Home screen</b> instead.',igFrame(menu)],
+    ['Tap Install','GG gets added to your home screen.',igFrame(install)],
+    ['Open GG from your home screen','Always open it from there, then tap <b>Allow</b> when it asks about alerts.',igFrame(home)]];
+  if(pf==='desktop') return [
+    ['Use your phone','This app is made for your phone. Open <b>gentlemen-games.com</b> on your phone to install it and get alerts.',igFrame(home)]];
+  return [
+    ['Tap the Share button',pf==='ios-chrome'?'In Chrome it\'s at the <b>top right</b> of the screen.':'In Safari it\'s the square with the arrow at the <b>bottom</b> of the screen (on some iPhones it\'s next to the address bar).',igFrame(iosBar(pf==='ios-chrome'))],
+    ['Tap "Add to Home Screen"','Scroll down the list to find it. If it\'s missing, tap <b>Edit Actions</b> or <b>More</b> at the bottom.',igFrame(sheet)],
+    ['Tap Add','It\'s in the top right corner.',igFrame(addBar)],
+    ['Open GG from your home screen','Close Safari and open <b>GG</b> from your home screen. Then tap <b>Allow</b> when it asks about alerts. Alerts only work from the home screen app.',igFrame(home)]];
+}
+window.openInstallGuide=()=>{
+  const pf=igPlatform(), steps=igSteps(pf);
+  let i=0;
+  const draw=()=>{
+    const [t,d,pic]=steps[i];
+    el('modal-area').innerHTML='<div class="modal-bg"><div class="modal" style="text-align:center">'
+      +'<div style="font-size:11px;font-weight:800;letter-spacing:1.2px;color:#534AB7">'+(steps.length>1?'STEP '+(i+1)+' OF '+steps.length:'GET THE APP')+'</div>'
+      +'<div style="font-size:19px;font-weight:800;margin:4px 0 10px">'+t+'</div>'
+      +pic
+      +'<div style="font-size:14px;color:#666;line-height:1.45;margin:12px 4px 14px">'+d+'</div>'
+      +'<div style="display:flex;gap:8px">'+(i>0?'<button class="btn" id="ig-back" style="flex:1">Back</button>':'')
+      +'<button class="btn btn-primary" id="ig-next" style="flex:2">'+(i<steps.length-1?'Next':'Got it')+'</button></div>'
+      +'<button class="btn" id="ig-later" style="margin-top:6px;border:none;color:#999">I\'ll do it later</button>'
+      +'</div></div>';
+    el('ig-next').onclick=()=>{ if(i<steps.length-1){ i++; draw(); } else done(); };
+    if(el('ig-back')) el('ig-back').onclick=()=>{ i--; draw(); };
+    el('ig-later').onclick=()=>{ try{ localStorage.setItem('gg_install_snooze',String(Date.now())); }catch(e){} closeModal(); };
+  };
+  const done=()=>{ try{ localStorage.setItem('gg_install_v1','1'); }catch(e){} closeModal(); };
+  draw();
+};
+function maybeInstallGuide(){
+  const env=pushEnv(); if(env.standalone) return;
+  const pf=igPlatform(); if(pf==='desktop') return;
+  try{
+    if(localStorage.getItem('gg_install_v1')) return;
+    const sn=+localStorage.getItem('gg_install_snooze')||0; if(Date.now()-sn<20*3600*1000) return;
+  }catch(e){ return; }
+  setTimeout(()=>{ if(!el('modal-area')?.innerHTML) openInstallGuide(); },900);
+}
+// ── CHANGE A GAME'S FORMAT MID-TOURNAMENT ─────────────────
+const FMT_MATCH=['round-robin','partial-rr','two-pool','single-elim','pool-playoff'];
+const FMT_SCORE=['score-low','score-high','multi-round-high','multi-round-low'];
+const FMT_NICE={'round-robin':'Round robin (everyone plays everyone)','partial-rr':'Round robin (3 games) + placement finals','two-pool':'2 pools + crossover finals','single-elim':'Single elimination','pool-playoff':'Pools + knockout','score-low':'Lowest score wins','score-high':'Highest score wins','multi-round-high':'Multi-round, high wins','multi-round-low':'Multi-round, low wins'};
+function gameHasResults(g){
+  const b=S.bs&&S.bs[g.id];
+  if(b&&getAllMatchesFromBracket(b,g.format).some(m=>m&&m.winner)) return true;
+  if(S.scores&&S.scores[g.id]&&Object.keys(S.scores[g.id]).length) return true;
+  if(S.pendingScores&&S.pendingScores[g.id]&&Object.keys(S.pendingScores[g.id]).length) return true;
+  return false;
+}
+function canChangeFormat(g){ return g&&g.status!=='skipped'&&!gameHasResults(g); }
+window.openFormatChange=(gid)=>{
+  const g=(S.games||[]).find(x=>x.id===gid); if(!g) return;
+  if(!canChangeFormat(g)){ alert('This game already has scores, so its format can\'t be changed. Unlock and clear its results first.'); return; }
+  const fam=FMT_SCORE.includes(g.format)?FMT_SCORE:FMT_MATCH;
+  const n=((S.teams&&S.teams[gid])||[]).length;
+  ggSheet('🔁 Change format: '+feedEsc(g.name),
+    '<div style="font-size:12px;color:#888;margin-bottom:8px">Now: <b>'+feedEsc(FMT_NICE[g.format]||g.format)+'</b>'+(n?' · '+n+' teams (teams stay the same)':'')+'</div>'
+    +fam.filter(f=>f!==g.format).map(f=>'<label class="fc-opt"><input type="radio" name="fc-fmt" value="'+f+'"> '+feedEsc(FMT_NICE[f]||f)+(n&&FMT_MATCH.includes(f)?' <span style="color:#999;font-size:11px">· '+fmtMatchCount(f,n)+'</span>':'')+'</label>').join('')
+    +'<div class="sec-label">Message to everyone (optional)</div>'
+    +'<input type="text" id="fc-note" maxlength="120" placeholder="e.g. Running long, cutting it down">'
+    +'<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:10px 0"><input type="checkbox" id="fc-ann" checked style="width:auto"> Announce it (chat + alert to everyone)</label>'
+    +'<button class="btn btn-primary" onclick="applyFormatChange(\''+gid+'\')">Change format</button>');
+};
+function fmtMatchCount(f,n){
+  if(f==='round-robin') return (n*(n-1)/2)+' matches';
+  if(f==='partial-rr') return (Math.floor(Math.min(3,n-1)*n/2)+Math.floor(n/2))+' matches';
+  if(f==='two-pool'){ const a=Math.ceil(n/2),b=n-a; return (a*(a-1)/2+b*(b-1)/2+Math.min(a,b))+' matches'; }
+  if(f==='single-elim') return (n-1)+' matches';
+  return '';
+}
+window.applyFormatChange=async(gid)=>{
+  const sel=document.querySelector('input[name="fc-fmt"]:checked');
+  if(!sel){ alert('Pick a new format.'); return; }
+  const g=(S.games||[]).find(x=>x.id===gid); if(!g||!canChangeFormat(g)) return;
+  const nf=sel.value, note=(el('fc-note')?.value||'').trim(), ann=!!el('fc-ann')?.checked;
+  const oldNice=FMT_NICE[g.format]||g.format, newNice=FMT_NICE[nf]||nf;
+  const games=(S.games||[]).map(x=>x.id===gid?{...x,format:nf,formatChangedAt:Date.now(),formatWas:x.format}:x);
+  const upd={games};
+  const teams=(S.teams&&S.teams[gid])||[];
+  if(teams.length) upd['bs/'+gid]=buildBracket({...g,format:nf},teams);
+  upd['activeMatchIds/'+gid]=null;
+  if(ann){
+    const now=Date.now(), k=feedKey();
+    const text=g.name+' is now '+newNice+' (was '+oldNice+').'+(note?' '+note:'');
+    upd['chat/'+k]={uid:'system',name:'Commissioner',system:true,kind:'notice',title:'FORMAT CHANGE',text,at:now};
+    upd['notices/'+k]={title:'📣 '+g.name+' format changed',body:newNice+(note?' · '+note:''),at:now,gameId:gid};
+  }
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
+  closeModal();
+  if(S.activeGameId===gid) setTimeout(()=>advanceMatchScheduler(gid),500);
+  showBadgeToast('🔁 '+feedEsc(g.name)+' is now '+feedEsc(newNice),true);
+};
+
+const _noticeSeen=new Set(); let _noticeInit=null;
+function checkNotices(tid){
+  const ents=Object.entries((S&&S.notices)||{});
+  if(_noticeInit!==tid){ _noticeSeen.clear(); ents.forEach(([k])=>_noticeSeen.add(k)); _noticeInit=tid; return; }
+  ents.forEach(([k,n])=>{ if(_noticeSeen.has(k)) return; _noticeSeen.add(k); if(n&&n.title) showBadgeToast(feedEsc(n.title)+(n.body?'<br><span style="font-weight:400">'+feedEsc(n.body)+'</span>':''),true); });
+}
+setTimeout(()=>{ try{ maybeInstallGuide(); }catch(e){} },1200);
+
 // ── PUSH ALERTS ───────────────────────────────────────────
 function pushEnv(){
   const ua=navigator.userAgent||'';
@@ -6866,6 +7030,7 @@ function pushPromptHTML(){
 let _autoPushAsked=false;
 function maybeAutoPushPrompt(){
   if(_autoPushAsked||!currentUser) return;
+  try{ if(!localStorage.getItem('gg_tour_v1')) return; }catch(e){}
   const env=pushEnv();
   if(!env.hasApi||!env.standalone||Notification.permission!=='default'||VAPID_KEY.startsWith('PASTE')) return;
   let last=0; try{ last=+localStorage.getItem('gg_push_asked')||0; }catch(e){}
@@ -7215,6 +7380,11 @@ function renderPlayerView(myName){
   el('player-area')?.classList.toggle('is-spectator',_spec);
   try{ const bm=el('btn-me'); if(bm){ bm.classList.remove('hidden'); bm.innerHTML=avatarHTML(myName,34); } el('btn-menu')?.classList.remove('hidden'); }catch(e){}
   const _noRank=!rankingsNeeded();
+  if(window._tabInitFor!==currentTourneyId){
+    window._tabInitFor=currentTourneyId;
+    const needRank=!_spec&&!_noRank&&S.tournamentStarted&&!S.activeGameId&&!(S.rankingsFinalized&&S.rankingsFinalized[myName]);
+    _tab=needRank?'rank':'active';
+  }
   el('player-area')?.classList.toggle('no-rank',_noRank);
   if(_spec&&['teams','rank','vote'].includes(_tab)) _tab='active';
   if(_noRank&&_tab==='rank') _tab='active';
@@ -8692,7 +8862,7 @@ window.playerSubmitScore = async (btnOrObj,matchIdArg,sideArg)=>{
             +'</div></div></div>';
           window._otRes=w=>{closeModal();res(w);};
         });
-        await saveMFMatch(gameId,matchId,type,poolKey,ri,otW===1?s1+0.1:s1,otW===2?s2+0.1:s2,true);
+        await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true,null,otW===1?'t1':'t2');
       } else {
         await saveMFMatch(gameId,matchId,type,poolKey,ri,s1,s2,true);
       }
