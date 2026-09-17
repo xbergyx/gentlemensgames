@@ -110,6 +110,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 #player-area .ptab .chat-dot{position:absolute;top:4px;right:10%;margin:0}
 .hdr-me{border:none;background:none;padding:0;cursor:pointer;line-height:0;border-radius:50%}
 .hdr-me .avatar,.hdr-me .av-img{box-shadow:0 0 0 2px #fff,0 0 0 3.5px #534AB7}
+.me-cam.sm{width:16px;height:16px;font-size:9px;right:-2px;bottom:-2px}
 .me-cam{position:absolute;right:-4px;bottom:-2px;background:#fff;border-radius:50%;font-size:14px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.2)}
 [data-theme="dark"] #player-area .ptab .ptab-btn{background:#1c1c24;border-color:#2e2e38;color:#aaa}
 [data-theme="dark"] #player-area .ptab .ptab-btn.active{background:#534AB7;color:#fff}
@@ -685,7 +686,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v126.17.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v127.17.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -759,7 +760,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v126.17.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v127.17.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3020,7 +3021,7 @@ function renderPlayerList(){
       '<span style="font-size:10px;color:#aaa">pending</span>';
     const isGhost=Object.values(S.ghostPlayers||{}).includes(p);
     return`<div class="player-row" style="${isGhost?'opacity:.8':''}">
-      <div class="avatar" style="${isGhost?'background:#FEF3E2;color:#7a4f00':''}">${isGhost?'⏳':initials(p)}</div>
+      <div ${isAdmin?`onclick="openPhotoSheet('${esc(p)}')" style="cursor:pointer;position:relative"`:''}>${isGhost&&!photoFor(p)?'<div class="avatar" style="background:#FEF3E2;color:#7a4f00">⏳</div>':avatarHTML(p,38)}${isAdmin?'<div class="me-cam sm">📷</div>':''}</div>
       <div style="flex:1">
         <div style="font-size:13px;font-weight:600">${nameSpan(p)}${isGhost?' <span class="tag" style="font-size:9px;background:#FEF3E2;color:#7a4f00">awaiting signup</span>':''}</div>
         <div class="badges-wrap" style="margin-top:3px">${renderBadges(badges)}</div>
@@ -6874,33 +6875,84 @@ function maybeTour(){
   if(el('modal-area')?.innerHTML) return;
   setTimeout(()=>{ if(!el('modal-area')?.innerHTML&&!el('player-area')?.classList.contains('hidden')) openTour(); },700);
 }
-function photoFor(name){ const p=_globalProfiles&&(_globalProfiles[name]||_globalProfiles[String(name||'').trim()]); return (p&&p.photo)||''; }
+function photoFor(name){
+  try{ const o=S&&S.photos&&(S.photos[name]||S.photos[String(name||'').trim()]); if(o) return o; }catch(e){}
+  const p=_globalProfiles&&(_globalProfiles[name]||_globalProfiles[String(name||'').trim()]); return (p&&p.photo)||'';
+}
 function avatarHTML(name,size,extra){
   const s=size||38, ph=photoFor(name);
   return ph?'<img class="av-img" src="'+ph+'" alt="" style="width:'+s+'px;height:'+s+'px;'+(extra||'')+'">'
     :'<div class="avatar" style="width:'+s+'px;height:'+s+'px;font-size:'+Math.round(s*.37)+'px;flex-shrink:0;'+(extra||'')+'">'+initials(name)+'</div>';
 }
-window.changeMyPhoto=()=>{
+// ── PHOTOS (self + super admin) ───────────────────────────
+function pickPhotoData(){
+  return new Promise(res=>{
+    const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+    inp.onchange=async()=>{
+      const f=inp.files&&inp.files[0]; if(!f) return res(null);
+      try{
+        const url=await new Promise((ok,bad)=>{ const r=new FileReader(); r.onload=()=>ok(r.result); r.onerror=bad; r.readAsDataURL(f); });
+        const img=new Image(); img.src=url; await img.decode();
+        const Z=160, cv=document.createElement('canvas'); cv.width=cv.height=Z;
+        const m=Math.min(img.width,img.height);
+        cv.getContext('2d').drawImage(img,(img.width-m)/2,(img.height-m)/2,m,m,0,0,Z,Z);
+        res(cv.toDataURL('image/jpeg',0.72));
+      }catch(err){ alert('Could not use that photo: '+(err&&err.message||err)); res(null); }
+    };
+    inp.click();
+  });
+}
+function uidForName(name){
+  const u=S&&S.playerUids||{};
+  const n=String(name||'').trim().toLowerCase();
+  return Object.keys(u).find(k=>String(u[k]||'').trim().toLowerCase()===n)||null;
+}
+window.adminSetPhoto=async(name,preset)=>{
+  if(!isAdmin){ alert('Only you can change other people’s photos.'); return; }
+  const data=preset||await pickPhotoData(); if(!data) return;
+  const uid2=uidForName(name);
+  try{
+    if(uid2) await update(ref(db,'players/'+uid2),{photo:data});
+    else await update(ref(db,'tournaments/'+currentTourneyId),{['photos/'+name]:data});
+    const nm=String(name||'').trim();
+    if(nm&&_globalProfiles) _globalProfiles[nm]={...(_globalProfiles[nm]||{}),photo:data};
+    showBadgeToast('📷 Photo set for '+feedEsc(name),true);
+    try{ renderPlayerList(); renderAdminPlayers&&0; }catch(e){}
+  }catch(err){ alert('Could not save that photo: '+(err&&err.message||err)); }
+};
+window.adminRemovePhoto=async(name)=>{
+  if(!isAdmin) return;
+  if(!confirm('Remove '+name+'’s photo?')) return;
+  const uid2=uidForName(name);
+  try{
+    if(uid2) await update(ref(db,'players/'+uid2),{photo:null});
+    await update(ref(db,'tournaments/'+currentTourneyId),{['photos/'+name]:null});
+    const nm=String(name||'').trim();
+    if(nm&&_globalProfiles&&_globalProfiles[nm]) _globalProfiles[nm]={..._globalProfiles[nm],photo:''};
+    showBadgeToast('📷 Photo removed for '+feedEsc(name),true);
+    try{ renderPlayerList(); }catch(e){}
+  }catch(err){ alert('Could not remove it: '+(err&&err.message||err)); }
+};
+window.openPhotoSheet=(name)=>{
+  if(!isAdmin) return;
+  const has=!!photoFor(name);
+  ggSheet('📷 '+feedEsc(name)+'’s photo',
+    '<div style="text-align:center;margin-bottom:12px">'+avatarHTML(name,96)+'</div>'
+    +'<div style="font-size:12px;color:#888;margin-bottom:10px">'+(has?'They can change it themselves any time from 🙋 Me.':'No photo yet — they can also add one themselves from 🙋 Me.')+'</div>'
+    +'<button class="btn btn-primary" onclick="closeModal();adminSetPhoto(\''+esc(name)+'\')">'+(has?'Replace photo':'Add a photo')+'</button>'
+    +(has?'<button class="btn btn-danger" onclick="closeModal();adminRemovePhoto(\''+esc(name)+'\')" style="margin-top:6px">Remove photo</button>':''));
+};
+window.changeMyPhoto=async(preset)=>{
   if(!currentUser) return;
-  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
-  inp.onchange=async()=>{
-    const f=inp.files&&inp.files[0]; if(!f) return;
-    try{
-      const url=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
-      const img=new Image(); img.src=url; await img.decode();
-      const Z=160, cv=document.createElement('canvas'); cv.width=cv.height=Z;
-      const m=Math.min(img.width,img.height);
-      cv.getContext('2d').drawImage(img,(img.width-m)/2,(img.height-m)/2,m,m,0,0,Z,Z);
-      const data=cv.toDataURL('image/jpeg',0.72);
-      await update(ref(db,'players/'+currentUser.uid),{photo:data});
-      if(userProfile) userProfile.photo=data;
-      const nm=String(userProfile?.preferredName||userProfile?.name||'').trim();
-      if(nm&&_globalProfiles) _globalProfiles[nm]={...(_globalProfiles[nm]||{}),photo:data};
-      showBadgeToast('📷 Photo updated',true);
-      try{ if(S) renderPlayerView(chatMyName()); }catch(e){}
-    }catch(err){ alert('Could not use that photo: '+(err&&err.message||err)); }
-  };
-  inp.click();
+  const data=(typeof preset==='string'&&preset)||await pickPhotoData(); if(!data) return;
+  try{
+    await update(ref(db,'players/'+currentUser.uid),{photo:data});
+    if(userProfile) userProfile.photo=data;
+    const nm=String(userProfile?.preferredName||userProfile?.name||'').trim();
+    if(nm&&_globalProfiles) _globalProfiles[nm]={...(_globalProfiles[nm]||{}),photo:data};
+    showBadgeToast('📷 Photo updated',true);
+    try{ if(S) renderPlayerView(chatMyName()); }catch(e){}
+  }catch(err){ alert('Could not save that photo: '+(err&&err.message||err)); }
 };
 function renderUXCards(){
   if(!S) return;
