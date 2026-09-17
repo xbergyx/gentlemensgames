@@ -685,7 +685,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v125.17.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v126.17.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -759,7 +759,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v125.17.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v126.17.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -778,6 +778,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
         <button class="btn btn-sm" onclick="installPWA()" style="width:auto;background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);color:#fff;flex-shrink:0">Install</button>
       </div>
     </div>
+    <div id="join-available"></div>
     <div class="card">
       <div class="card-title">🏆 Active tournaments</div>
       <div id="active-tourneys"></div>
@@ -1993,13 +1994,14 @@ async function renderSMSPanel(){
 function loadTournamentList(){
   onValue(ref(db,'tournaments'), snap=>{
     const all = snap.exists() ? snap.val() : {};
-    const active=[], past=[];
+    const active=[], past=[], joinable=[];
     Object.entries(all).forEach(([id,t])=>{
       if(!t||!t.tourneyName) return;
       // Show tournament if user is a participant or admin
       const myUid = actingAsUid||currentUser?.uid;
       const isParticipant = (t.playerUids && t.playerUids[myUid]) || (t.spectators && t.spectators[myUid]);
       const isPending = !isParticipant && t.joinRequests && t.joinRequests[myUid];
+      if(!isParticipant && !isPending && !t.tournamentFinalized) joinable.push({id,name:t.tourneyName,year:t.tourneyYear,players:(t.players||[]).length});
       if(isPending&&!isAdmin&&!t.tournamentFinalized){ active.push({id,...t,_pending:true}); return; }
       if(!isAdmin&&!isParticipant) return;
       if(t.tournamentFinalized) past.push({id,...t});
@@ -2014,6 +2016,8 @@ function loadTournamentList(){
       const all2 = [...active,...past];
       renderTourneyList('admin-all-tourneys', all2, false, true);
     }
+    window._joinable=joinable;
+    try{ renderJoinAvailable(); }catch(e){}
     // Act-as dropdown
     buildActAsDropdown(all);
   });
@@ -2435,6 +2439,7 @@ window.openTournament = (tid)=>{
       try{ renderNextGameCards(); renderUXCards(); checkNotices(tid); }catch(err){ console.warn('nextgame',err); }
       try{ if(window._pendingNav) setTimeout(applyPendingNav,50); }catch(err){}
       try{ const n=Object.keys(S.joinRequests||{}).length, t=el('atab-players'), l='👥 Players'+(n?' <span class="chat-dot">'+n+'</span>':''); if(t&&t.innerHTML!==l) t.innerHTML=l; }catch(err){}
+      try{ checkJoinRequests(tid); renderJoinAdminCard(); }catch(err){}
     });
   });
 };
@@ -2467,7 +2472,7 @@ function buildTournamentShell(){
     <div id="admin-players" class="hidden"></div>
     <div id="admin-games" class="hidden"></div>
     <div id="admin-rankings" class="hidden"></div>
-    <div id="admin-scores" class="hidden"><div id="push-prompt-admin"></div><div id="next-game-admin"></div><div id="brief-admin"></div><div id="boards-admin"></div><div id="admin-scores-main"></div></div>
+    <div id="admin-scores" class="hidden"><div id="push-prompt-admin"></div><div id="next-game-admin"></div><div id="join-admin"></div><div id="brief-admin"></div><div id="boards-admin"></div><div id="admin-scores-main"></div></div>
     <div id="admin-board" class="hidden"></div>
     <div id="admin-power" class="hidden"></div>
     <div id="admin-history" class="hidden"></div>
@@ -6899,13 +6904,52 @@ window.changeMyPhoto=()=>{
 };
 function renderUXCards(){
   if(!S) return;
-  try{ renderBriefCards(); }catch(e){}
+  try{ renderBriefCards(); renderJoinAdminCard(); }catch(e){}
   const mm=el('my-match-player'); if(mm){ const h=myMatchCardHTML(); if(mm.dataset.h!==h){ mm.innerHTML=h; mm.dataset.h=h; } }
   const bc=el('boards-admin'); if(bc){ const h=isTourneyAdmin?boardsCardHTML():''; if(bc.dataset.h!==h){ bc.innerHTML=h; bc.dataset.h=h; } }
   const su=el('admin-setup'); if(su&&!su.classList.contains('hidden')) renderChecklist();
   syncMoreTab();
 }
 setInterval(()=>{ try{ renderUXCards(); }catch(e){} },30000);
+
+// ── JOIN / ADMIN ALERTS ───────────────────────────────────
+window._joinable=[];
+function renderJoinAvailable(){
+  const e=el('join-available'); if(!e) return;
+  const list=window._joinable||[];
+  const h=(!list.length||isAdmin)?'':
+    '<div class="card" style="border-color:#AFA9EC">'
+    +'<div class="card-title">🙋 Join a tournament</div>'
+    +'<div style="font-size:12px;color:#888;margin-bottom:8px">You\'re not in this one yet. Ask the host to let you in as a player or a spectator.</div>'
+    +list.map(t=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid rgba(128,128,128,.12)">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">'+feedEsc(t.name)+'</div>'
+      +'<div style="font-size:11px;color:#888">'+(t.year||'')+' · '+t.players+' players</div></div>'
+      +'<button class="btn btn-sm btn-primary" onclick="askToJoin(\''+t.id+'\')" style="width:auto">Ask to join</button></div>').join('')
+    +'</div>';
+  if(e.dataset.h!==h){ e.innerHTML=h; e.dataset.h=h; }
+}
+window.askToJoin=async(tid)=>{ await handleJoinLink(tid,''); };
+// Admin: live toast + card when someone asks to join
+const _joinSeen=new Set(); let _joinInit=null;
+function checkJoinRequests(tid){
+  const reqs=Object.entries((S&&S.joinRequests)||{}).filter(([,v])=>v);
+  if(_joinInit!==tid){ _joinSeen.clear(); reqs.forEach(([k])=>_joinSeen.add(k)); _joinInit=tid; return; }
+  if(!isTourneyAdmin) return;
+  reqs.forEach(([k,v])=>{ if(_joinSeen.has(k)) return; _joinSeen.add(k);
+    showBadgeToast('🙋 '+feedEsc(v.name||'Someone')+' wants to join<br><span style="font-weight:400">Players tab → add as player or spectator</span>',true); });
+}
+function renderJoinAdminCard(){
+  const e=el('join-admin'); if(!e) return;
+  const n=Object.values((S&&S.joinRequests)||{}).filter(Boolean).length;
+  const h=(isTourneyAdmin&&n)
+    ?'<div class="card" style="padding:10px 12px;display:flex;align-items:center;gap:10px;margin-bottom:8px;border-color:#f5cc80;background:#FEF9F0">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">🙋 '+n+' waiting to join</div>'
+      +'<div style="font-size:11px;color:#888">'+feedEsc(Object.values(S.joinRequests).filter(Boolean).map(r=>r.name||'Someone').join(', ')).slice(0,60)+'</div></div>'
+      +'<button class="btn btn-sm btn-primary" onclick="showPhaseFromCard(\'players\')" style="width:auto">Review</button></div>'
+    :'';
+  if(e.dataset.h!==h){ e.innerHTML=h; e.dataset.h=h; }
+}
+window.showPhaseFromCard=(ph)=>{ const t=document.querySelector('.phase-tab[data-phase="'+ph+'"]'); if(t) t.click(); };
 
 // ── EDIT GAME ─────────────────────────────────────────────
 function gameTeams(gid){ return (S.teams&&S.teams[gid])||[]; }
