@@ -173,6 +173,15 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .eg-hint{font-size:11px;color:#888;margin-top:4px}
 .eg-chk{display:flex;gap:8px;align-items:center;font-size:13px;margin:8px 0}
 .eg-chk input{width:auto}
+.tb-win{background:linear-gradient(160deg,#2b2113,#1a1208);border:1px solid rgba(228,180,0,.4);text-align:center;padding:16px}
+.tb-win-k{font-size:11px;font-weight:800;letter-spacing:1.4px;color:#f6e2a8;margin-bottom:6px}
+.end-hero{background:linear-gradient(160deg,#0d0a2a,#1e1650);border:none;text-align:center;padding:16px;color:#fff}
+.end-pod{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.07);border-radius:8px;padding:6px 10px;margin-top:6px;font-size:13px;color:#fff}
+.end-nums{display:flex;gap:6px;text-align:center}
+.end-nums>div{flex:1;background:#f8f7f4;border-radius:10px;padding:8px 4px}
+.end-nums b{display:block;font-size:17px;font-weight:800}
+.end-nums span{font-size:10px;color:#888}
+[data-theme="dark"] .end-nums>div{background:rgba(255,255,255,.06)}
 .bf-chk{display:flex;gap:8px;align-items:center;font-size:13px;margin:8px 0}
 .bf-chk input{width:auto}
 .bf-card{background:linear-gradient(160deg,#14331f,#0c2417);border-radius:16px;overflow:hidden;margin-bottom:10px}
@@ -686,7 +695,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v128.17.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v129.17.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -760,7 +769,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v128.17.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v129.17.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -6238,6 +6247,80 @@ function recapRow(icon,title,who,detail){
   return '<div class="recap-row"><div class="recap-ic">'+icon+'</div><div style="flex:1;min-width:0"><div class="recap-t">'+title+'</div>'
     +'<div class="recap-w">'+who+'</div>'+(detail?'<div class="recap-d">'+detail+'</div>':'')+'</div></div>';
 }
+// ── END-OF-TOURNAMENT NOW SCREEN ──────────────────────────
+function tourneyWrapped(){
+  try{ return !!(S&&(S.recapReady||S.tournamentFinalized||(S.activeAnnouncement&&S.activeAnnouncement.gameId==='__final'))); }catch(e){ return false; }
+}
+function tbCardHTML(tb,done){
+  const who=(tb.teams||[]).filter(t=>t&&t.players&&t.players[0]);
+  return '<div class="card" style="border:2px solid #E4B400;background:#FFFBEB;padding:16px">'
+    +'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px;text-align:center">🏆 OVERALL TIEBREAKER</div>'
+    +'<div style="font-size:20px;font-weight:700;text-align:center;margin-bottom:6px">'+feedEsc(tb.name||'')+'</div>'
+    +(tb.description?'<div style="font-size:12px;color:#888;text-align:center;margin-bottom:10px">'+feedEsc(tb.description)+'</div>':'')
+    +(who.length?'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-top:8px;margin-bottom:4px;text-align:center">'+(done?'Played:':'Playing:')+'</div><div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px">'
+      +who.map(t=>'<span style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:8px;padding:4px 12px;font-size:13px;font-weight:600;color:#7a4f00">'+feedEsc(t.players[0])+'</span>').join('<span style="color:#aaa;padding:0 4px">vs</span>')+'</div>':'')
+    +'</div>';
+}
+function tbWinnerCardHTML(tb){
+  return '<div class="card tb-win">'
+    +'<div class="tb-win-k">🏆 TIEBREAKER SETTLED</div>'
+    +'<div style="font-size:14px;color:rgba(255,255,255,.75);margin-bottom:2px">'+feedEsc(tb.name||'Overall tiebreaker')+'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin:8px 0 4px">'+avatarHTML(tb.winner,54)
+    +'<div style="text-align:left"><div style="font-size:22px;font-weight:800;color:#fff;line-height:1.1">'+feedEsc(tb.winner)+'</div>'
+    +'<div style="font-size:12px;color:#f6e2a8;font-weight:700">wins it · +1 point</div></div></div>'
+    +(tb.description?'<div style="font-size:12px;color:rgba(255,255,255,.65);margin-top:4px">'+feedEsc(tb.description)+'</div>':'')
+    +'<div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:10px;border-top:1px solid rgba(255,255,255,.15);padding-top:8px">Final standings and awards coming up next.</div>'
+    +'</div>';
+}
+function endRecapCardHTML(myName){
+  let R;
+  try{ R=computeRecap(); }catch(e){ return ''; }
+  const yr=S.tourneyYear||new Date().getFullYear();
+  const champ=R.standings&&R.standings[0];
+  const tb=S.tiebreakerGame;
+  let h='<div class="card end-hero">'
+    +'<div class="tb-win-k">🎉 THAT’S A WRAP</div>'
+    +'<div style="font-size:15px;color:rgba(255,255,255,.8)">'+feedEsc(S.tourneyName||'Gentleman’s Games')+' '+yr+'</div>'
+    +(champ?'<div style="font-size:38px;margin-top:6px">🏆</div>'
+      +'<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:4px">'+avatarHTML(champ.p,44)
+      +'<div style="text-align:left"><div style="font-size:21px;font-weight:800;color:#f6e2a8;line-height:1.1">'+feedEsc(champ.p)+'</div>'
+      +'<div style="font-size:12px;color:#c8c0ff">Champion · '+champ.pts+' pts</div></div></div>':'');
+  (R.standings||[]).slice(1,3).forEach((s,i)=>{
+    h+='<div class="end-pod"><span>'+['🥈','🥉'][i]+' '+feedEsc(s.p)+'</span><b>'+s.pts+' pts</b></div>';
+  });
+  if(tb&&tb.winner) h+='<div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:8px">Tiebreaker: '+feedEsc(tb.winner)+' won '+feedEsc(tb.name||'the tiebreaker')+'</div>';
+  h+='</div>';
+  const me=(S.players||[]).find(p=>String(p).trim().toLowerCase()===String(myName||'').trim().toLowerCase());
+  if(me){
+    const st=(R.standings||[]).find(x=>x.p===me)||{}, rc=(R.record&&R.record[me])||{w:0,l:0};
+    const tp=R.T&&R.T.players&&R.T.players[me];
+    const bl=[...((R.badgesByPlayer&&R.badgesByPlayer[me])||[])];
+    let best=null;
+    (S.games||[]).forEach(g=>{ const v=S.points&&S.points[g.id]&&S.points[g.id][me]; if(v!=null&&(!best||v>best.v)) best={g,v}; });
+    h+='<div class="card"><div class="card-title" style="margin-bottom:8px">🫵 Your day</div>'
+      +'<div class="end-nums"><div><b>#'+(st.place||'—')+'</b><span>finish</span></div>'
+      +'<div><b>'+rc.w+'–'+rc.l+'</b><span>record</span></div>'
+      +'<div><b>'+(tp&&tp.avg?(tp.avg/60000).toFixed(1):'—')+'</b><span>min / match</span></div>'
+      +'<div><b>'+bl.length+'</b><span>badges</span></div></div>'
+      +(best?'<div style="font-size:12px;color:#888;margin-top:8px">Best game: <b>'+feedEsc(best.g.name)+'</b> ('+best.v+' pts)</div>':'')
+      +(bl.length?'<div style="font-size:12px;color:#888;margin-top:4px">Badges: '+bl.map(feedEsc).join(', ')+'</div>':'')
+      +'</div>';
+  }
+  h+='<div class="card" style="background:linear-gradient(135deg,#1e1650,#534AB7);border:none;color:#fff;cursor:pointer" onclick="openRecap()">'
+    +'<div style="display:flex;align-items:center;gap:12px"><div style="font-size:30px">📜</div><div style="flex:1">'
+    +'<div style="font-weight:800;font-size:15px">Full tournament recap</div>'
+    +'<div style="font-size:12px;opacity:.8">Superlatives, the day in numbers, every badge</div></div><div style="font-size:20px">›</div></div></div>';
+  return h;
+}
+function noGameCardHTML(myName,allDone){
+  const tb=S.tiebreakerGame;
+  if(tourneyWrapped()){ const h=endRecapCardHTML(myName); if(h) return h; }
+  if(tb&&tb.winner) return tbWinnerCardHTML(tb);
+  if(tb) return tbCardHTML(tb,false);
+  if(allDone) return '<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">🎉</div><div style="font-size:15px;font-weight:700">All games complete!</div><div style="font-size:12px;color:#888;margin-top:4px">Final standings and awards coming up.</div></div>';
+  return '<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">⏳</div><div style="font-size:15px;font-weight:700">No active game right now</div><div style="font-size:12px;color:#888;margin-top:6px">The host will kick off the next game soon.<br>Check the Standings tab while you wait.</div></div>';
+}
+
 function recapHTML(myName){
   const R=computeRecap(), yr=S.tourneyYear||new Date().getFullYear();
   const champ=R.standings[0];
@@ -8529,25 +8612,7 @@ async function renderActiveGameTab(myName){
     // No active game — check all done or just waiting
     const allGames=S.games||[];
     const allDone=allGames.length>0&&allGames.every(g=>g.status==='done'||(S.scores&&S.scores[g.id]&&S.scores[g.id]._fin));
-    const _tbGame=S.tiebreakerGame;
-    e.innerHTML=allDone
-      ? (_tbGame
-          ? '<div class="card" style="border:2px solid #E4B400;background:#FFFBEB;padding:16px">'
-            +'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px;text-align:center">🏆 OVERALL TIEBREAKER</div>'
-            +'<div style="font-size:20px;font-weight:700;text-align:center;margin-bottom:6px">'+esc(_tbGame.name||'')+'</div>'
-            +(_tbGame.description?'<div style="font-size:12px;color:#888;text-align:center;margin-bottom:10px">'+esc(_tbGame.description)+'</div>':'')
-            +(_tbGame.teams&&_tbGame.teams.length?'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-top:8px;margin-bottom:4px;text-align:center">Playing:</div><div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px">'+_tbGame.teams.filter(t=>t.players&&t.players[0]).map(t=>'<span style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:8px;padding:4px 12px;font-size:13px;font-weight:600;color:#7a4f00">'+esc(t.players[0])+'</span>').join('<span style="color:#aaa;padding:0 4px">vs</span>')+'</div>':'') 
-            +'</div>'
-          : '<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">🎉</div><div style="font-size:15px;font-weight:700">All games complete!</div><div style="font-size:12px;color:#888;margin-top:4px">Check the Standings tab for final results.</div></div>'
-        )
-      : (_tbGame&&!_tbGame.winner
-          ? '<div class="card" style="border:2px solid #E4B400;background:#FFFBEB;padding:16px">'
-            +'<div style="font-size:11px;font-weight:700;color:#7a4f00;margin-bottom:6px;text-align:center">🏆 OVERALL TIEBREAKER</div>'
-            +'<div style="font-size:20px;font-weight:700;text-align:center;margin-bottom:6px">'+esc(_tbGame.name||'')+'</div>'
-            +(_tbGame.teams&&_tbGame.teams.length?'<div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:8px">'+_tbGame.teams.filter(t=>t.players&&t.players[0]).map(t=>'<span style="background:#FEF3E2;border:1px solid #f5cc80;border-radius:8px;padding:4px 12px;font-size:13px;font-weight:600;color:#7a4f00">'+esc(t.players[0])+'</span>').join('<span style="color:#aaa;padding:0 4px">vs</span>')+'</div>':'') 
-            +'</div>'
-          : '<div class="card" style="text-align:center;padding:24px"><div style="font-size:36px;margin-bottom:8px">⏳</div><div style="font-size:15px;font-weight:700">No active game right now</div><div style="font-size:12px;color:#888;margin-top:6px">The host will kick off the next game soon.<br>Check the Standings tab while you wait.</div></div>'
-        );
+    e.innerHTML=noGameCardHTML(myName,allDone);
     return;
   }
 
