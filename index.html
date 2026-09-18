@@ -686,7 +686,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v127.17.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v128.17.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -760,7 +760,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v127.17.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v128.17.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -8006,7 +8006,7 @@ function renderPlayerGames(myName){
             h+='<div style="display:flex;align-items:center;gap:8px">';
             h+='<span style="font-size:13px">'+(i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1+'.')+'</span>';
             h+='<div style="flex:1"><div style="font-size:13px;font-weight:700">'+teamLabel(t)+'</div>';
-            h+='<div style="font-size:10px;color:#888">'+s.w+'W–'+s.l+'L · point diff: '+(diff>=0?'+':'')+diff+'</div></div>';
+            h+='<div style="font-size:10px;color:#888">'+s.w+'W–'+s.l+'L · point diff: '+(diff>0?'+':'')+diff+'</div></div>';
             h+='</div></div>';
           });
           h+='</div>';
@@ -8102,7 +8102,7 @@ function renderPlayerGames(myName){
               if(group.length<2) return;
               const s0=pSt[group[0].t.id]||{w:0,l:0};
               tbExps.push('Pool '+pKey+' '+group.length+'-way tie ('+s0.w+'W–'+s0.l+'L) broken by point differential: '
-                +group.sort((a,b2)=>(pSt[b2.t.id]?.pf-pSt[b2.t.id]?.pa)-(pSt[a.t.id]?.pf-pSt[a.t.id]?.pa)).map(x=>{const d=(pSt[x.t.id]?.pf||0)-(pSt[x.t.id]?.pa||0);return teamLabel(x.t)+' ('+(d>=0?'+':'')+d+')'}).join(' > '));
+                +group.sort((a,b2)=>(pSt[b2.t.id]?.pf-pSt[b2.t.id]?.pa)-(pSt[a.t.id]?.pf-pSt[a.t.id]?.pa)).map(x=>{const d=(pSt[x.t.id]?.pf||0)-(pSt[x.t.id]?.pa||0);return teamLabel(x.t)+' ('+(d>0?'+':'')+d+')'}).join(' > '));
             });
           });
           if(tbExps.length){
@@ -8190,7 +8190,7 @@ function renderPlayerGames(myName){
             +'<span style="flex:1;font-size:13px;font-weight:600">'+teamLabel(t)+'</span>'
             +'<span style="font-size:11px;color:#888">'+s.w+'W–'+s.l+'L</span>'
             +'</div>'
-            +'<div style="font-size:10px;color:#aaa;margin-left:26px">PF:'+s.pf+' PA:'+s.pa+' Diff:'+(diff>=0?'+':'')+diff+'</div>'
+            +'<div style="font-size:10px;color:#aaa;margin-left:26px">PF:'+s.pf+' PA:'+s.pa+' Diff:'+(diff>0?'+':'')+diff+'</div>'
             +'</div>';
         });
 
@@ -8248,7 +8248,7 @@ function renderPlayerGames(myName){
             if(Math.max(...diffs)!==Math.min(...diffs)){
               const order=group.slice().sort((a,b)=>(h2h[b.t.id].pf-h2h[b.t.id].pa)-(h2h[a.t.id].pf-h2h[a.t.id].pa));
               explanations.push(tieWord+' for '+placeLabel+' (all '+record+', H2H wins equal) — broken by point differential: '
-                +order.map(x=>{const d=h2h[x.t.id].pf-h2h[x.t.id].pa;return teamLabel(x.t)+' ('+(d>=0?'+':'')+d+')'}).join(' > '));
+                +order.map(x=>{const d=h2h[x.t.id].pf-h2h[x.t.id].pa;return teamLabel(x.t)+' ('+(d>0?'+':'')+d+')'}).join(' > '));
               return;
             }
             // Step 4: overall point diff
@@ -8256,7 +8256,7 @@ function renderPlayerGames(myName){
             if(Math.max(...ovDiffs)!==Math.min(...ovDiffs)){
               const order=group.slice().sort((a,b)=>{const sa=allSt[a.t.id]||{pf:0,pa:0},sb=allSt[b.t.id]||{pf:0,pa:0};return(sb.pf-sb.pa)-(sa.pf-sa.pa);});
               explanations.push(tieWord+' for '+placeLabel+' (H2H equal) — broken by overall point differential: '
-                +order.map(x=>{const s=allSt[x.t.id]||{pf:0,pa:0};const d=s.pf-s.pa;return teamLabel(x.t)+' ('+(d>=0?'+':'')+d+')'}).join(' > '));
+                +order.map(x=>{const s=allSt[x.t.id]||{pf:0,pa:0};const d=s.pf-s.pa;return teamLabel(x.t)+' ('+(d>0?'+':'')+d+')'}).join(' > '));
               return;
             }
             // Step 5: points scored
@@ -8266,92 +8266,48 @@ function renderPlayerGames(myName){
           });
 
         } else {
-          // Restart mode: trace pick-one-at-a-time cascade, explain each pick
+          // Restart mode: settle one place at a time, then re-check among whoever is left
+          const _tieSeen=new Set();
           function explainGroup(group){
             if(group.length<2) return;
-            const count=group.length;
-            const tieWord=count===2?'2-way tie':count+'-way tie';
-            const sortedIdxs=group.map(x=>x.i).sort((a,b)=>a-b);
-            const placeLabel=sortedIdxs[0]===sortedIdxs[sortedIdxs.length-1]?placeStr(sortedIdxs[0]):placeStr(sortedIdxs[0])+' to '+placeStr(sortedIdxs[sortedIdxs.length-1]);
-            const names=group.map(x=>teamLabel(x.t));
+            const sig=group.map(x=>x.t.id).slice().sort().join('|');
+            if(_tieSeen.has(sig)) return;
+            _tieSeen.add(sig);
+            const byPlace=group.slice().sort((a,b)=>a.i-b.i);
+            const idxs=byPlace.map(x=>x.i);
+            const tieWord=group.length+'-way tie';
+            const placeLabel=idxs[0]===idxs[idxs.length-1]?placeStr(idxs[0]):placeStr(idxs[0])+' to '+placeStr(idxs[idxs.length-1]);
+            const names=byPlace.map(x=>teamLabel(x.t));
             const s0=allSt[group[0].t.id]||{w:0,l:0};
             const record=s0.w+'W–'+s0.l+'L';
             const h2h=calcH2HSt(group);
-
-            // Step 1: H2H wins — only if someone swept
-            const h2hWins=group.map(x=>h2h[x.t.id].w);
-            const maxH2H=Math.max(...h2hWins);
-            if(maxH2H!==Math.min(...h2hWins)){
-              const sorted=group.slice().sort((a,b)=>h2h[b.t.id].w-h2h[a.t.id].w);
-              const winner=sorted[0]; const rest=sorted.slice(1);
-              explanations.push(
-                tieWord+' for '+placeLabel+' (all '+record+'): '+names.join(', ')+
-                ' — broken by head-to-head record. '+
-                teamLabel(winner.t)+' went '+maxH2H+'-'+(group.length-1-maxH2H)+' in H2H → '+placeStr(winner.i)+'.'
-              );
-              const byH2H={};
-              group.forEach(x=>{ const w=h2h[x.t.id].w; if(!byH2H[w])byH2H[w]=[]; byH2H[w].push(x); });
-              Object.values(byH2H).forEach(sub=>{ if(sub.length>1) explainGroup(sub); });
-              const sortedH2H=group.slice().sort((a,b)=>h2h[b.t.id].w-h2h[a.t.id].w);
-              const topH2HW=h2h[sortedH2H[0].t.id].w;
-              const restH2H=sortedH2H.filter(x=>h2h[x.t.id].w!==topH2HW);
-              if(restH2H.length>1) explainGroup(restH2H);
+            const STEPS=[
+              {label:'head-to-head record', get:x=>h2h[x.t.id].w, fmt:(x,v)=>teamLabel(x.t)+' ('+v+'-'+(group.length-1-v)+')'},
+              {label:'point differential in those head-to-head games', get:x=>h2h[x.t.id].pf-h2h[x.t.id].pa, fmt:(x,v)=>teamLabel(x.t)+' ('+(v>0?'+':'')+v+')'},
+              {label:'points scored in those head-to-head games', get:x=>h2h[x.t.id].pf, fmt:(x,v)=>teamLabel(x.t)+' ('+v+' pts)'},
+              {label:'overall point differential', get:x=>{const s=allSt[x.t.id]||{pf:0,pa:0}; return s.pf-s.pa;}, fmt:(x,v)=>teamLabel(x.t)+' ('+(v>0?'+':'')+v+')'},
+              {label:'total points scored', get:x=>(allSt[x.t.id]||{pf:0}).pf, fmt:(x,v)=>teamLabel(x.t)+' ('+v+' pts)'}
+            ];
+            // Mirror the real tiebreaker: narrow the field step by step until one team is left
+            let leaders=group.slice(); const used=[];
+            for(const st of STEPS){
+              if(leaders.length===1) break;
+              const vs=leaders.map(st.get), mx=Math.max(...vs);
+              const next=leaders.filter(x=>st.get(x)===mx);
+              if(next.length<leaders.length){
+                used.push(st.label+': '+leaders.slice().sort((a,b)=>st.get(b)-st.get(a)).map(x=>st.fmt(x,st.get(x))).join(', '));
+                leaders=next;
+              }
+            }
+            const winner=leaders[0];
+            if(!used.length){
+              explanations.push(tieWord+' for '+placeLabel+' ('+names.join(', ')+') — dead even on every tiebreaker.');
               return;
             }
-
-            // Step 2: H2H point diff
-            const diffs=group.map(x=>h2h[x.t.id].pf-h2h[x.t.id].pa);
-            if(Math.max(...diffs)!==Math.min(...diffs)){
-              const sorted=group.slice().sort((a,b)=>(h2h[b.t.id].pf-h2h[b.t.id].pa)-(h2h[a.t.id].pf-h2h[a.t.id].pa));
-              const winner=sorted[0]; const rest=sorted.slice(1);
-              const diffStrs=group.map((x,i)=>teamLabel(x.t)+' ('+(diffs[i]>=0?'+':'')+diffs[i]+')').join(', ');
-              explanations.push(
-                tieWord+' for '+placeLabel+' (all '+record+'): '+names.join(', ')+
-                ' — H2H record equal, broken by point differential: '+diffStrs+
-                '. '+teamLabel(winner.t)+' takes '+placeStr(winner.i)+'.'
-              );
-              const byDiff={};
-              group.forEach((x,i)=>{ const d=diffs[i]; if(!byDiff[d])byDiff[d]=[]; byDiff[d].push(x); });
-              Object.values(byDiff).forEach(sub=>{ if(sub.length>1) explainGroup(sub); });
-              if(rest.length>1) explainGroup(rest);
-              return;
-            }
-
-            // Step 3: H2H points scored
-            const pfs=group.map(x=>h2h[x.t.id].pf);
-            if(Math.max(...pfs)!==Math.min(...pfs)){
-              const sorted=group.slice().sort((a,b)=>h2h[b.t.id].pf-h2h[a.t.id].pf);
-              const winner=sorted[0];
-              const pfStrs=group.map((x,i)=>teamLabel(x.t)+' ('+pfs[i]+'pts)').join(', ');
-              explanations.push(
-                tieWord+' for '+placeLabel+' — broken by H2H points scored: '+pfStrs+
-                '. '+teamLabel(winner.t)+' takes '+placeStr(winner.i)+'.'
-              );
-              if(sorted.slice(1).length>1) explainGroup(sorted.slice(1));
-              return;
-            }
-
-            // Step 4: overall point diff
-            const ovDiffs=group.map(x=>{const s=(allSt[x.t.id]||{pf:0,pa:0});return s.pf-s.pa;});
-            if(Math.max(...ovDiffs)!==Math.min(...ovDiffs)){
-              const sorted=group.slice().sort((a,b)=>ovDiffs[group.indexOf(b)]-ovDiffs[group.indexOf(a)]);
-              const winner=sorted[0];
-              const ovStrs=group.map((x,i)=>teamLabel(x.t)+' ('+(ovDiffs[i]>=0?'+':'')+ovDiffs[i]+')').join(', ');
-              explanations.push(
-                tieWord+' for '+placeLabel+' — broken by overall point differential: '+ovStrs+
-                '. '+teamLabel(winner.t)+' takes '+placeStr(winner.i)+'.'
-              );
-              const byOv={};
-              group.forEach((x,i)=>{ const d=ovDiffs[i]; if(!byOv[d])byOv[d]=[]; byOv[d].push(x); });
-              Object.values(byOv).forEach(sub=>{ if(sub.length>1) explainGroup(sub); });
-              if(sorted.slice(1).length>1) explainGroup(sorted.slice(1));
-              return;
-            }
-
-            // Step 5: overall points scored
-            const ovPFs=group.map(x=>(allSt[x.t.id]||{pf:0}).pf);
-            const ovStrs=group.map((x,i)=>teamLabel(x.t)+' ('+ovPFs[i]+' pts)').join(', ');
-            explanations.push(tieWord+' for '+placeLabel+' — broken by total points scored: '+ovStrs+'.');
+            explanations.push(tieWord+' for '+placeLabel+' (all '+record+'): '+names.join(', ')
+              +' — broken by '+used.join('; then ')+'. '+teamLabel(winner.t)+' takes '+placeStr(winner.i)+'.');
+            const rest=group.filter(x=>x.t.id!==winner.t.id);
+            if(rest.length>1) explainGroup(rest);
           }
 
           // Find tied groups by W-L and explain each
