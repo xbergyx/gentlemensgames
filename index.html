@@ -697,7 +697,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v136.22.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v137.22.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -771,7 +771,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v136.22.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v137.22.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -1349,7 +1349,7 @@ function afterSignIn(){
 // ── GLOBAL PROFILES + GHOST LINKS ────────────────────────
 // When a player signs in, ensure their preferred name is consistent across all tournaments
 async function syncPlayerNameAcrossTournaments(uid2, profile){
-  const preferredName = (profile.preferredName||profile.name||profile.firstName||'').trim();
+  const preferredName = safeName(profile.preferredName||profile.name||profile.firstName||'');
   if(!preferredName) return;
 
   const snap = await get(ref(db,'tournaments'));
@@ -1428,7 +1428,7 @@ async function syncPlayerNameAcrossTournaments(uid2, profile){
 async function linkGhostPlayerSlots(uid2,profile){
   const snap=await get(ref(db,'tournaments'));
   if(!snap.exists()) return;
-  const pn=profile.preferredName||profile.name||profile.firstName||'';
+  const pn=safeName(profile.preferredName||profile.name||profile.firstName||'');
   const fn=(profile.firstName||'').trim().toLowerCase();
   const ln=(profile.lastName||'').trim().toLowerCase();
   const pk=profile._preKey||null;
@@ -2956,6 +2956,8 @@ window.searchPlayersToAdd=async(term)=>{
 };
 
 window.addPlayerFromGlobal=async(playerUid,playerName)=>{
+  playerName=safeName(playerName);
+  if(!playerName){ alert('That profile has no usable name.'); return; }
   const players=[...(S.players||[])],playerUids={...(S.playerUids||{})};
   if(players.includes(playerName)){alert('Already added.');return;}
   players.push(playerName); playerUids[playerUid]=playerName;
@@ -2974,6 +2976,8 @@ window.addPlayerFromGlobal=async(playerUid,playerName)=>{
 };
 
 window.addPlayerFromPre=async(preKey,playerName)=>{
+  playerName=safeName(playerName);
+  if(!playerName){ alert('That record has no usable name.'); return; }
   const players=[...(S.players||[])],ghostPlayers={...(S.ghostPlayers||{})};
   if(players.includes(playerName)){alert('Already added.');return;}
   players.push(playerName); ghostPlayers[preKey]=playerName;
@@ -5997,6 +6001,8 @@ window.approveJoin=async(u,as)=>{
   const r=(S.joinRequests||{})[u]; if(!r) return;
   let name=r.name;
   try{ const p=(await get(ref(db,'players/'+u))).val(); if(p) name=String(p.preferredName||p.name||name).trim(); }catch(e){}
+  name=safeName(name);
+  if(!name){ alert('That person has no usable name on their account.'); return; }
   try{
     if(as==='player'){
       if((S.players||[]).includes(name)){
@@ -7407,6 +7413,8 @@ window.mergePlayers=async(fromName,toName)=>{
 };
 
 // ── PLACEHOLDERS: add people before they join, match them after ──
+// Firebase keys can't hold . # $ / [ ] — and player names are used as keys
+function safeName(n){ return String(n==null?'':n).replace(/[.#$/\[\]]/g,'').replace(/\s+/g,' ').trim(); }
 function ghostList(){ return Object.entries(S&&S.ghostPlayers||{}).map(([k,n])=>({k,n})).filter(x=>x.n); }
 window.openPlaceholderSheet=(name)=>{
   if(!isTourneyAdmin) return;
@@ -7422,7 +7430,7 @@ window.openPlaceholderSheet=(name)=>{
   try{ numpadify(el('modal-area')); }catch(e){}
 };
 window.addPlaceholder=async()=>{
-  const name=(el('ph-name')?.value||'').trim();
+  const name=safeName(el('ph-name')?.value||'');
   if(!name){ alert('Give them a name.'); return; }
   if((S.players||[]).some(p=>String(p).trim().toLowerCase()===name.toLowerCase())){ alert(name+' is already in this tournament.'); return; }
   const contact=(el('ph-contact')?.value||'').trim();
@@ -7443,6 +7451,13 @@ window.addPlaceholder=async()=>{
 // Build the updates that move everything from one name to another
 function renameUpdates(oldName,newName){
   const t=S, u={};
+  // Same name in and out: move nothing, or the "move" would wipe the record
+  if(String(oldName)===String(newName)){
+    u['players']=(t.players||[]).slice();
+    u['playerUids']={...(t.playerUids||{})};
+    u['ghostPlayers']={...(t.ghostPlayers||{})};
+    return u;
+  }
   u['players']=(t.players||[]).map(p=>p===oldName?newName:p);
   const pu={...(t.playerUids||{})}; Object.entries(pu).forEach(([k,n])=>{ if(n===oldName) pu[k]=newName; }); u['playerUids']=pu;
   const gp={...(t.ghostPlayers||{})}; Object.entries(gp).forEach(([k,n])=>{ if(n===oldName) gp[k]=newName; }); u['ghostPlayers']=gp;
@@ -7463,6 +7478,9 @@ function renameUpdates(oldName,newName){
 window.matchPlaceholder=async(ghostName,personUid,realName)=>{
   if(!isTourneyAdmin) return;
   const g=ghostList().find(x=>x.n===ghostName); if(!g){ alert('That placeholder is gone.'); return; }
+  const rawName=realName;
+  realName=safeName(realName)||ghostName;
+  if(realName!==rawName&&!confirm('"'+rawName+'" can\'t be stored with dots in it, so they\'ll show as "'+realName+'". OK?')) return;
   const clash=(S.players||[]).some(p=>p!==ghostName&&String(p).trim().toLowerCase()===String(realName).trim().toLowerCase());
   if(clash){ alert(realName+' is already in this tournament under that name.'); return; }
   if(!confirm(ghostName+' becomes '+realName+'. Everything you filled in — history, rankings, points — stays with them.')) return;
