@@ -182,6 +182,8 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .end-nums b{display:block;font-size:17px;font-weight:800}
 .end-nums span{font-size:10px;color:#888}
 [data-theme="dark"] .end-nums>div{background:rgba(255,255,255,.06)}
+.ms-row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-top:1px solid rgba(128,128,128,.12);cursor:pointer}
+.open-cd{background:linear-gradient(160deg,#10331f,#0a2415);border:none;text-align:center;padding:16px;color:#fff}
 .bf-chk{display:flex;gap:8px;align-items:center;font-size:13px;margin:8px 0}
 .bf-chk input{width:auto}
 .bf-card{background:linear-gradient(160deg,#14331f,#0c2417);border-radius:16px;overflow:hidden;margin-bottom:10px}
@@ -695,7 +697,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v129.17.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v130.22.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -769,7 +771,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v129.17.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v130.22.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2931,6 +2933,7 @@ function renderAdminPlayers(){
     <div class="card">
       <div class="card-title">👥 Players <span class="tag tag-purple">${players.length}</span></div>
       <div style="font-size:11px;color:#888;margin-bottom:8px">Join link: ${APP_DOMAIN}/?join=${S.joinCode} <button class="btn btn-sm btn-primary" onclick="copyJoinLink()" style="width:auto;margin-left:4px">📋</button></div>
+      <button class="btn btn-sm" onclick="openPlaceholderSheet()" style="margin-bottom:8px">➕ Add someone who hasn't joined yet</button>
       <div id="player-list"></div>
     </div>
     <div class="card">
@@ -3036,6 +3039,7 @@ function renderPlayerList(){
         <div class="badges-wrap" style="margin-top:3px">${renderBadges(badges)}</div>
       </div>
       ${ranked}
+      ${isGhost&&isTourneyAdmin?`<button class="btn btn-sm" onclick="openMatchSheet('${esc(p)}')" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🔗 Match</button>`:''}
       <button class="btn btn-sm btn-danger" onclick="removePlayer('${esc(p)}')" style="margin-left:6px">✕</button>
     </div>`;
   }).join('');
@@ -3053,6 +3057,7 @@ function renderStartTourneyCard(){
     <span style="${pc>=4?'color:#27500A;font-weight:600':''}">${pc>=4?'✓':'○'} ${pc} players${pc<4?' (need 4+)':''}</span><br>
     <span style="${gc>=1?'color:#27500A;font-weight:600':''}">${gc>=1?'✓':'○'} ${gc} game${gc!==1?'s':''}${gc<1?' (need 1+)':''}</span>
   </div>
+  <button class="btn btn-sm" onclick="openOpeningPrompt()" style="margin-bottom:8px">🎉 ${(S.openingAt)?'Change opening countdown':'Set opening ceremonies countdown'}</button>
   ${ready?`<div class="alert alert-warn" style="font-size:11px;margin-bottom:8px">No new players or games can be added after starting.</div>
     <button class="btn btn-primary" onclick="startTournament()">🚀 Start tournament</button>`:
     `<button class="btn" disabled style="opacity:.4">🚀 Start tournament</button>`}`;
@@ -4929,6 +4934,7 @@ const BADGE_DEFS = [
   {id:'beerpong-champ',  cat:'Game', icon:'🏓', name:'Beer Pong Champ',    auto:false, spicy:false, desc:'Won the overall tiebreaker'},
   // Tournament results (auto on finalize)
   {id:'champion',        cat:'Tournament', icon:'🥇', name:'Champion',      auto:true,  spicy:false, desc:'Overall tournament winner'},
+  {id:'fresh-meat',      cat:'Tournament', icon:'🐣', name:'Fresh Meat',    auto:true,  spicy:false, desc:'First Gentleman\u2019s Games. Came for a fun day out, left with a nickname.'},
   {id:'runner-up',       cat:'Tournament', icon:'🥈', name:'Runner Up',     auto:true,  spicy:false, desc:'2nd place overall'},
   {id:'third-place',     cat:'Tournament', icon:'🥉', name:'Third Place',   auto:true,  spicy:false, desc:'3rd place overall'},
   {id:'last-place',      cat:'Tournament', icon:'💀', name:'Last Place',    auto:true,  spicy:true,  desc:'Finished last overall'},
@@ -5869,7 +5875,8 @@ function renderJoinRequestsAdmin(){
       +'<div style="display:flex;gap:6px">'
       +'<button class="btn btn-sm btn-primary" onclick="approveJoin(\''+u+'\',\'player\')" style="flex:1">➕ Player</button>'
       +'<button class="btn btn-sm" onclick="approveJoin(\''+u+'\',\'spectator\')" style="flex:1">👀 Spectator</button>'
-      +'<button class="btn btn-sm btn-danger" onclick="declineJoin(\''+u+'\')" style="width:auto">✕</button></div></div>').join('')
+      +'<button class="btn btn-sm btn-danger" onclick="declineJoin(\''+u+'\')" style="width:auto">✕</button></div>'
+      +(ghostList().length?'<button class="btn btn-sm" onclick="openMatchFromRequest(\''+u+'\')" style="margin-top:6px">🔗 Match to someone you penciled in</button>':'')+'</div>').join('')
     :'<p class="empty" style="margin:0">No one waiting.</p>';
   if(box.dataset.h!==h){ box.innerHTML=h; box.dataset.h=h; }
 }
@@ -6665,13 +6672,14 @@ function renderNextGameCards(){
   if(!S) return;
   [['next-game-player',false],['next-game-admin',true]].forEach(([id,adm])=>{
     const e=el(id); if(!e) return;
-    const h=(adm&&!isTourneyAdmin)?'':nextGameCardHTML(adm);
-    const key=h.replace(/<div class="gg-cd"[^>]*>[^<]*<\/div>/,'');
+    let h=(adm&&!isTourneyAdmin)?'':(openingCardHTML(adm)+nextGameCardHTML(adm));
+    const key=h.replace(/<div class="gg-cd"[^>]*>[^<]*<\/div>/,'').replace(/<div class="gg-cdl"[^>]*>[^<]*<\/div>/,'');
     if(e.dataset.k!==key){ e.innerHTML=h; e.dataset.k=key; }
   });
 }
 setInterval(()=>{
   document.querySelectorAll('.gg-cd').forEach(x=>{ const at=+x.dataset.at; const t=ngFmtLeft(at-Date.now()); if(x.textContent!==t) x.textContent=t; });
+  document.querySelectorAll('.gg-cdl').forEach(x=>{ const at=+x.dataset.at; const t=ggLeftLong(at-Date.now()); if(x.textContent!==t) x.textContent=t; });
 },1000);
 
 // ── CHAT REACTIONS ────────────────────────────────────────
@@ -7046,6 +7054,172 @@ function renderUXCards(){
   syncMoreTab();
 }
 setInterval(()=>{ try{ renderUXCards(); }catch(e){} },30000);
+
+// ── PLACEHOLDERS: add people before they join, match them after ──
+function ghostList(){ return Object.entries(S&&S.ghostPlayers||{}).map(([k,n])=>({k,n})).filter(x=>x.n); }
+window.openPlaceholderSheet=(name)=>{
+  if(!isTourneyAdmin) return;
+  ggSheet('➕ Add someone who hasn’t joined yet',
+    '<div style="font-size:12px;color:#888;margin-bottom:10px">Pencil them in now. When they sign up you match them, and everything you filled in here stays with them.</div>'
+    +'<div class="sec-label" style="margin-top:0">Name</div><input type="text" id="ph-name" maxlength="30" value="'+feedEsc(name||'')+'" placeholder="e.g. Chett">'
+    +'<div class="sec-label">Phone or email <span style="font-weight:400;color:#aaa">(optional)</span></div><input type="text" id="ph-contact" maxlength="60" placeholder="so you can send them the link">'
+    +'<div class="sec-label">Their history <span style="font-weight:400;color:#aaa">(optional)</span></div>'
+    +'<div style="display:flex;gap:6px">'
+    +stepperHTML('ph-years',0,'Years')+stepperHTML('ph-wins',0,'Wins')+stepperHTML('ph-pods',0,'Podiums')+stepperHTML('ph-lasts',0,'Last place')
+    +'</div>'
+    +'<button class="btn btn-primary" onclick="addPlaceholder()" style="margin-top:12px">Add them</button>');
+  try{ numpadify(el('modal-area')); }catch(e){}
+};
+window.addPlaceholder=async()=>{
+  const name=(el('ph-name')?.value||'').trim();
+  if(!name){ alert('Give them a name.'); return; }
+  if((S.players||[]).some(p=>String(p).trim().toLowerCase()===name.toLowerCase())){ alert(name+' is already in this tournament.'); return; }
+  const contact=(el('ph-contact')?.value||'').trim();
+  const num=id=>Math.max(0,parseInt(el(id)?.value||'0')||0);
+  const years=num('ph-years'), wins=num('ph-wins'), podiums=num('ph-pods'), lastPlaces=num('ph-lasts');
+  const key=uid();
+  const isEmail=contact.includes('@');
+  try{
+    await set(ref(db,'preAssignments/'+key),{name,phone:isEmail?'':contact,email:isEmail?contact:'',
+      preferredContact:isEmail?'email':'phone',years,wins,podiums,lastPlaces,yearsAttended:[],gameWins:{},customBadges:[],createdAt:Date.now()});
+  }catch(e){}
+  const upd={players:[...(S.players||[]),name],['ghostPlayers/'+key]:name};
+  upd['history/'+name]={years,wins,podiums,lastPlaces,yearsAttended:[],gameWins:{},gameStats:{}};
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
+  closeModal();
+  showBadgeToast('➕ '+feedEsc(name)+' penciled in · match them once they sign up',true);
+};
+// Build the updates that move everything from one name to another
+function renameUpdates(oldName,newName){
+  const t=S, u={};
+  u['players']=(t.players||[]).map(p=>p===oldName?newName:p);
+  const pu={...(t.playerUids||{})}; Object.entries(pu).forEach(([k,n])=>{ if(n===oldName) pu[k]=newName; }); u['playerUids']=pu;
+  const gp={...(t.ghostPlayers||{})}; Object.entries(gp).forEach(([k,n])=>{ if(n===oldName) gp[k]=newName; }); u['ghostPlayers']=gp;
+  if(t.history&&t.history[oldName]){ u['history/'+newName]=t.history[oldName]; u['history/'+oldName]=null; }
+  Object.entries(t.gameRankings||{}).forEach(([gid,r])=>{ if(r&&r[oldName]!==undefined){ u['gameRankings/'+gid+'/'+newName]=r[oldName]; u['gameRankings/'+gid+'/'+oldName]=null; } });
+  Object.entries(t.points||{}).forEach(([gid,p])=>{ if(p&&p[oldName]!==undefined){ u['points/'+gid+'/'+newName]=p[oldName]; u['points/'+gid+'/'+oldName]=null; } });
+  if(t.rankingsFinalized&&t.rankingsFinalized[oldName]!==undefined){ u['rankingsFinalized/'+newName]=t.rankingsFinalized[oldName]; u['rankingsFinalized/'+oldName]=null; }
+  if(t.tourneyBadges&&t.tourneyBadges[oldName]){ u['tourneyBadges/'+newName]={...(t.tourneyBadges[newName]||{}),...t.tourneyBadges[oldName]}; u['tourneyBadges/'+oldName]=null; }
+  if(t.photos&&t.photos[oldName]){ u['photos/'+newName]=t.photos[oldName]; u['photos/'+oldName]=null; }
+  Object.entries(t.teams||{}).forEach(([gid,list])=>{
+    if(!Array.isArray(list)) return;
+    let hit=false;
+    const nl=list.map(tm=>{ const c={...tm}; ['p1','p2','p3'].forEach(k=>{ if(c[k]===oldName){ c[k]=newName; hit=true; } }); return c; });
+    if(hit) u['teams/'+gid]=nl;
+  });
+  return u;
+}
+window.matchPlaceholder=async(ghostName,personUid,realName)=>{
+  if(!isTourneyAdmin) return;
+  const g=ghostList().find(x=>x.n===ghostName); if(!g){ alert('That placeholder is gone.'); return; }
+  const clash=(S.players||[]).some(p=>p!==ghostName&&String(p).trim().toLowerCase()===String(realName).trim().toLowerCase());
+  if(clash){ alert(realName+' is already in this tournament under that name.'); return; }
+  if(!confirm(ghostName+' becomes '+realName+'. Everything you filled in — history, rankings, points — stays with them.')) return;
+  const upd=renameUpdates(ghostName,realName);
+  upd['ghostPlayers/'+g.k]=null;
+  const gp={...(upd['playerUids']||S.playerUids||{})}; gp[personUid]=realName; upd['playerUids']=gp;
+  if(S.joinRequests&&S.joinRequests[personUid]) upd['joinRequests/'+personUid]=null;
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
+  try{ await update(ref(db,'players/'+personUid),{pendingAdminReview:false}); }catch(e){}
+  closeModal();
+  showBadgeToast('🔗 '+feedEsc(ghostName)+' is now '+feedEsc(realName),true);
+};
+window.openMatchSheet=async(ghostName)=>{
+  if(!isTourneyAdmin) return;
+  const h0='<div style="font-size:12px;color:#888;margin-bottom:10px">Who is <b>'+feedEsc(ghostName)+'</b>? Pick the account and their real name takes over the slot — history, rankings and points all come with it.</div>';
+  ggSheet('🔗 Match '+feedEsc(ghostName),h0+'<p class="empty">Looking…</p>');
+  let all={}; try{ all=(await get(ref(db,'players'))).val()||{}; }catch(e){}
+  const inTourney=new Set(Object.keys(S.playerUids||{}));
+  const specs=S.spectators||{}, reqs=S.joinRequests||{};
+  const rows=Object.entries(all).filter(([u2,p])=>p&&!inTourney.has(u2)).map(([u2,p])=>{
+    const dn=String(p.preferredName||p.name||p.firstName||'').trim();
+    const tag=reqs[u2]?'<span class="tag tag-amber" style="font-size:10px">asked to join</span>':(specs[u2]?'<span class="tag" style="font-size:10px">spectating</span>':'');
+    return {u:u2,dn,sub:p.email||p.phone||'',tag,at:reqs[u2]?2:(p.createdAt?1:0)};
+  }).filter(r=>r.dn).sort((a,b)=>b.at-a.at||a.dn.localeCompare(b.dn));
+  const body=h0+(rows.length
+    ?'<input type="text" id="ms-find" placeholder="Search…" oninput="msFilter()" style="margin-bottom:8px">'
+      +'<div id="ms-rows">'+rows.map(r=>'<div class="ms-row" data-n="'+feedEsc((r.dn+' '+r.sub).toLowerCase())+'" onclick="matchPlaceholder(\''+esc(ghostName)+'\',\''+r.u+'\',\''+esc(r.dn)+'\')">'
+        +avatarHTML(r.dn,34)+'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+feedEsc(r.dn)+' '+r.tag+'</div>'
+        +'<div style="font-size:11px;color:#999">'+feedEsc(r.sub)+'</div></div><span style="color:#aaa">›</span></div>').join('')+'</div>'
+    :'<p class="empty">Nobody new has signed up yet.</p>');
+  ggSheet('🔗 Match '+feedEsc(ghostName),body);
+};
+window.msFilter=()=>{
+  const q=(el('ms-find')?.value||'').trim().toLowerCase();
+  document.querySelectorAll('#ms-rows .ms-row').forEach(r=>{ r.style.display=(!q||r.dataset.n.includes(q))?'':'none'; });
+};
+window.openMatchFromRequest=(personUid)=>{
+  const r=(S.joinRequests||{})[personUid]; if(!r) return;
+  const gl=ghostList();
+  if(!gl.length){ alert('No placeholders to match. Add them as a new player instead.'); return; }
+  ggSheet('🔗 Match '+feedEsc(r.name||'them'),
+    '<div style="font-size:12px;color:#888;margin-bottom:10px">Which placeholder is '+feedEsc(r.name||'this person')+'? Their name replaces it and the history you entered stays.</div>'
+    +gl.map(x=>'<div class="ms-row" onclick="matchPlaceholder(\''+esc(x.n)+'\',\''+personUid+'\',\''+esc(r.name||'')+'\')">'
+      +avatarHTML(x.n,34)+'<div style="flex:1"><div style="font-size:13px;font-weight:700">'+feedEsc(x.n)+'</div>'
+      +'<div style="font-size:11px;color:#999">penciled in</div></div><span style="color:#aaa">›</span></div>').join(''));
+};
+
+// ── OPENING CEREMONIES COUNTDOWN ──────────────────────────
+function ggLeftLong(ms){
+  if(ms<=0) return 'it’s go time';
+  const s=Math.floor(ms/1000), d=Math.floor(s/86400), h=Math.floor((s%86400)/3600), m=Math.floor((s%3600)/60), sec=s%60;
+  if(d) return d+'d '+h+'h';
+  if(h) return h+'h '+String(m).padStart(2,'0')+'m';
+  if(m) return m+'m '+String(sec).padStart(2,'0')+'s';
+  return sec+'s';
+}
+function ggWhenLong(t){
+  try{ return new Date(t).toLocaleString([], {weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; }
+}
+function openingCardHTML(admin){
+  if(!S||S.tournamentStarted) return admin?'':'';
+  const at=+S.openingAt||0;
+  if(!at) return admin?'<div class="card" style="padding:10px 12px;display:flex;align-items:center;gap:8px"><span style="font-size:20px">🎉</span><span style="flex:1;font-size:12px;color:#888">No opening time set</span><button class="btn btn-sm" onclick="openOpeningPrompt()" style="width:auto">Set it</button></div>':'';
+  const left=at-Date.now();
+  return '<div class="card open-cd">'
+    +'<div class="tb-win-k">🎉 OPENING CEREMONIES</div>'
+    +'<div style="font-size:14px;color:rgba(255,255,255,.85);font-weight:600">'+feedEsc(ggWhenLong(at))+'</div>'
+    +'<div class="gg-cdl" data-at="'+at+'" style="font-size:38px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;margin:6px 0 2px">'+ggLeftLong(left)+'</div>'
+    +(S.openingNote?'<div style="font-size:12px;color:rgba(255,255,255,.7)">'+feedEsc(S.openingNote)+'</div>':'')
+    +(left<=0?'<div style="font-size:12px;color:#f6e2a8;font-weight:700;margin-top:4px">Gentlemen, take your positions.</div>':'')
+    +(admin?'<div style="display:flex;gap:6px;margin-top:10px"><button class="btn btn-sm" onclick="openOpeningPrompt()" style="flex:1;background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)">Change</button><button class="btn btn-sm" onclick="clearOpening()" style="flex:1;background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)">Clear</button></div>':'')
+    +'</div>';
+}
+function localISO(t){
+  const d=new Date(t), p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());
+}
+window.openOpeningPrompt=()=>{
+  if(!isTourneyAdmin) return;
+  const cur=+S.openingAt||0;
+  const def=cur||(()=>{ const d=new Date(); d.setDate(d.getDate()+((6-d.getDay()+7)%7||7)); d.setHours(10,0,0,0); return d.getTime(); })();
+  ggSheet('🎉 Opening ceremonies',
+    '<div style="font-size:12px;color:#888;margin-bottom:10px">Everyone sees a countdown on their Now screen until you start the tournament.</div>'
+    +'<div class="sec-label" style="margin-top:0">When</div>'
+    +'<input type="datetime-local" id="oc-when" value="'+localISO(def)+'">'
+    +'<div class="sec-label">Note <span style="font-weight:400;color:#aaa">(optional)</span></div>'
+    +'<input type="text" id="oc-note" maxlength="80" value="'+feedEsc(S.openingNote||'')+'" placeholder="e.g. Coffee and bloody marys at 9">'
+    +'<button class="btn btn-primary" onclick="saveOpening()" style="margin-top:12px">Start the countdown</button>');
+};
+window.saveOpening=async()=>{
+  const v=el('oc-when')?.value; if(!v){ alert('Pick a date and time.'); return; }
+  const at=new Date(v).getTime();
+  if(!at||isNaN(at)){ alert('That date didn’t work.'); return; }
+  const note=(el('oc-note')?.value||'').trim();
+  const first=!S.openingAt;
+  const upd={openingAt:at,openingNote:note};
+  const k=feedKey(), now=Date.now();
+  upd['chat/'+k]={uid:'system',name:'Commissioner',system:true,kind:'notice',title:first?'OPENING CEREMONIES':'OPENING TIME CHANGED',
+    text:ggWhenLong(at)+(note?'\n'+note:''),at:now};
+  upd['notices/'+k]={title:'🎉 '+(first?'Opening ceremonies set':'Opening time changed'),body:ggWhenLong(at),at:now};
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
+  closeModal();
+  showBadgeToast('🎉 Countdown started · '+feedEsc(ggWhenLong(at)),true);
+};
+window.clearOpening=async()=>{
+  if(!confirm('Clear the opening countdown?')) return;
+  await update(ref(db,'tournaments/'+currentTourneyId),{openingAt:null,openingNote:null});
+};
 
 // ── JOIN / ADMIN ALERTS ───────────────────────────────────
 window._joinable=[];
@@ -7508,6 +7682,8 @@ function computeTournamentAwards(){
   const A={};
   const give=(bid,ps)=>{ ps=[...new Set((ps||[]).filter(Boolean))]; if(ps.length&&BADGE_DEFS.some(b=>b.id===bid)) A[bid]=ps; };
   const maxBy=(obj,min)=>{ const v=Object.values(obj); if(!v.length) return []; const mx=Math.max(...v); return mx<min?[]:Object.keys(obj).filter(k=>obj[k]===mx); };
+  const rookies=players.filter(p=>{ const h=(S.history&&S.history[p])||{}; return !(h.years>0)&&!((h.yearsAttended||[]).length); });
+  give('fresh-meat',rookies);
   if(sorted.length) give('champion',[sorted[0]]);
   if(sorted.length>1) give('runner-up',[sorted[1]]);
   if(sorted.length>2) give('third-place',[sorted[2]]);
