@@ -697,7 +697,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v130.22.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v131.22.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -771,7 +771,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v130.22.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v131.22.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -828,6 +828,11 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
         Import from GG_Complete_History.xlsx
         <input type="file" id="history-import-input" accept=".xlsx,.xls" style="display:none" onchange="handleHistoryImport(event)">
       </label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="imp-replace" style="width:auto"> Let the sheet overwrite everything (instead of merging)</label>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button class="btn btn-sm" onclick="ggBackupProfiles()" style="flex:1">💾 Back up profiles</button>
+        <label class="btn btn-sm" style="flex:1;cursor:pointer;margin:0">♻️ Restore backup<input type="file" accept=".json" style="display:none" onchange="ggRestoreProfiles(event)"></label>
+      </div>
       <div id="history-import-status" style="margin-bottom:8px"></div>
       <div class="search-box">
         <span class="search-icon">🔍</span>
@@ -1554,9 +1559,54 @@ window.rejectPending=async(btn)=>{
 };
 
 // ── HISTORY IMPORT ────────────────────────────────────────
+window.ggBackupProfiles=async(quiet)=>{
+  try{
+    const [a,b]=await Promise.all([get(ref(db,'players')),get(ref(db,'preAssignments'))]);
+    const data={savedAt:new Date().toISOString(),players:a.val()||{},preAssignments:b.val()||{}};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));
+    const el2=document.createElement('a'); el2.href=url;
+    el2.download='gg-profiles-backup-'+new Date().toISOString().slice(0,16).replace(/[:T]/g,'-')+'.json';
+    document.body.appendChild(el2); el2.click(); el2.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    if(!quiet) alert('✓ Backup downloaded. Keep it somewhere safe.');
+    return true;
+  }catch(err){ if(!quiet) alert('Could not make a backup: '+(err&&err.message||err)); return false; }
+};
+window.ggRestoreProfiles=async(event)=>{
+  const f=event.target.files&&event.target.files[0]; event.target.value='';
+  if(!f) return;
+  const statusEl=el('history-import-status');
+  try{
+    const data=JSON.parse(await f.text());
+    if(!data||!data.players){ alert('That does not look like a profile backup.'); return; }
+    if(!confirm('Merge this backup back in? Nothing gets lowered — only missing or smaller numbers are topped back up.')) return;
+    let n=0;
+    for(const [k,p] of Object.entries(data.players||{})){
+      if(!p) continue;
+      let ex={}; try{ ex=(await get(ref(db,'players/'+k))).val()||{}; }catch(e){}
+      if(!Object.keys(ex).length) continue;
+      await update(ref(db,'players/'+k),{...mergeStats(statsOf(ex),statsOf(p)),
+        customBadges:(ex.customBadges&&ex.customBadges.length?ex.customBadges:p.customBadges)||[]});
+      n++;
+    }
+    for(const [k,p] of Object.entries(data.preAssignments||{})){
+      if(!p) continue;
+      let ex={}; try{ ex=(await get(ref(db,'preAssignments/'+k))).val()||{}; }catch(e){}
+      await set(ref(db,'preAssignments/'+k),{...p,...ex,...mergeStats(statsOf(ex),statsOf(p))});
+    }
+    if(statusEl) statusEl.innerHTML='<div class="alert alert-success">✓ Restored stats for '+n+' profile'+(n===1?'':'s')+'.</div>';
+    loadGlobalPlayers();
+  }catch(err){ alert('Could not read that backup: '+(err&&err.message||err)); }
+};
 window.handleHistoryImport=async(event)=>{
   const file=event.target.files[0]; if(!file) return;
   const statusEl=el('history-import-status');
+  window._impReplace=!!el('imp-replace')?.checked;
+  if(!confirm('Import this sheet?\n\n'+(window._impReplace
+      ?'REPLACE mode: the sheet wins, even where it is blank. Anything not in the sheet is wiped.'
+      :'Merge mode: nothing goes down. Bigger numbers and extra game wins from the sheet get added, badges people already earned stay.')
+    +'\n\nA backup of every profile downloads first.')){ event.target.value=''; return; }
+  await ggBackupProfiles(true);
   statusEl.innerHTML='<div class="alert alert-info" style="font-size:11px">Reading spreadsheet...</div>';
   if(!window.XLSX){
     await new Promise((res,rej)=>{
@@ -1606,7 +1656,10 @@ window.handleHistoryImport=async(event)=>{
         if(eu){
           const es=await get(ref(db,'players/'+eu));
           const ex=es.exists()?es.val():{};
-          await update(ref(db,'players/'+eu),{...pd,uid:eu,phone:ex.phone||phone,email:ex.email||email});
+          const stats=window._impReplace?statsOf(pd):mergeStats(statsOf(ex),statsOf(pd));
+          await update(ref(db,'players/'+eu),{...pd,...stats,uid:eu,phone:ex.phone||phone,email:ex.email||email,
+            customBadges:ex.customBadges||pd.customBadges||[],photo:ex.photo||null,
+            matchNames:[...new Set([...(ex.matchNames||[]),...matchNames])]});
           updated++;
         } else {
           // Check existing preAssignments by first+last to avoid duplicates
@@ -1625,7 +1678,10 @@ window.handleHistoryImport=async(event)=>{
           // Use stable key based on first+last (no timestamp) to prevent duplicates
           const stableKey='pre_'+fn2.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+ln2.toLowerCase().replace(/[^a-z0-9]/g,'_');
           const targetKey=existingPreKey||stableKey;
-          await set(ref(db,'preAssignments/'+targetKey),pd);
+          let exPre={}; try{ exPre=(await get(ref(db,'preAssignments/'+targetKey))).val()||{}; }catch(e){}
+          const preStats=window._impReplace?statsOf(pd):mergeStats(statsOf(exPre),statsOf(pd));
+          await set(ref(db,'preAssignments/'+targetKey),{...exPre,...pd,...preStats,
+            matchNames:[...new Set([...(exPre.matchNames||[]),...matchNames])]});
           if(existingPreKey) updated++; else imported++;
         }
       }catch(e){skipped++;}
@@ -1704,10 +1760,15 @@ window.syncTournamentHistory=async()=>{
 
   const updates={};let synced=0,notFound=[];
 
+  const links=S.historyLinks||{};
   players.forEach(playerName=>{
+    // An admin-picked link always wins
+    let prof=null;
+    const lk=links[playerName];
+    if(lk&&lk.key) prof=(lk.src==='pre')?preByKey[lk.key]:((ps.exists()&&ps.val()[lk.key])||null);
     // For ghost players: find their preKey and load directly
     const preKey=Object.entries(ghostPlayers).find(([k,v])=>v===playerName)?.[0];
-    let prof = preKey ? preByKey[preKey] : null;
+    if(!prof) prof = preKey ? preByKey[preKey] : null;
 
     // If found by preKey but has no gameStats, check if a better entry exists by name
     if(prof && (!prof.gameStats || Object.keys(prof.gameStats).length===0)){
@@ -1739,7 +1800,7 @@ window.syncTournamentHistory=async()=>{
 
     if(!prof){notFound.push(playerName);return;}
 
-    const h={
+    const raw={
       years:      prof.years||0,
       wins:       prof.wins||0,
       podiums:    prof.podiums||0,
@@ -1748,12 +1809,8 @@ window.syncTournamentHistory=async()=>{
       gameWins:   prof.gameWins||{},
       gameStats:  prof.gameStats||{}
     };
-    // Sanity check: if gameWins is empty but gameStats has wins, rebuild it
-    if(Object.keys(h.gameWins).length===0&&h.gameStats){
-      Object.entries(h.gameStats).forEach(([game,gs])=>{
-        if(gs.wins>0) h.gameWins[game]=gs.wins;
-      });
-    }
+    // Merge with whatever is already on file — a sync never lowers a number or drops a game win
+    const h=mergeStats((S.history&&S.history[playerName])||{},raw);
     updates['history/'+playerName]=h;
 
     // Update _globalProfiles cache
@@ -2531,6 +2588,8 @@ async function loadGlobalProfilesForTournament(){
   if(!players.length) return;
   const [ps,prs]=await Promise.all([get(ref(db,'players')),get(ref(db,'preAssignments'))]);
   _globalProfiles={};
+  window._profileByUid={};
+  if(ps.exists()) Object.entries(ps.val()).forEach(([u2,p])=>{ if(p) window._profileByUid[u2]=p; });
   if(ps.exists()) Object.values(ps.val()).forEach(p=>{
     if(!p) return;
     const fullName=((p.firstName||'')+' '+(p.lastName||'')).trim();
@@ -5455,7 +5514,8 @@ function renderHistoryList(){
     html+=`<div style="padding:10px 0;border-bottom:1px solid #f0ede6">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <span style="font-size:13px;font-weight:600">${p}${ghost?' <span class="tag" style="font-size:9px;background:#FEF3E2;color:#7a4f00">⏳ ghost</span>':''}</span>
-        <button class="btn btn-sm" onclick="openEditHistory('${esc(p)}')" style="width:auto">Edit stats</button>
+        <span style="display:flex;gap:4px"><button class="btn btn-sm" onclick="openHistoryLink('${esc(p)}')" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🔗 Pull history</button>
+        <button class="btn btn-sm" onclick="openEditHistory('${esc(p)}')" style="width:auto">Edit stats</button></span>
       </div>
       <div style="font-size:11px;color:#888;margin-bottom:6px">${h.years||0}yrs · ${h.wins||0}W · ${h.podiums||0}P · ${h.lastPlaces||0}L</div>
       <div class="badges-wrap" style="margin-bottom:6px">${renderBadges(getPlayerBadges(p))}</div>
@@ -7055,6 +7115,95 @@ function renderUXCards(){
 }
 setInterval(()=>{ try{ renderUXCards(); }catch(e){} },30000);
 
+// ── HISTORY MERGE HELPERS (never lose what's already there) ──
+function mergeStats(oldH,newH){
+  const o=oldH||{}, n=newH||{};
+  const num=(a,b)=>Math.max(+a||0,+b||0);
+  const ya=[...new Set([...(o.yearsAttended||[]),...(n.yearsAttended||[])].map(Number).filter(Boolean))].sort();
+  const gw={...(o.gameWins||{})};
+  Object.entries(n.gameWins||{}).forEach(([g,c])=>{ gw[g]=Math.max(+gw[g]||0,+c||0); });
+  const gs={...(o.gameStats||{})};
+  Object.entries(n.gameStats||{}).forEach(([g,v])=>{ gs[g]={...(gs[g]||{}),...v}; });
+  // if gameWins is thin but gameStats knows about wins, fill it in
+  Object.entries(gs).forEach(([g,v])=>{ if(v&&+v.wins>0) gw[g]=Math.max(+gw[g]||0,+v.wins||0); });
+  return {years:num(o.years,n.years),wins:num(o.wins,n.wins),podiums:num(o.podiums,n.podiums),
+    lastPlaces:num(o.lastPlaces,n.lastPlaces),
+    yearsAttended:ya.length?ya:(o.yearsAttended||n.yearsAttended||[]),gameWins:gw,gameStats:gs};
+}
+function statsOf(p){ return {years:p&&p.years,wins:p&&p.wins,podiums:p&&p.podiums,lastPlaces:p&&p.lastPlaces,
+  yearsAttended:p&&p.yearsAttended,gameWins:p&&p.gameWins,gameStats:p&&p.gameStats}; }
+// ── ROOKIE TEST (for the Fresh Meat badge) ────────────────
+function rookieInfo(p){
+  const yr=+(S&&S.tourneyYear)||new Date().getFullYear();
+  const h=(S&&S.history&&S.history[p])||{};
+  const prof=(typeof _globalProfiles!=='undefined'&&_globalProfiles)?(_globalProfiles[p]||_globalProfiles[String(p||'').trim()]):null;
+  // The account linked to this slot counts even when it is filed under a different name
+  let byUid=null;
+  try{
+    const n=String(p||'').trim().toLowerCase();
+    const u2=Object.keys(S.playerUids||{}).find(k=>String(S.playerUids[k]||'').trim().toLowerCase()===n);
+    if(u2&&window._profileByUid) byUid=window._profileByUid[u2];
+  }catch(e){}
+  const m=mergeStats(mergeStats(statsOf(prof||{}),statsOf(byUid||{})),h);
+  const priorYears=(m.yearsAttended||[]).map(Number).filter(y=>y&&y<yr).length;
+  const gwTotal=Object.values(m.gameWins||{}).reduce((a,b)=>a+(+b||0),0);
+  return {priorYears,years:+m.years||0,wins:+m.wins||0,podiums:+m.podiums||0,lastPlaces:+m.lastPlaces||0,gwTotal};
+}
+function isRookie(p){
+  const r=rookieInfo(p);
+  if(r.priorYears>0) return false;                 // they were here in an earlier year
+  const finalized=!!(S&&S.tournamentFinalized);
+  if(r.years>(finalized?1:0)) return false;        // any year on the books before this one
+  if(!finalized&&(r.wins||r.podiums||r.lastPlaces||r.gwTotal)) return false; // has a past result
+  return true;
+}
+window.cleanupFreshMeat=async()=>{
+  if(!S||!isTourneyAdmin) return 0;
+  const tb=S.tourneyBadges||{}, upd={}; let n=0;
+  Object.keys(tb).forEach(p=>{ if(tb[p]&&tb[p]['fresh-meat']&&!isRookie(p)){ upd['tourneyBadges/'+p+'/fresh-meat']=null; n++; } });
+  Object.entries(S.badgeFeed||{}).forEach(([k,v])=>{ if(v&&v.badgeId==='fresh-meat'&&!isRookie(v.player)) upd['badgeFeed/'+k]=null; });
+  if(Object.keys(upd).length) await update(ref(db,'tournaments/'+currentTourneyId),upd);
+  return n;
+};
+// ── LINK A PLAYER TO THE RIGHT PROFILE / HISTORY RECORD ───
+window.openHistoryLink=async(playerName)=>{
+  if(!isTourneyAdmin) return;
+  ggSheet('🔗 Pull history for '+feedEsc(playerName),'<p class="empty">Looking…</p>');
+  let ps={},prs={};
+  try{ const [a,b]=await Promise.all([get(ref(db,'players')),get(ref(db,'preAssignments'))]); ps=a.val()||{}; prs=b.val()||{}; }catch(e){}
+  const rows=[];
+  Object.entries(ps).forEach(([k,p])=>{ if(!p) return; rows.push({src:'players',k,p,dn:String(p.preferredName||p.name||p.firstName||'').trim(),
+    full:((p.firstName||'')+' '+(p.lastName||'')).trim()}); });
+  Object.entries(prs).forEach(([k,p])=>{ if(!p) return; rows.push({src:'pre',k,p,dn:String(p.preferredName||p.nickname||p.firstName||p.name||'').trim(),
+    full:((p.firstName||'')+' '+(p.lastName||'')).trim()}); });
+  const cur=(S.history&&S.history[playerName])||{};
+  const line=p=>((+p.years||0)+'yr · '+(+p.wins||0)+'W · '+(+p.podiums||0)+'P · '+Object.keys(p.gameWins||{}).length+' game wins');
+  const body='<div style="font-size:12px;color:#888;margin-bottom:8px">'+feedEsc(playerName)+' right now: <b>'+feedEsc(line(cur))+'</b>.<br>Pick the record that is really them — their stats get merged in and remembered, so future syncs find them.</div>'
+    +'<input type="text" id="hl-find" placeholder="Search a name…" oninput="hlFilter()" style="margin-bottom:8px">'
+    +'<div id="hl-rows">'+rows.filter(r=>r.dn||r.full).sort((a,b)=>(+b.p.years||0)-(+a.p.years||0)).map(r=>
+      '<div class="ms-row" data-n="'+feedEsc(((r.dn+' '+r.full+' '+(r.p.email||'')+' '+(r.p.phone||'')).toLowerCase()))+'" onclick="linkHistory(\''+esc(playerName)+'\',\''+r.src+'\',\''+esc(r.k)+'\')">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+feedEsc(r.dn||r.full)
+      +(r.src==='pre'?' <span class="tag tag-amber" style="font-size:9px">not signed up</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:#999">'+feedEsc(r.full&&r.full!==r.dn?r.full+' · ':'')+feedEsc(line(r.p))+'</div></div><span style="color:#aaa">›</span></div>').join('')+'</div>';
+  ggSheet('🔗 Pull history for '+feedEsc(playerName),body);
+};
+window.hlFilter=()=>{
+  const q=(el('hl-find')?.value||'').trim().toLowerCase();
+  document.querySelectorAll('#hl-rows .ms-row').forEach(r=>{ r.style.display=(!q||r.dataset.n.includes(q))?'':'none'; });
+};
+window.linkHistory=async(playerName,src,key)=>{
+  let prof=null;
+  try{ prof=(await get(ref(db,(src==='pre'?'preAssignments/':'players/')+key))).val(); }catch(e){}
+  if(!prof){ alert('Could not read that record.'); return; }
+  const merged=mergeStats((S.history&&S.history[playerName])||{},statsOf(prof));
+  const upd={['history/'+playerName]:merged,['historyLinks/'+playerName]:{src,key,at:Date.now()}};
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
+  try{ _globalProfiles[playerName]={...(_globalProfiles[playerName]||{}),...prof,...merged}; }catch(e){}
+  closeModal();
+  showBadgeToast('🔗 Pulled '+feedEsc(String(prof.preferredName||prof.nickname||prof.firstName||'their'))+' history into '+feedEsc(playerName),true);
+  try{ renderHistoryList(); }catch(e){}
+};
+
 // ── PLACEHOLDERS: add people before they join, match them after ──
 function ghostList(){ return Object.entries(S&&S.ghostPlayers||{}).map(([k,n])=>({k,n})).filter(x=>x.n); }
 window.openPlaceholderSheet=(name)=>{
@@ -7682,7 +7831,7 @@ function computeTournamentAwards(){
   const A={};
   const give=(bid,ps)=>{ ps=[...new Set((ps||[]).filter(Boolean))]; if(ps.length&&BADGE_DEFS.some(b=>b.id===bid)) A[bid]=ps; };
   const maxBy=(obj,min)=>{ const v=Object.values(obj); if(!v.length) return []; const mx=Math.max(...v); return mx<min?[]:Object.keys(obj).filter(k=>obj[k]===mx); };
-  const rookies=players.filter(p=>{ const h=(S.history&&S.history[p])||{}; return !(h.years>0)&&!((h.yearsAttended||[]).length); });
+  const rookies=players.filter(p=>{ try{ return isRookie(p); }catch(e){ return false; } });
   give('fresh-meat',rookies);
   if(sorted.length) give('champion',[sorted[0]]);
   if(sorted.length>1) give('runner-up',[sorted[1]]);
@@ -7727,6 +7876,7 @@ function computeTournamentAwards(){
 }
 window.openTournamentAwards=()=>{
   if(!S) return;
+  try{ cleanupFreshMeat(); }catch(e){}
   if(!window._tAwardsOpen){ window._tAwards=computeTournamentAwards().A; window._tAwardsMsg=''; window._tAwardsOpen=true; }
   renderTournamentAwards();
 };
