@@ -697,7 +697,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v131.22.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v132.22.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -771,7 +771,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v131.22.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v132.22.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -1630,7 +1630,9 @@ window.handleHistoryImport=async(event)=>{
     const col=n=>hdrs.findIndex(h=>h.includes(n));
     const cN=col('nickname'),cF=col('first'),cL=col('last'),cP=col('preferred'),
           cPh=col('phone'),cEm=col('email'),cYr=col('years'),cW=col('wins'),
-          cPo=col('podium'),cLp=col('last place'),cYl=col('years list'),cGs=col('gamestats'),cGw=col('gamewins');
+          cPo=col('podium'),cLp=col('last place'),cYl=col('years list'),cGs=col('gamestats'),cGw=col('gamewins'),
+          cMn=col('matchable');
+    let gwFound=0;
     let imported=0,updated=0,skipped=0;
     for(let i=hIdx+1;i<rows.length;i++){
       const row=rows[i];
@@ -1642,11 +1644,15 @@ window.handleHistoryImport=async(event)=>{
       const years=parseInt(row[cYr])||0,wins=parseInt(row[cW])||0;
       const podiums=parseInt(row[cPo])||0,lastPlaces=parseInt(row[cLp])||0;
       const yearsAttended=String(row[cYl]||'').split(',').map(y=>parseInt(y.trim())).filter(Boolean);
-      const matchNames=[nick,fn2,pref,fn2+' '+ln2,pref+' '+ln2].filter(Boolean).map(n=>n.trim().toLowerCase());
+      const sheetNames=cMn>=0?String(row[cMn]||'').split(/[|,;]/).map(n=>n.trim()).filter(Boolean):[];
+      const matchNames=[...new Set([nick,fn2,pref,fn2+' '+ln2,pref+' '+ln2,...sheetNames].filter(Boolean).map(n=>n.trim().toLowerCase()))];
       let gameStats={};
       try{ if(cGs>=0&&row[cGs]) gameStats=JSON.parse(String(row[cGs])); }catch(e){}
       let gameWins={};
       try{ if(cGw>=0&&row[cGw]) gameWins=JSON.parse(String(row[cGw])); }catch(e){}
+      // Most sheets have no gameWins column — the wins live inside gameStats
+      Object.entries(gameStats||{}).forEach(([g,v])=>{ const w=+(v&&v.wins)||0; if(w>0) gameWins[g]=Math.max(+gameWins[g]||0,w); });
+      if(Object.keys(gameWins).length) gwFound++;
       const pd={nickname:nick,firstName:fn2,lastName:ln2,preferredName:pref,name:pref,
         phone,email,preferredContact:phone?'phone':'email',years,wins,podiums,lastPlaces,
         yearsAttended,matchNames,gameStats,gameWins,importedFrom:'GG_Complete_History',importedAt:Date.now()};
@@ -1686,7 +1692,8 @@ window.handleHistoryImport=async(event)=>{
         }
       }catch(e){skipped++;}
     }
-    statusEl.innerHTML='<div class="alert alert-success">Import complete! '+imported+' new, '+updated+' updated'+(skipped?' ('+skipped+' skipped)':'')+'</div>';
+    statusEl.innerHTML='<div class="alert alert-success">Import complete! '+imported+' new, '+updated+' updated'+(skipped?' ('+skipped+' skipped)':'')
+      +'<div style="font-size:11px;margin-top:4px">Game wins picked up for '+gwFound+' player'+(gwFound===1?'':'s')+'.</div></div>';
     loadGlobalPlayers(); event.target.value='';
   }catch(err){statusEl.innerHTML='<div class="alert alert-warn">Error: '+err.message+'</div>';}
 };
@@ -1712,6 +1719,18 @@ async function findPlayerByMatchNames(matchNames,phone,email,firstName='',lastNa
       const pFn=(p.firstName||'').trim().toLowerCase();
       const pLn=(p.lastName||'').trim().toLowerCase();
       if(pFn===fn&&pLn===ln) return uid2;
+    }
+  }
+  // Priority 3.5: same last name and a nickname of the first name (Mitch ↔ Mitchel, Chris ↔ Christopher)
+  if(lastName){
+    const ln=lastName.trim().toLowerCase(), fn=(firstName||'').trim().toLowerCase();
+    const nickOf=(a,b)=>a&&b&&a!==b&&(a.startsWith(b)||b.startsWith(a))&&Math.min(a.length,b.length)>=3;
+    for(const [uid2,p] of Object.entries(all)){
+      if(!p) continue;
+      if((p.lastName||'').trim().toLowerCase()!==ln) continue;
+      const cands=[p.firstName,p.preferredName,p.nickname,p.name].filter(Boolean).map(x=>String(x).trim().toLowerCase().split(' ')[0]);
+      const mine=[fn,...matchNames.map(m=>m.split(' ')[0])].filter(Boolean);
+      if(cands.some(c=>mine.some(m=>c===m||nickOf(c,m)))) return uid2;
     }
   }
   // Priority 4: matchNames array
@@ -7130,8 +7149,13 @@ function mergeStats(oldH,newH){
     lastPlaces:num(o.lastPlaces,n.lastPlaces),
     yearsAttended:ya.length?ya:(o.yearsAttended||n.yearsAttended||[]),gameWins:gw,gameStats:gs};
 }
-function statsOf(p){ return {years:p&&p.years,wins:p&&p.wins,podiums:p&&p.podiums,lastPlaces:p&&p.lastPlaces,
-  yearsAttended:p&&p.yearsAttended,gameWins:p&&p.gameWins,gameStats:p&&p.gameStats}; }
+function statsOf(p){
+  p=p||{};
+  const gw={...(p.gameWins||{})};
+  // Sheets keep the wins inside gameStats — pull them out so game badges work
+  Object.entries(p.gameStats||{}).forEach(([g,v])=>{ const w=+(v&&v.wins)||0; if(w>0) gw[g]=Math.max(+gw[g]||0,w); });
+  return {years:p.years,wins:p.wins,podiums:p.podiums,lastPlaces:p.lastPlaces,
+    yearsAttended:p.yearsAttended,gameWins:gw,gameStats:p.gameStats}; }
 // ── ROOKIE TEST (for the Fresh Meat badge) ────────────────
 function rookieInfo(p){
   const yr=+(S&&S.tourneyYear)||new Date().getFullYear();
