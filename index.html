@@ -697,7 +697,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v133.22.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v135.22.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -771,7 +771,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v133.22.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v135.22.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2340,6 +2340,8 @@ window.editGlobalPlayer = (uid2)=>{
       <div class="sec-label">Last place finishes</div><input type="number" id="ep-last" value="${p.lastPlaces||0}" min="0">
       <div class="sec-label">Years list (e.g. 2019,2020,2022)</div>
       <input type="text" id="ep-ylist" value="${(p.yearsAttended||[]).join(',')}">
+      <div class="sec-label">Game wins (game=count, e.g. Golf=1,Bowling=1)</div>
+      <input type="text" id="ep-gw" value="${Object.entries(statsOf(p).gameWins||{}).map(e=>e[0]+'='+e[1]).join(',')}">
       <div class="divider"></div>
       <button class="btn btn-primary" onclick="saveGlobalPlayer('${uid2}')">✓ Save</button>
     </div></div>`;
@@ -2365,6 +2367,7 @@ window.saveGlobalPlayer = async (uid2)=>{
     podiums: parseInt(el('ep-podiums').value)||0,
     lastPlaces: parseInt(el('ep-last').value)||0,
     yearsAttended: ylist,
+    gameWins: (()=>{ const g={}; (el('ep-gw')?.value||'').split(',').forEach(x=>{ const kv=x.split('='); if(kv.length===2&&kv[0].trim()) g[kv[0].trim()]=parseInt(kv[1])||0; }); return g; })(),
   };
   await set(ref(db,'players/'+uid2), updated);
 
@@ -2517,18 +2520,7 @@ window.openTournament = (tid)=>{
     if(!S.tourneyAdmins) S.tourneyAdmins={};
     if(!S.playerUids) S.playerUids={};
     if(!S.ghostPlayers) S.ghostPlayers={};
-    // Deduplicate playerUids — remove entries where same name appears multiple times
-    if(S.playerUids){
-      const seen={};
-      const cleaned={};
-      Object.entries(S.playerUids).forEach(([uid2,name])=>{
-        if(!seen[name]){ seen[name]=true; cleaned[uid2]=name; }
-      });
-      if(Object.keys(cleaned).length!==Object.keys(S.playerUids).length){
-        S.playerUids=cleaned;
-        update(ref(db,'tournaments/'+currentTourneyId),{playerUids:cleaned}).catch(()=>{});
-      }
-    }
+    // One person can hold two logins (an old email and a new one) — both stay mapped to their name
     try{ ensureGameChampDefs(); }catch(err){}
     const myUid = actingAsUid||currentUser?.uid;
     const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
@@ -3135,6 +3127,7 @@ function renderPlayerList(){
       </div>
       ${ranked}
       ${isGhost&&isTourneyAdmin?`<button class="btn btn-sm" onclick="openMatchSheet('${esc(p)}')" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🔗 Match</button>`:''}
+      ${isTourneyAdmin?`<button class="btn btn-sm" onclick="openMergeSheet('${esc(p)}')" style="width:auto" title="Merge this person into someone else">⤵️</button>`:''}
       <button class="btn btn-sm btn-danger" onclick="removePlayer('${esc(p)}')" style="margin-left:6px">✕</button>
     </div>`;
   }).join('');
@@ -5499,7 +5492,9 @@ function getPlayerBadges(name){
   return getPlayerBadgesFromProfile(gp,name);
 }
 function getPlayerBadgesFromProfile(h,name=''){
-  const badges=[],yr=S?.tourneyYear||new Date().getFullYear(),fy=S?.foundingYear||2019,totalYears=yr-fy+1;
+  const badges=[],yr=S?.tourneyYear||new Date().getFullYear(),fy=S?.foundingYear||2019;
+  // This year only counts once it has actually been played
+  const totalYears=(S&&S.tournamentFinalized)?(yr-fy+1):(yr-fy);
   h=h||{};
   if(!(+h.years>0))badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
   if(h.years>=1)badges.push({cls:'badge-years',icon:'📅',text:h.years+' year'+(h.years!==1?'s':'')});
@@ -5549,8 +5544,17 @@ function renderHistoryList(){
     }).join('');
     html+=`<div style="padding:10px 0;border-bottom:1px solid #f0ede6">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:13px;font-weight:600">${p}${ghost?' <span class="tag" style="font-size:9px;background:#FEF3E2;color:#7a4f00">⏳ ghost</span>':''}</span>
-        <span style="display:flex;gap:4px"><button class="btn btn-sm" onclick="openHistoryLink('${esc(p)}')" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🔗 Pull history</button>
+        <span style="font-size:13px;font-weight:600">${p}${ghost?' <span class="tag" style="font-size:9px;background:#FEF3E2;color:#7a4f00">⏳ ghost</span>':''}${(()=>{
+          try{
+            const n=String(p).trim().toLowerCase();
+            const u2=Object.keys(S.playerUids||{}).find(k=>String(S.playerUids[k]||'').trim().toLowerCase()===n);
+            const pr=u2&&window._profileByUid&&window._profileByUid[u2];
+            const dn=pr?String(pr.preferredName||pr.name||'').trim():'';
+            return (dn&&dn.toLowerCase()!==n)?' <span style="font-size:10px;color:#c47b00;font-weight:600">· account: '+feedEsc(dn)+'</span>':'';
+          }catch(e){ return ''; }
+        })()}</span>
+        <span style="display:flex;gap:4px"><button class="btn btn-sm" onclick="openMergeSheet('${esc(p)}')" style="width:auto" title="Merge into another player">⤵️ Merge</button>
+        <button class="btn btn-sm" onclick="openHistoryLink('${esc(p)}')" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🔗 Pull history</button>
         <button class="btn btn-sm" onclick="openEditHistory('${esc(p)}')" style="width:auto">Edit stats</button></span>
       </div>
       <div style="font-size:11px;color:#888;margin-bottom:6px">${h.years||0}yrs · ${h.wins||0}W · ${h.podiums||0}P · ${h.lastPlaces||0}L</div>
@@ -7245,6 +7249,95 @@ window.linkHistory=async(playerName,src,key)=>{
   try{ renderHistoryList(); }catch(e){}
 };
 
+// ── MERGE TWO PLAYERS INTO ONE ────────────────────────────
+function playerIsGhost(n){ return Object.values(S.ghostPlayers||{}).includes(n); }
+function uidsForPlayer(n){
+  const k=String(n||'').trim().toLowerCase();
+  return Object.keys(S.playerUids||{}).filter(u=>String(S.playerUids[u]||'').trim().toLowerCase()===k);
+}
+window.openMergeSheet=(fromName)=>{
+  if(!isTourneyAdmin) return;
+  const others=(S.players||[]).filter(p=>p!==fromName);
+  if(!others.length){ alert('Nobody to merge into yet.'); return; }
+  const tag=n=>playerIsGhost(n)
+    ?'<span class="tag" style="font-size:9px;background:#FEF3E2;color:#7a4f00">penciled in</span>'
+    :(uidsForPlayer(n).length?'<span class="tag tag-green" style="font-size:9px">signed in</span>':'');
+  ggSheet('⤵️ Merge '+feedEsc(fromName)+' into…',
+    '<div style="font-size:12px;color:#888;margin-bottom:8px">Everything on <b>'+feedEsc(fromName)+'</b> — history, rankings, points, badges, their spot on teams — moves onto whoever you pick, and <b>'+feedEsc(fromName)+'</b> disappears. Both of their logins will end up pointing at the same person, so a second email is fine.</div>'
+    +'<input type="text" id="mg-find" placeholder="Search…" oninput="mgFilter()" style="margin-bottom:8px">'
+    +'<div id="mg-rows">'+others.map(n=>'<div class="ms-row" data-n="'+feedEsc(String(n).toLowerCase())+'" onclick="mergePlayers(\''+esc(fromName)+'\',\''+esc(n)+'\')">'
+      +avatarHTML(n,34)+'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+feedEsc(n)+' '+tag(n)+'</div>'
+      +'<div style="font-size:11px;color:#999">'+((S.history&&S.history[n])?((+S.history[n].years||0)+'yr · '+(+S.history[n].wins||0)+'W'):'no history yet')+'</div></div>'
+      +'<span style="color:#aaa">›</span></div>').join('')+'</div>');
+};
+window.mgFilter=()=>{
+  const q=(el('mg-find')?.value||'').trim().toLowerCase();
+  document.querySelectorAll('#mg-rows .ms-row').forEach(r=>{ r.style.display=(!q||r.dataset.n.includes(q))?'':'none'; });
+};
+window.mergePlayers=async(fromName,toName)=>{
+  if(!isTourneyAdmin||fromName===toName) return;
+  const t=S;
+  if(!(t.players||[]).includes(fromName)||!(t.players||[]).includes(toName)){ alert('One of them is no longer in this tournament.'); return; }
+  if(!confirm('Merge '+fromName+' into '+toName+'?\n\n'+toName+' keeps the name. '+fromName+'’s history, points, badges and team spots come across, and any login either of them used will sign in as '+toName+'.')) return;
+  const u={};
+  u['players']=(t.players||[]).filter(p=>p!==fromName);
+  // both logins now point at the same person
+  const pu={...(t.playerUids||{})};
+  Object.keys(pu).forEach(k=>{ if(String(pu[k]||'').trim().toLowerCase()===String(fromName).trim().toLowerCase()) pu[k]=toName; });
+  u['playerUids']=pu;
+  const gp={...(t.ghostPlayers||{})};
+  Object.entries(gp).forEach(([k,n])=>{ if(n===fromName) delete gp[k]; });
+  u['ghostPlayers']=gp;
+  // history: keep the best of both
+  const merged=mergeStats((t.history&&t.history[toName])||{},(t.history&&t.history[fromName])||{});
+  u['history/'+toName]=merged; u['history/'+fromName]=null;
+  if(t.historyLinks&&t.historyLinks[fromName]&&!(t.historyLinks[toName])) u['historyLinks/'+toName]=t.historyLinks[fromName];
+  if(t.historyLinks&&t.historyLinks[fromName]) u['historyLinks/'+fromName]=null;
+  // points and rankings: keep whichever exists, bigger wins
+  Object.entries(t.points||{}).forEach(([gid,p])=>{
+    if(!p||p[fromName]===undefined) return;
+    u['points/'+gid+'/'+toName]=Math.max(+p[toName]||0,+p[fromName]||0);
+    u['points/'+gid+'/'+fromName]=null;
+  });
+  Object.entries(t.gameRankings||{}).forEach(([gid,r])=>{
+    if(!r||r[fromName]===undefined) return;
+    if(r[toName]===undefined) u['gameRankings/'+gid+'/'+toName]=r[fromName];
+    u['gameRankings/'+gid+'/'+fromName]=null;
+  });
+  if(t.rankingsFinalized&&t.rankingsFinalized[fromName]!==undefined){
+    if(t.rankingsFinalized[toName]===undefined) u['rankingsFinalized/'+toName]=t.rankingsFinalized[fromName];
+    u['rankingsFinalized/'+fromName]=null;
+  }
+  if(t.tourneyBadges&&t.tourneyBadges[fromName]){
+    u['tourneyBadges/'+toName]={...(t.tourneyBadges[toName]||{}),...t.tourneyBadges[fromName]};
+    u['tourneyBadges/'+fromName]=null;
+  }
+  if(t.playerBadges&&t.playerBadges[fromName]){
+    u['playerBadges/'+toName]=[...new Set([...(t.playerBadges[toName]||[]),...t.playerBadges[fromName]])];
+    u['playerBadges/'+fromName]=null;
+  }
+  if(t.photos&&t.photos[fromName]){ if(!t.photos[toName]) u['photos/'+toName]=t.photos[fromName]; u['photos/'+fromName]=null; }
+  // teams: take over their seat, unless the target is already on that team
+  Object.entries(t.teams||{}).forEach(([gid,list])=>{
+    if(!Array.isArray(list)) return;
+    let hit=false;
+    const nl=list.map(tm=>{
+      const c={...tm}, slots=['p1','p2','p3'];
+      const already=slots.some(k=>c[k]===toName);
+      slots.forEach(k=>{ if(c[k]===fromName){ c[k]=already?null:toName; hit=true; } });
+      slots.forEach(k=>{ if(c[k]===null) delete c[k]; });
+      return c;
+    });
+    if(hit) u['teams/'+gid]=nl;
+  });
+  // any pending join request from either of them is done with
+  Object.keys(t.joinRequests||{}).forEach(k=>{ if(pu[k]===toName) u['joinRequests/'+k]=null; });
+  await update(ref(db,'tournaments/'+currentTourneyId),u);
+  closeModal();
+  showBadgeToast('⤵️ '+feedEsc(fromName)+' merged into '+feedEsc(toName),true);
+  try{ renderPlayerList(); renderHistoryList(); }catch(e){}
+};
+
 // ── PLACEHOLDERS: add people before they join, match them after ──
 function ghostList(){ return Object.entries(S&&S.ghostPlayers||{}).map(([k,n])=>({k,n})).filter(x=>x.n); }
 window.openPlaceholderSheet=(name)=>{
@@ -7321,14 +7414,18 @@ window.openMatchSheet=async(ghostName)=>{
   let all={}; try{ all=(await get(ref(db,'players'))).val()||{}; }catch(e){}
   const inTourney=new Set(Object.keys(S.playerUids||{}));
   const specs=S.spectators||{}, reqs=S.joinRequests||{};
-  const rows=Object.entries(all).filter(([u2,p])=>p&&!inTourney.has(u2)).map(([u2,p])=>{
+  const rows=Object.entries(all).filter(([u2,p])=>!!p).map(([u2,p])=>{
     const dn=String(p.preferredName||p.name||p.firstName||'').trim();
-    const tag=reqs[u2]?'<span class="tag tag-amber" style="font-size:10px">asked to join</span>':(specs[u2]?'<span class="tag" style="font-size:10px">spectating</span>':'');
-    return {u:u2,dn,sub:p.email||p.phone||'',tag,at:reqs[u2]?2:(p.createdAt?1:0)};
+    const here=inTourney.has(u2);
+    const tag=here?'<span class="tag tag-green" style="font-size:10px">already in — will merge</span>'
+      :(reqs[u2]?'<span class="tag tag-amber" style="font-size:10px">asked to join</span>':(specs[u2]?'<span class="tag" style="font-size:10px">spectating</span>':''));
+    return {u:u2,dn,sub:p.email||p.phone||'',tag,here,inName:here?String(S.playerUids[u2]||dn):'',at:here?3:(reqs[u2]?2:(p.createdAt?1:0))};
   }).filter(r=>r.dn).sort((a,b)=>b.at-a.at||a.dn.localeCompare(b.dn));
   const body=h0+(rows.length
     ?'<input type="text" id="ms-find" placeholder="Search…" oninput="msFilter()" style="margin-bottom:8px">'
-      +'<div id="ms-rows">'+rows.map(r=>'<div class="ms-row" data-n="'+feedEsc((r.dn+' '+r.sub).toLowerCase())+'" onclick="matchPlaceholder(\''+esc(ghostName)+'\',\''+r.u+'\',\''+esc(r.dn)+'\')">'
+      +'<div id="ms-rows">'+rows.map(r=>'<div class="ms-row" data-n="'+feedEsc((r.dn+' '+r.sub+' '+r.inName).toLowerCase())+'" onclick="'+(r.here
+          ?'mergePlayers(\''+esc(ghostName)+'\',\''+esc(r.inName)+'\')'
+          :'matchPlaceholder(\''+esc(ghostName)+'\',\''+r.u+'\',\''+esc(r.dn)+'\')')+'">'
         +avatarHTML(r.dn,34)+'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+feedEsc(r.dn)+' '+r.tag+'</div>'
         +'<div style="font-size:11px;color:#999">'+feedEsc(r.sub)+'</div></div><span style="color:#aaa">›</span></div>').join('')+'</div>'
     :'<p class="empty">Nobody new has signed up yet.</p>');
