@@ -697,7 +697,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v135.22.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v136.22.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -771,7 +771,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v135.22.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v136.22.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3127,7 +3127,8 @@ function renderPlayerList(){
       </div>
       ${ranked}
       ${isGhost&&isTourneyAdmin?`<button class="btn btn-sm" onclick="openMatchSheet('${esc(p)}')" style="width:auto;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🔗 Match</button>`:''}
-      ${isTourneyAdmin?`<button class="btn btn-sm" onclick="openMergeSheet('${esc(p)}')" style="width:auto" title="Merge this person into someone else">⤵️</button>`:''}
+      ${isTourneyAdmin?`<button class="btn btn-sm" onclick="openAccountSheet('${esc(p)}')" style="width:auto" title="Which account signs in as this player">🔑</button>
+      <button class="btn btn-sm" onclick="openMergeSheet('${esc(p)}')" style="width:auto" title="Merge this person into someone else">⤵️</button>`:''}
       <button class="btn btn-sm btn-danger" onclick="removePlayer('${esc(p)}')" style="margin-left:6px">✕</button>
     </div>`;
   }).join('');
@@ -5479,17 +5480,29 @@ function renderPowerRankings(){
 }
 
 // ── HISTORY & BADGES ──────────────────────────────────────
+// The account actually linked to this player slot, not just whoever shares a first name
+function profileForPlayer(name){
+  try{
+    const n=String(name||'').trim().toLowerCase();
+    const u2=Object.keys(S.playerUids||{}).find(k=>String(S.playerUids[k]||'').trim().toLowerCase()===n);
+    if(u2&&window._profileByUid&&window._profileByUid[u2]) return window._profileByUid[u2];
+  }catch(e){}
+  return _globalProfiles[name]||_globalProfiles[String(name||'').trim()]||null;
+}
+// What you set in this tournament's History tab wins; the profile only fills the gaps
+function blendStats(prof,h){
+  const P=statsOf(prof||{}), H=statsOf(h||{});
+  if(!h||!Object.keys(h).length) return P;
+  const pick=(a,b)=>(a===undefined||a===null||a==='')?(+b||0):(+a||0);
+  const gw=Object.keys(H.gameWins||{}).length?H.gameWins:(P.gameWins||{});
+  const ya=(H.yearsAttended&&H.yearsAttended.length)?H.yearsAttended:(P.yearsAttended||[]);
+  return {years:pick(H.years,P.years),wins:pick(H.wins,P.wins),podiums:pick(H.podiums,P.podiums),
+    lastPlaces:pick(H.lastPlaces,P.lastPlaces),yearsAttended:ya,gameWins:gw,
+    gameStats:Object.keys(H.gameStats||{}).length?H.gameStats:(P.gameStats||{})};
+}
 function getPlayerBadges(name){
-  // Try exact match first, then trimmed, then tournament history
-  const gp=_globalProfiles[name]
-    ||_globalProfiles[(name||'').trim()]
-    ||(S.history&&S.history[name])
-    ||{};
-  if(S.tournamentFinalized){
-    const h=(S.history&&S.history[name])||gp;
-    return getPlayerBadgesFromProfile(h,name);
-  }
-  return getPlayerBadgesFromProfile(gp,name);
+  const h=(S.history&&S.history[name])||null;
+  return getPlayerBadgesFromProfile(blendStats(profileForPlayer(name),h),name);
 }
 function getPlayerBadgesFromProfile(h,name=''){
   const badges=[],yr=S?.tourneyYear||new Date().getFullYear(),fy=S?.foundingYear||2019;
@@ -7249,6 +7262,60 @@ window.linkHistory=async(playerName,src,key)=>{
   try{ renderHistoryList(); }catch(e){}
 };
 
+// ── WHICH ACCOUNT IS THIS PLAYER? ─────────────────────────
+window.openAccountSheet=async(playerName)=>{
+  if(!isTourneyAdmin) return;
+  ggSheet('🔑 '+feedEsc(playerName)+'’s account','<p class="empty">Looking…</p>');
+  let all={}; try{ all=(await get(ref(db,'players'))).val()||{}; }catch(e){}
+  const mine=uidsForPlayer(playerName);
+  const cur=mine.map(u=>{ const p=all[u]||{}; return {u,dn:String(p.preferredName||p.name||p.firstName||'(unknown)').trim(),
+    sub:[((p.firstName||'')+' '+(p.lastName||'')).trim(),p.email||p.phone||''].filter(Boolean).join(' · ')}; });
+  const taken=new Set(Object.keys(S.playerUids||{}));
+  const rows=Object.entries(all).filter(([u,p])=>p&&!mine.includes(u)).map(([u,p])=>({u,
+    dn:String(p.preferredName||p.name||p.firstName||'').trim(),
+    sub:[((p.firstName||'')+' '+(p.lastName||'')).trim(),p.email||p.phone||''].filter(Boolean).join(' · '),
+    other:taken.has(u)?String(S.playerUids[u]):''})).filter(r=>r.dn)
+    .sort((a,b)=>a.dn.localeCompare(b.dn));
+  const h='<div style="font-size:12px;color:#888;margin-bottom:8px">Whoever is linked here signs in as <b>'+feedEsc(playerName)+'</b>. If the wrong person is attached, pick the right account.</div>'
+    +(cur.length?'<div class="sec-label" style="margin-top:0">Linked now</div>'+cur.map(c=>'<div class="ms-row" style="cursor:default">'
+        +avatarHTML(c.dn,34)+'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+feedEsc(c.dn)+'</div>'
+        +'<div style="font-size:11px;color:#999">'+feedEsc(c.sub)+'</div></div>'
+        +'<button class="btn btn-sm btn-danger" onclick="unlinkAccount(\''+esc(playerName)+'\',\''+c.u+'\')" style="width:auto">Unlink</button></div>').join('')
+      :'<div class="alert alert-warn" style="font-size:11px">No account is linked — they can’t sign in as '+feedEsc(playerName)+' yet.</div>')
+    +'<div class="sec-label">Link a different account</div>'
+    +'<input type="text" id="ac-find" placeholder="Search…" oninput="acFilter()" style="margin-bottom:8px">'
+    +'<div id="ac-rows">'+rows.map(r=>'<div class="ms-row" data-n="'+feedEsc((r.dn+' '+r.sub).toLowerCase())+'" onclick="linkAccount(\''+esc(playerName)+'\',\''+r.u+'\')">'
+      +avatarHTML(r.dn,34)+'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+feedEsc(r.dn)
+      +(r.other?' <span class="tag tag-amber" style="font-size:9px">now: '+feedEsc(r.other)+'</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:#999">'+feedEsc(r.sub)+'</div></div><span style="color:#aaa">›</span></div>').join('')+'</div>';
+  ggSheet('🔑 '+feedEsc(playerName)+'’s account',h);
+};
+window.acFilter=()=>{
+  const q=(el('ac-find')?.value||'').trim().toLowerCase();
+  document.querySelectorAll('#ac-rows .ms-row').forEach(r=>{ r.style.display=(!q||r.dataset.n.includes(q))?'':'none'; });
+};
+window.linkAccount=async(playerName,personUid)=>{
+  if(!isTourneyAdmin) return;
+  const was=(S.playerUids||{})[personUid];
+  if(was&&was!==playerName&&!confirm('That account is currently '+was+'. Move it to '+playerName+'?')) return;
+  const pu={...(S.playerUids||{})}; pu[personUid]=playerName;
+  try{ await update(ref(db,'tournaments/'+currentTourneyId),{playerUids:pu}); }
+  catch(err){ alert('Could not link that account: '+(err&&err.message||err)); return; }
+  closeModal();
+  showBadgeToast('🔑 Account linked to '+feedEsc(playerName),true);
+  try{ await loadGlobalProfilesForTournament(); renderPlayerList(); renderHistoryList(); }catch(e){}
+};
+window.unlinkAccount=async(playerName,personUid)=>{
+  if(!isTourneyAdmin) return;
+  if(!confirm('Unlink this account from '+playerName+'? They will not be able to sign in as '+playerName+' until you link one.')) return;
+  const pu={...(S.playerUids||{})}; delete pu[personUid];
+  try{ await update(ref(db,'tournaments/'+currentTourneyId),{playerUids:pu}); }
+  catch(err){ alert('Could not unlink: '+(err&&err.message||err)); return; }
+  closeModal();
+  showBadgeToast('🔑 Unlinked from '+feedEsc(playerName),true);
+  try{ await loadGlobalProfilesForTournament(); renderPlayerList(); renderHistoryList(); }catch(e){}
+};
+
 // ── MERGE TWO PLAYERS INTO ONE ────────────────────────────
 function playerIsGhost(n){ return Object.values(S.ghostPlayers||{}).includes(n); }
 function uidsForPlayer(n){
@@ -7332,7 +7399,8 @@ window.mergePlayers=async(fromName,toName)=>{
   });
   // any pending join request from either of them is done with
   Object.keys(t.joinRequests||{}).forEach(k=>{ if(pu[k]===toName) u['joinRequests/'+k]=null; });
-  await update(ref(db,'tournaments/'+currentTourneyId),u);
+  try{ await update(ref(db,'tournaments/'+currentTourneyId),u); }
+  catch(err){ alert('Could not merge them: '+(err&&err.message||err)); return; }
   closeModal();
   showBadgeToast('⤵️ '+feedEsc(fromName)+' merged into '+feedEsc(toName),true);
   try{ renderPlayerList(); renderHistoryList(); }catch(e){}
@@ -7399,10 +7467,11 @@ window.matchPlaceholder=async(ghostName,personUid,realName)=>{
   if(clash){ alert(realName+' is already in this tournament under that name.'); return; }
   if(!confirm(ghostName+' becomes '+realName+'. Everything you filled in — history, rankings, points — stays with them.')) return;
   const upd=renameUpdates(ghostName,realName);
-  upd['ghostPlayers/'+g.k]=null;
+  const gh={...(upd['ghostPlayers']||S.ghostPlayers||{})}; delete gh[g.k]; upd['ghostPlayers']=gh;
   const gp={...(upd['playerUids']||S.playerUids||{})}; gp[personUid]=realName; upd['playerUids']=gp;
   if(S.joinRequests&&S.joinRequests[personUid]) upd['joinRequests/'+personUid]=null;
-  await update(ref(db,'tournaments/'+currentTourneyId),upd);
+  try{ await update(ref(db,'tournaments/'+currentTourneyId),upd); }
+  catch(err){ alert('Could not link them: '+(err&&err.message||err)); return; }
   try{ await update(ref(db,'players/'+personUid),{pendingAdminReview:false}); }catch(e){}
   closeModal();
   showBadgeToast('🔗 '+feedEsc(ghostName)+' is now '+feedEsc(realName),true);
