@@ -697,7 +697,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v132.22.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v133.22.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -771,7 +771,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v132.22.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v133.22.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -1633,6 +1633,17 @@ window.handleHistoryImport=async(event)=>{
           cPo=col('podium'),cLp=col('last place'),cYl=col('years list'),cGs=col('gamestats'),cGw=col('gamewins'),
           cMn=col('matchable');
     let gwFound=0;
+    // Names shared by more than one row (two Adams, say) must never be used to match
+    const nameCount={};
+    for(let i=hIdx+1;i<rows.length;i++){
+      const r2=rows[i], nk=String(r2[cN]||'').trim();
+      if(!nk||nk.startsWith('📝')) continue;
+      const f2=String(r2[cF]||'').trim(), l2=String(r2[cL]||'').trim(), p2=String(r2[cP]||'').trim()||f2||nk;
+      const sn=cMn>=0?String(r2[cMn]||'').split(/[|,;]/):[];
+      [...new Set([nk,f2,p2,...sn].map(x=>String(x||'').trim().toLowerCase()).filter(Boolean))]
+        .forEach(x=>{ nameCount[x]=(nameCount[x]||0)+1; });
+    }
+    const ambiguous=new Set(Object.keys(nameCount).filter(k=>nameCount[k]>1&&!k.includes(' ')));
     let imported=0,updated=0,skipped=0;
     for(let i=hIdx+1;i<rows.length;i++){
       const row=rows[i];
@@ -1645,7 +1656,8 @@ window.handleHistoryImport=async(event)=>{
       const podiums=parseInt(row[cPo])||0,lastPlaces=parseInt(row[cLp])||0;
       const yearsAttended=String(row[cYl]||'').split(',').map(y=>parseInt(y.trim())).filter(Boolean);
       const sheetNames=cMn>=0?String(row[cMn]||'').split(/[|,;]/).map(n=>n.trim()).filter(Boolean):[];
-      const matchNames=[...new Set([nick,fn2,pref,fn2+' '+ln2,pref+' '+ln2,...sheetNames].filter(Boolean).map(n=>n.trim().toLowerCase()))];
+      const matchNames=[...new Set([nick,fn2,pref,fn2+' '+ln2,pref+' '+ln2,...sheetNames].filter(Boolean).map(n=>n.trim().toLowerCase()))]
+        .filter(n=>!ambiguous.has(n));
       let gameStats={};
       try{ if(cGs>=0&&row[cGs]) gameStats=JSON.parse(String(row[cGs])); }catch(e){}
       let gameWins={};
@@ -1733,12 +1745,17 @@ async function findPlayerByMatchNames(matchNames,phone,email,firstName='',lastNa
       if(cands.some(c=>mine.some(m=>c===m||nickOf(c,m)))) return uid2;
     }
   }
-  // Priority 4: matchNames array
+  // Priority 4: matchNames array — a single word only counts if the last names agree
+  const ln2=(lastName||'').trim().toLowerCase();
   for(const [uid2,p] of Object.entries(all)){
     if(!p) continue;
+    const pLast=(p.lastName||'').trim().toLowerCase();
     const pn=[(p.firstName||'')+' '+(p.lastName||''),p.preferredName,p.nickname,p.name]
       .filter(Boolean).map(n=>n.trim().toLowerCase());
-    if(matchNames.some(m=>pn.includes(m))) return uid2;
+    const hit=matchNames.find(m=>pn.includes(m));
+    if(!hit) continue;
+    if(hit.includes(' ')) return uid2;                 // full name — safe
+    if(!ln2||!pLast||ln2===pLast) return uid2;         // one word — only when nothing contradicts it
   }
   return null;
 }
@@ -5484,7 +5501,7 @@ function getPlayerBadges(name){
 function getPlayerBadgesFromProfile(h,name=''){
   const badges=[],yr=S?.tourneyYear||new Date().getFullYear(),fy=S?.foundingYear||2019,totalYears=yr-fy+1;
   h=h||{};
-  if(h.years===1)badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
+  if(!(+h.years>0))badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
   if(h.years>=1)badges.push({cls:'badge-years',icon:'📅',text:h.years+' year'+(h.years!==1?'s':'')});
   if(h.years>=totalYears&&totalYears>=2)badges.push({cls:'badge-everyyear',icon:'🔥',text:'Every Year'});
   if(h.wins===1)badges.push({cls:'badge-champ',icon:'👑',text:'Champion'});
