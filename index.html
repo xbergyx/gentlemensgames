@@ -123,6 +123,8 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 [data-theme="dark"] .stepper button{background:#26262f}
 [data-theme="dark"] .mm-card:not(.up):not(.done){background:#1d1b33;border-color:#3b3570}
 [data-theme="dark"] .ck-row.cur{background:#2d2766}
+.seen-tag{background:none;border:1px solid rgba(128,128,128,.3);color:#888;font-size:10px;padding:1px 7px;border-radius:999px;margin-top:3px;cursor:pointer;width:auto;align-self:flex-start}
+.chat-row.mine .seen-tag{align-self:flex-end}
 .react-row{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}
 .chat-row.mine .react-row{justify-content:flex-end}
 .react-chip{border:1px solid rgba(128,128,128,.3);background:#fff;border-radius:12px;padding:1px 7px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;line-height:20px}
@@ -697,7 +699,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v141.23.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v142.23.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -771,7 +773,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v141.23.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v142.23.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -5831,7 +5833,8 @@ function chatListHTML(admin){
       +(admin||mine?' <a href="#" class="chat-x" onclick="deleteChat(\''+it.k+'\');return false">✕</a>':'')
       +(admin&&isAdmin&&!mine&&it.uid&&!String(it.uid).startsWith('as:')?' <a href="#" class="chat-x" title="Silence" onclick="openMuteSheet(\''+it.uid+'\',\''+feedEsc(String(it.name)).replace(/'/g,'')+'\');return false"><span class="mute-btn"><span class="mute-ic">💬</span>Mute</span></a>':'')
       +' <button class="react-btn" title="React" onclick="openReactPicker(\''+it.k+'\',event)">😀<b>+</b></button>'
-      +'</div>'+reactionChipsHTML(it.k,it.reactions)+'</div>';
+      +'</div>'+reactionChipsHTML(it.k,it.reactions)
+      +(admin?seenTagHTML(it.k,it):'')+'</div>';
     prev=it;
   });
   return h;
@@ -5862,6 +5865,7 @@ function renderChat(box){
   const mb=el('chat-mute-'+box); if(mb){ const mh=chatMuteBanner(box); if(mb.innerHTML!==mh) mb.innerHTML=mh; }
   const inp=el('chat-input-'+box); if(inp){ const muted=!!muteInfo(chatMyUid()); if(inp.disabled!==muted){ inp.disabled=muted; inp.placeholder=muted?'🤐 You are silenced':'Message… (type @ to mention)'; } }
   updateChatBadges();
+  try{ if(chatIsOpen()) chatPostRead(); }catch(e){}
 }
 function refreshChats(){
   ['p','a'].forEach(b=>{ if(el('chat-list-'+b)) renderChat(b); });
@@ -6826,6 +6830,50 @@ setInterval(()=>{
   document.querySelectorAll('.gg-cd').forEach(x=>{ const at=+x.dataset.at; const t=ngFmtLeft(at-Date.now()); if(x.textContent!==t) x.textContent=t; });
   document.querySelectorAll('.gg-cdl').forEach(x=>{ const at=+x.dataset.at; const t=ggLeftLong(at-Date.now()); if(x.textContent!==t) x.textContent=t; });
 },1000);
+
+// ── CHAT READ RECEIPTS ────────────────────────────────────
+let _lastReadWrite=0;
+async function chatPostRead(){
+  const u=chatMyUid();
+  if(!u||!currentTourneyId||!S) return;
+  const now=Date.now();
+  if(now-_lastReadWrite<20000) return;            // at most once every 20s
+  const mine=(S.chatReads||{})[u];
+  const newest=Math.max(0,...Object.values(S.chat||{}).map(m=>(m&&m.at)||0));
+  if(mine&&+mine>=newest) return;                  // already up to date
+  _lastReadWrite=now;
+  try{ await update(ref(db,'tournaments/'+currentTourneyId),{['chatReads/'+u]:now}); }catch(e){}
+}
+function chatSeenBy(msg){
+  const reads=(S&&S.chatReads)||{}, at=(msg&&msg.at)||0;
+  const seen=[], missing=[];
+  chatPeople().forEach(p=>{
+    if(!p.uid){ missing.push({...p,noAccount:true}); return; }   // never signed in
+    if(msg&&p.uid===msg.uid) return;                              // the sender
+    (+reads[p.uid]>=at?seen:missing).push(p);
+  });
+  return {seen,missing};
+}
+window.showSeenBy=(key)=>{
+  const m=(S.chat||{})[key]; if(!m) return;
+  const {seen,missing}=chatSeenBy(m);
+  const line=p=>'<div class="ms-row" style="cursor:default">'+avatarHTML(p.name,30)
+    +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+feedEsc(p.name)
+    +(p.spectator?' <span class="tag" style="font-size:9px">spectator</span>':'')
+    +(p.noAccount?' <span class="tag tag-amber" style="font-size:9px">never signed in</span>':'')+'</div></div></div>';
+  ggSheet('👀 Seen by '+seen.length+' of '+(seen.length+missing.length),
+    '<div style="font-size:12px;color:#888;margin-bottom:8px">“'+feedEsc(String(m.text||'').slice(0,90))+'”</div>'
+    +(seen.length?'<div class="sec-label" style="margin-top:0">Seen ('+seen.length+')</div>'+seen.map(line).join(''):'')
+    +(missing.length?'<div class="sec-label">Not yet ('+missing.length+')</div>'+missing.map(line).join(''):'')
+    +'<div style="font-size:11px;color:#999;margin-top:10px">Counted when someone has the Chat tab open. Nobody but you and your admins sees this.</div>');
+};
+function seenTagHTML(key,msg){
+  if(!isTourneyAdmin||!msg||msg.system) return '';
+  const {seen,missing}=chatSeenBy(msg);
+  const total=seen.length+missing.length;
+  if(!total) return '';
+  return '<button class="seen-tag" onclick="showSeenBy(\''+key+'\')">👀 '+seen.length+'/'+total+'</button>';
+}
 
 // ── CHAT REACTIONS ────────────────────────────────────────
 const REACTIONS=[
