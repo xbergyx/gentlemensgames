@@ -697,7 +697,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v139.23.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v141.23.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -771,7 +771,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v139.23.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v141.23.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -829,6 +829,9 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
         <input type="file" id="history-import-input" accept=".xlsx,.xls" style="display:none" onchange="handleHistoryImport(event)">
       </label>
       <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="imp-replace" style="width:auto"> Let the sheet overwrite everything (instead of merging)</label>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button class="btn btn-sm" onclick="openCleanupSheet()" style="flex:1">🧹 Clean up test records</button>
+      </div>
       <div style="display:flex;gap:6px;margin-bottom:8px">
         <button class="btn btn-sm" onclick="ggBackupProfiles()" style="flex:1">💾 Back up profiles</button>
         <label class="btn btn-sm" style="flex:1;cursor:pointer;margin:0">♻️ Restore backup<input type="file" accept=".json" style="display:none" onchange="ggRestoreProfiles(event)"></label>
@@ -2298,9 +2301,17 @@ window.deduplicateGlobalPlayers = async ()=>{
 function loadGlobalPlayers(searchTerm=''){
   Promise.all([get(ref(db,'players')),get(ref(db,'preAssignments'))]).then(([ps,prs])=>{
     const e = el('global-players-list'); if(!e) return;
-    const rows=[];
-    Object.entries(ps.exists()?ps.val():{}).forEach(([k,p])=>{ if(p) rows.push({k,p,acct:true}); });
-    Object.entries(prs.exists()?prs.val():{}).forEach(([k,p])=>{ if(p) rows.push({k,p,acct:false}); });
+    const rows=[], claimed=new Set();
+    const idOf=p=>[String(p.firstName||p.preferredName||p.name||'').trim().toLowerCase(),String(p.lastName||'').trim().toLowerCase()].join('|');
+    const nameOf=p=>String(p.preferredName||p.name||'').trim().toLowerCase()+'|'+String(p.lastName||'').trim().toLowerCase();
+    Object.entries(ps.exists()?ps.val():{}).forEach(([k,p])=>{ if(!p) return; rows.push({k,p,acct:true}); claimed.add(idOf(p)); claimed.add(nameOf(p)); });
+    let hidden=0;
+    Object.entries(prs.exists()?prs.val():{}).forEach(([k,p])=>{
+      if(!p) return;
+      // an imported record whose person already has an account is the same person twice
+      if(!window._ggShowDupes&&(claimed.has(idOf(p))||claimed.has(nameOf(p)))){ hidden++; return; }
+      rows.push({k,p,acct:false});
+    });
     const term=String(searchTerm||'').trim().toLowerCase();
     const hay=p=>[p.name,p.preferredName,p.firstName,p.lastName,p.nickname,
       ((p.firstName||'')+' '+(p.lastName||'')),p.phone,p.email,...(p.matchNames||[])].filter(Boolean).join(' ').toLowerCase();
@@ -2308,7 +2319,9 @@ function loadGlobalPlayers(searchTerm=''){
       .sort((a,b)=>(b.acct-a.acct)||String(a.p.preferredName||a.p.name||'').localeCompare(String(b.p.preferredName||b.p.name||'')));
     if(!filtered.length){ e.innerHTML='<p class="empty">Nobody matches that.</p>'; return; }
     const shown=filtered.slice(0,60);
-    e.innerHTML=(filtered.length>shown.length?'<div style="font-size:11px;color:#888;margin-bottom:6px">Showing '+shown.length+' of '+filtered.length+' — search to narrow it down.</div>':'')
+    e.innerHTML=(hidden?'<div style="font-size:11px;color:#888;margin-bottom:6px">'+hidden+' imported record'+(hidden===1?'':'s')+' hidden — those people already have accounts. <a href="#" onclick="ggToggleDupes();return false" style="color:#534AB7;font-weight:600">Show them</a></div>':'')
+      +(window._ggShowDupes?'<div style="font-size:11px;color:#888;margin-bottom:6px">Showing imported duplicates. <a href="#" onclick="ggToggleDupes();return false" style="color:#534AB7;font-weight:600">Hide them</a></div>':'')
+      +(filtered.length>shown.length?'<div style="font-size:11px;color:#888;margin-bottom:6px">Showing '+shown.length+' of '+filtered.length+' — search to narrow it down.</div>':'')
       +shown.map(({k,p,acct})=>{
       const dn=p.preferredName||p.name||p.firstName||'?';
       const full=((p.firstName||'')+' '+(p.lastName||'')).trim();
@@ -2327,7 +2340,8 @@ function loadGlobalPlayers(searchTerm=''){
   });
 }
 
-window.searchGlobalPlayers = (term)=>{ loadGlobalPlayers(term); };
+window.searchGlobalPlayers = (term)=>{ window._ggLastSearch=term; loadGlobalPlayers(term); };
+window.ggToggleDupes = ()=>{ window._ggShowDupes=!window._ggShowDupes; loadGlobalPlayers(window._ggLastSearch||''); };
 
 window.editGlobalPlayer = (uid2)=>{
   get(ref(db,'players/'+uid2)).then(snap=>{
@@ -10104,6 +10118,107 @@ window.handleXlsxUpload = async (event)=>{
     statusEl.innerHTML=`<div class="alert alert-success" style="font-size:11px">✓ Loaded <strong>${loadedPlayers.length} players</strong>: ${loadedPlayers.join(', ')}${errors.length?'<br>⚠️ Skipped: '+errors.join(', '):''}`;
     event.target.value='';
   }catch(err){statusEl.innerHTML=`<div class="alert alert-warn">❌ ${err.message}</div>`;}
+};
+
+// ── TEST / DUPLICATE CLEANUP (super admin) ────────────────
+function looksLikeTest(key,p){
+  if(!p) return false;
+  if(String(key||'').startsWith('test_')) return true;
+  if(p.isTestPlayer===true||p.importedFrom==='test') return true;
+  const last=String(p.lastName||'').trim().toLowerCase();
+  if(last==='(test)'||last==='test') return true;
+  const first=String(p.firstName||'').trim().toLowerCase();
+  if(first==='test') return true;
+  const dn=String(p.preferredName||p.name||'').trim();
+  if(/\btest\b/i.test(dn)) return true;
+  return false;
+}
+window.openCleanupSheet=async()=>{
+  if(userProfile?.email!==SUPER_ADMIN_EMAIL){ alert('Super admin only.'); return; }
+  ggSheet('🧹 Clean up records','<p class="empty">Looking…</p>');
+  let ps={},prs={},tours={};
+  try{ const [a,b,c]=await Promise.all([get(ref(db,'players')),get(ref(db,'preAssignments')),get(ref(db,'tournaments'))]);
+    ps=a.val()||{}; prs=b.val()||{}; tours=c.val()||{}; }catch(e){}
+  const inUse=new Set();
+  Object.values(tours).forEach(t=>{ if(!t||t.tournamentFinalized) return; (t.players||[]).forEach(n=>inUse.add(String(n).trim().toLowerCase())); });
+  const claimed=new Set();
+  Object.values(ps).forEach(p=>{ if(!p) return;
+    claimed.add([String(p.firstName||'').trim().toLowerCase(),String(p.lastName||'').trim().toLowerCase()].join('|'));
+    claimed.add([String(p.preferredName||p.name||'').trim().toLowerCase(),String(p.lastName||'').trim().toLowerCase()].join('|')); });
+  const tests=[], dupes=[];
+  Object.entries(prs).forEach(([k,p])=>{
+    if(!p) return;
+    const dn=String(p.preferredName||p.name||p.firstName||k).trim();
+    if(looksLikeTest(k,p)){ tests.push({src:'pre',k,dn,sub:'penciled-in record',used:inUse.has(dn.toLowerCase())}); return; }
+    const id=[String(p.firstName||'').trim().toLowerCase(),String(p.lastName||'').trim().toLowerCase()].join('|');
+    const id2=[String(p.preferredName||p.name||'').trim().toLowerCase(),String(p.lastName||'').trim().toLowerCase()].join('|');
+    if(claimed.has(id)||claimed.has(id2)) dupes.push({src:'pre',k,dn,sub:'already has an account',dupe:true});
+  });
+  Object.entries(ps).forEach(([k,p])=>{
+    if(!p||k===currentUser?.uid) return;
+    if(looksLikeTest(k,p)) tests.push({src:'players',k,dn:String(p.preferredName||p.name||'?').trim(),
+      sub:'ACCOUNT · '+(p.email||p.phone||'no contact'),acct:true,used:inUse.has(String(p.preferredName||p.name||'').trim().toLowerCase())});
+  });
+  window._cleanRows=[...tests,...dupes];
+  const row=(r,i,on)=>'<label class="ms-row" style="cursor:pointer">'
+    +'<input type="checkbox" class="cl-box" data-i="'+i+'"'+(on?' checked':'')+' style="width:auto;margin:0 4px 0 0">'
+    +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+feedEsc(r.dn)
+    +(r.acct?' <span class="tag tag-green" style="font-size:9px">account</span>':'')
+    +(r.used?' <span class="tag tag-amber" style="font-size:9px">in a live tournament</span>':'')+'</div>'
+    +'<div style="font-size:11px;color:#999">'+feedEsc(r.sub)+'</div></div></label>';
+  let h='';
+  h+=tests.length?'<div class="sec-label" style="margin-top:0">Test records ('+tests.length+')</div>'
+      +tests.map((r,i)=>row(r,i,!r.acct&&!r.used)).join('')
+    :'<div class="sec-label" style="margin-top:0">No test records left 👍</div>';
+  if(dupes.length) h+='<div class="sec-label">Imported records that already have an account ('+dupes.length+')</div>'
+    +dupes.map((r,i)=>row(r,tests.length+i,true)).join('');
+  h+='<div style="font-size:11px;color:#888;margin:10px 0">Deleting a record removes it from the global database and from any tournament it appears in. Accounts and anyone in a live tournament are left unticked — tick them only if you mean it.</div>'
+    +'<button class="btn btn-danger" onclick="runCleanup()">Delete the ticked records</button>';
+  ggSheet('🧹 Clean up records',h);
+};
+window.runCleanup=async()=>{
+  const rows=window._cleanRows||[];
+  const picked=[...document.querySelectorAll('.cl-box')].filter(b=>b.checked).map(b=>rows[+b.dataset.i]).filter(Boolean);
+  if(!picked.length){ alert('Nothing ticked.'); return; }
+  if(!confirm('Delete '+picked.length+' record'+(picked.length===1?'':'s')+'? This cannot be undone.')) return;
+  const names=new Set(picked.map(r=>String(r.dn).trim().toLowerCase()));
+  const preKeys=picked.filter(r=>r.src==='pre').map(r=>r.k);
+  const uids=picked.filter(r=>r.src==='players').map(r=>r.k);
+  const upd={};
+  preKeys.forEach(k=>{ upd['preAssignments/'+k]=null; });
+  uids.forEach(k=>{ upd['players/'+k]=null; upd['pendingApprovals/'+k]=null; });
+  let tours={};
+  try{ tours=(await get(ref(db,'tournaments'))).val()||{}; }catch(e){}
+  // Only pull someone out of a tournament when the record we deleted was what put them there
+  const testNames=new Set(picked.filter(r=>!r.dupe).map(r=>String(r.dn).trim().toLowerCase()));
+  Object.entries(tours).forEach(([tid,t])=>{
+    if(!t) return;
+    const ghosts={...(t.ghostPlayers||{})}, pu={...(t.playerUids||{})};
+    const goneGhosts=Object.entries(ghosts).filter(([k])=>preKeys.includes(k));
+    const goneUids=Object.entries(pu).filter(([u])=>uids.includes(u));
+    goneGhosts.forEach(([k])=>delete ghosts[k]);
+    goneUids.forEach(([u])=>delete pu[u]);
+    // a name still held by another slot or login stays put
+    const backed=new Set([...Object.values(ghosts),...Object.values(pu)].map(n=>String(n).trim().toLowerCase()));
+    const dropped=(t.players||[]).filter(n=>{
+      const ln=String(n).trim().toLowerCase();
+      if(backed.has(ln)) return false;
+      return testNames.has(ln)
+        ||goneGhosts.some(([,gn])=>String(gn).trim().toLowerCase()===ln)
+        ||goneUids.some(([,un])=>String(un).trim().toLowerCase()===ln);
+    });
+    if(goneGhosts.length) upd['tournaments/'+tid+'/ghostPlayers']=ghosts;
+    if(goneUids.length) upd['tournaments/'+tid+'/playerUids']=pu;
+    if(dropped.length){
+      upd['tournaments/'+tid+'/players']=(t.players||[]).filter(n=>!dropped.includes(n));
+      dropped.forEach(n=>{ if(t.history&&t.history[n]) upd['tournaments/'+tid+'/history/'+n]=null; });
+    }
+  });
+  try{ await update(ref(db,'/'),upd); }
+  catch(err){ alert('Could not delete: '+(err&&err.message||err)); return; }
+  closeModal();
+  showBadgeToast('🧹 Deleted '+picked.length+' record'+(picked.length===1?'':'s'),true);
+  try{ loadGlobalPlayers(window._ggLastSearch||''); }catch(e){}
 };
 
 // ── TEST HELPERS ──────────────────────────────────────────
