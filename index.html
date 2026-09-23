@@ -699,7 +699,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v142.23.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v143.23.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -773,7 +773,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v142.23.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v143.23.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2889,6 +2889,12 @@ function renderAdminGames(){
         <input type="number" id="game-rounds" min="2" max="10" value="2">
       </div>
 
+      <div class="sec-label">What do you call the playing area?</div>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="game-boardlabel" maxlength="14" placeholder="Board" style="flex:2;margin:0">
+        <input type="number" id="game-boardcount" min="1" max="12" placeholder="How many" style="flex:1;margin:0" inputmode="numeric">
+      </div>
+      <div style="font-size:11px;color:#aaa;margin:4px 0 0">e.g. Board, Table, Field, Kan, Lane, Pit — and how many run at once</div>
       <div class="sec-label">Team size</div>
       <select id="game-teamsize">
         <option value="2">2 players per team</option>
@@ -3202,39 +3208,39 @@ window.startTournament = async ()=>{
 // ── GAME PRESETS ─────────────────────────────────────────
 const GAME_PRESETS = {
   cornhole: {
-    name:'Cornhole', format:'', teamSize:'2', tiebreak:'auto', tbMode:'restart',
+    name:'Cornhole', format:'', boardLabel:'Board', teamSize:'2', tiebreak:'auto', tbMode:'restart',
     winScore:21, exactScore:false, hasRebuttal:true, hasInstaWin:false, tbDesc:'',
     rules:'• First to or above 21 wins (can go over)\n• Bags in hole = 3 pts, on board = 1 pt\n• Bags cancel — only net score counts each round\n• Bag must land and stay on board to count\n• Foul line: front edge of board — no stepping over\n• Knocked-off bags score nothing'
   },
   kanjam: {
-    name:'KanJam', format:'', teamSize:'2', tiebreak:'host-pick', tbMode:'restart',
+    name:'KanJam', format:'', boardLabel:'Kan', teamSize:'2', tiebreak:'host-pick', tbMode:'restart',
     winScore:21, exactScore:true, hasRebuttal:true, hasInstaWin:true, tbDesc:'',
     rules:'• Play to exactly 21 — going over resets to 11\n• 3 pts = partner deflects your throw into the can, 2 pts = you hit the can yourself (unassisted), 1 pt = partner deflects your throw to hit the outside of the can\n• InstaWin: throw it unassisted into the kan — through the front slot or the top — InstaWin regardless of score\n• Rebuttal only applies if you went second — if team 2 hits 21 after team 1, sudden death\n• Sudden death: each team throws one round, most points wins\n• Both players must throw each round\n• Can must stay upright to count points'
   },
   beerdie: {
-    name:'Beer Die', format:'', teamSize:'2', tiebreak:'auto', tbMode:'restart',
+    name:'Beer Die', format:'', boardLabel:'Table', teamSize:'2', tiebreak:'auto', tbMode:'restart',
     winScore:7, exactScore:false, winBy2:true, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• Play to 7, must win by 2\n• In cup = 3 pts, off cup = 2 pts, off table = 1 pt\n• Die must break table plane before catch — one hand, no trap\n• Must make it past the tape in the middle\n• Die must be thrown above head height of all players\n• No gripping the die\n• Must drink after every point your opponent scores'
   },
   beerdarts: {
-    name:'Beer Darts', format:'', teamSize:'2', tiebreak:'auto', tbMode:'restart',
+    name:'Beer Darts', format:'', boardLabel:'Pit', teamSize:'2', tiebreak:'auto', tbMode:'restart',
     winScore:6, exactScore:true, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• Exactly 6 pierces to win\n• Each team member has their own can — 2 cans per team, 3 pierces per can\n• First hole in top of can = can eliminated (counts as 3 pierces)\n• Any hole in bottom silver ring = can eliminated (counts as 3 pierces)\n• Drink when your can is pierced'
   },
   bowling: {
-    name:'Bowling', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'restart',
+    name:'Bowling', format:'', boardLabel:'Lane', teamSize:'2', tiebreak:'host-score', tbMode:'restart',
     winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasInstaWin:false,
     tbDesc:'Tiebreaker game — highest combined score wins',
     rules:'• Two games each teammate — total team pins\n• Alternate frames on second game\n• Team with highest combined pin total wins\n• Standard 10-pin bowling rules apply'
   },
   golf: {
-    name:'Golf', format:'', teamSize:'2', tiebreak:'host-score', tbMode:'restart',
+    name:'Golf', format:'', boardLabel:'Group', teamSize:'2', tiebreak:'host-score', tbMode:'restart',
     winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasInstaWin:false,
     tbDesc:'Closest putt to the pin',
     rules:'• Two man scramble — both hit from each spot, pick best ball and continue\n• One club length to improve lie, no improvement to rough\n• Two mulligans per team per round\n• Lowest total score wins\n• Each teammate must have at least one shot per hole'
   },
   spikeball: {
-    name:'Spikeball', format:'', teamSize:'2', tiebreak:'auto', tbMode:'restart',
+    name:'Spikeball', format:'', boardLabel:'Net', teamSize:'2', tiebreak:'auto', tbMode:'restart',
     winScore:21, exactScore:false, winBy2:true, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• Gentleman\'s serve to start — both teams agree on who goes first\n• Play to 21, must win by 2\n• Max 3 touches per team before hitting net, must alternate players\n• Serve must be hit cleanly — no spinning serves\n• Rim shots are replayed (let)\n• Scoring team serves next point\n• Switch sides after first team hits 11\n• No carrying or catching the ball\n• Body shots count if ball stays in play'
   },
@@ -3244,7 +3250,7 @@ const GAME_PRESETS = {
     rules:'• 6 cups per team — line up 3 in a row across table from partner\n• Shoot ball into cup — on a make, pass cup to other team who must drink and flip before continuing\n• Once all 6 cups are cleared, double bounce (or 17) to center bowl to win\n• Winning score = exactly 7 (6 cups and one bowl)\n• Flip must be completed before next throw can happen'
   },
   bucketball: {
-    name:'Bucketball', format:'', teamSize:'2', tiebreak:'auto', tbMode:'restart',
+    name:'Bucketball', format:'', boardLabel:'Court', teamSize:'2', tiebreak:'auto', tbMode:'restart',
     winScore:null, exactScore:false, scoreType:null, hasRebuttal:false, hasInstaWin:false, tbDesc:'',
     rules:'• Standard Bucketball rules\n• Eliminate all opponent buckets to win\n• Each ball scored stays out of play'
   },
@@ -3263,6 +3269,7 @@ window.applyGamePreset = (key)=>{
   const ts=el('game-teamsize'); if(ts) ts.value=p.teamSize;
   const tb=el('game-tiebreak'); if(tb) tb.value=p.tiebreak;
   const tm=el('game-tbmode'); if(tm) tm.value=p.tbMode;
+  const bl=el('game-boardlabel'); if(bl) bl.value=p.boardLabel||'Board';
   const td=el('game-tb-desc'); if(td) td.value=p.tbDesc||'';
   const ms=el('game-min-score'); if(ms) ms.value=p.winScore||'';
   const rex=el('score-type-exact'); if(rex) rex.checked=!!p.exactScore;
@@ -3359,7 +3366,9 @@ window.addGame = async ()=>{
   const winBy2=el('score-type-winby2')?.checked||false;
   const hasRebuttal=el('game-has-rebuttal')?.checked||false;
   const hasInstaWin=el('game-has-instawin')?.checked||false;
-  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize,tbMode,rules,tbDesc,winScore,exactScore,winBy2,hasRebuttal,hasInstaWin};
+  const boardLabel=(el('game-boardlabel')?.value||'').trim()||'Board';
+  const boardCount=Math.max(0,Math.min(12,parseInt(el('game-boardcount')?.value)||0))||null;
+  const g={id:uid(),name,format,tiebreak:tb,rounds,status:'pending',teamSize,tbMode,rules,tbDesc,winScore,exactScore,winBy2,hasRebuttal,hasInstaWin,boardLabel,boardCount};
   const games=[...(S.games||[]),g];
   await update(ref(db,'tournaments/'+currentTourneyId),{games});
   el('game-name-input').value='';
@@ -3384,7 +3393,7 @@ async function advanceMatchScheduler(gameId,freshB){
   const allM=getAllMatchesFromBracket(b,game.format);
   const unplayed=allM.filter(m=>!m.winner&&m.t1&&m.t1.p1&&m.t2&&m.t2.p1);
   const prev=(S.activeMatchIds&&S.activeMatchIds[gameId])||{};
-  const cap=Math.max(1,Math.min(12,parseInt(S.boardCount)||4));
+  const cap=boardCapFor(game);
   const active=new Map();
   unplayed.forEach(m=>{ if(prev[m.id]) active.set(m.id,typeof prev[m.id]==='number'?prev[m.id]:0); });
   const done=allM.filter(m=>m.winner&&m.t1&&m.t2);
@@ -4257,7 +4266,7 @@ function matchRowPending(game,m,fmt,num,label,type,poolKey,ri){
   if(!m||!m.t1||(!m.t2&&!m.bye))return'';
   const t2=m.t2||{id:'tbd',p1:'TBD',p2:null};
   const pfx=`mf-${game.id}-${m.id}`;
-  { const bn=boardOf(game.id,m.id); if(bn) label=(typeof bn==='number'?'🎯 Board '+bn:'🎯 On a board')+(label?' · '+label:''); }
+  { const bn=boardOf(game.id,m.id); const W=boardWord(game); if(bn) label=(typeof bn==='number'?'🎯 '+W+' '+bn:'🎯 On a '+W.toLowerCase())+(label?' · '+label:''); }
   let saveCall='';
   if(type==='rr')       saveCall=`saveMFMatch('${game.id}','${m.id}','rr')`;
   else if(type==='pool')saveCall=`saveMFMatch('${game.id}','${m.id}','pool','${poolKey}')`;
@@ -6999,21 +7008,32 @@ window.openAfterGameSheet=(doneId)=>{
     +'<div class="divider"></div><button class="btn btn-primary" onclick="openNextGamePrompt(\''+doneId+'\')">⏰ Set a countdown instead</button>'
     +'<button class="btn" style="margin-top:6px" onclick="closeModal()">Later</button>');
 };
+// What a game calls its playing area, and how many run at once
+function boardWord(g){ return String((g&&g.boardLabel)||'Board').trim()||'Board'; }
+function boardWordFor(gid){ return boardWord((S.games||[]).find(x=>x.id===gid)); }
+function boardCapFor(g){
+  const own=parseInt(g&&g.boardCount);
+  if(own>0) return Math.max(1,Math.min(12,own));
+  return Math.max(1,Math.min(12,parseInt(S.boardCount)||4));
+}
 window.setBoardCount=async(n)=>{
   n=Math.max(1,Math.min(12,n));
-  await update(ref(db,'tournaments/'+currentTourneyId),{boardCount:n});
+  const g=(S.games||[]).find(x=>x.id===S.activeGameId);
+  const upd={boardCount:n};
+  if(g){ upd.games=(S.games||[]).map(x=>x.id===g.id?{...x,boardCount:n}:x); }  // this game keeps its own number
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
   setTimeout(()=>{ if(S.activeGameId) advanceMatchScheduler(S.activeGameId); },300);
 };
 function boardsCardHTML(){
   const g=(S.games||[]).find(x=>x.id===S.activeGameId);
   if(!g||!isMatchGame(g)) return '';
-  const n=parseInt(S.boardCount)||4;
+  const n=boardCapFor(g), W=boardWord(g);
   const act=(S.activeMatchIds&&S.activeMatchIds[g.id])||{};
   const b=S.bs&&S.bs[g.id], all=b?getAllMatchesFromBracket(b,g.format):[];
   const nm=t=>t?[t.p1,t.p2,t.p3].filter(Boolean).map(x=>String(x).split(' ')[0]).join(' & '):'?';
   const rows=Object.entries(act).sort((a,c)=>(+a[1]||0)-(+c[1]||0)).map(([id,bn])=>{ const m=all.find(x=>x.id===id); if(!m) return ''; const t=(S.matchTimes&&S.matchTimes[g.id]&&S.matchTimes[g.id][id])||{};
-    return '<div style="display:flex;gap:8px;font-size:12px;padding:3px 0"><b style="min-width:58px">Board '+(typeof bn==='number'?bn:'?')+'</b><span style="flex:1">'+feedEsc(nm(m.t1))+' vs '+feedEsc(nm(m.t2))+'</span>'+(t.readyAt?'<span style="color:#888">'+fmtDur(Date.now()-t.readyAt)+'</span>':'')+'</div>'; }).join('');
-  return '<div class="card" style="padding:10px 12px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">🎯</span><b style="flex:1;font-size:13px">Boards in use</b>'
+    return '<div style="display:flex;gap:8px;font-size:12px;padding:3px 0"><b style="min-width:58px">'+feedEsc(W)+' '+(typeof bn==='number'?bn:'?')+'</b><span style="flex:1">'+feedEsc(nm(m.t1))+' vs '+feedEsc(nm(m.t2))+'</span>'+(t.readyAt?'<span style="color:#888">'+fmtDur(Date.now()-t.readyAt)+'</span>':'')+'</div>'; }).join('');
+  return '<div class="card" style="padding:10px 12px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">🎯</span><b style="flex:1;font-size:13px">'+feedEsc(W)+'s in use</b>'
     +'<div class="stepper"><button type="button" onclick="setBoardCount('+(n-1)+')">−</button><input type="number" value="'+n+'" readonly data-stepped="1"><button type="button" onclick="setBoardCount('+(n+1)+')">+</button></div></div>'
     +(rows?'<div style="margin-top:6px">'+rows+'</div>':'<div style="font-size:11px;color:#888;margin-top:4px">No matches on a board right now.</div>')+'</div>';
 }
@@ -7046,7 +7066,7 @@ function myMatchCardHTML(inline){
   else if(I.pend&&I.pend[I.side==='t1'?'t2':'t1']&&!I.pend[I.side]){ status='✅ They entered a score. Confirm it below.'; cls='warn'; }
   else if(I.pend&&I.pend[I.side]){ status='⏳ Waiting for them to confirm your score.'; }
   else if(I.active) status='When you finish, enter the score below.';
-  const head=I.active?('🎯 YOU\'RE UP'+(typeof I.board==='number'?' · BOARD '+I.board:'')):'⏳ ON DECK';
+  const head=I.active?('🎯 YOU\'RE UP'+(typeof I.board==='number'?' · '+boardWordFor(I.gameId||S.activeGameId).toUpperCase()+' '+I.board:'')):'⏳ ON DECK';
   return '<div class="mm-card mm-inline'+(I.active?' up':'')+'">'
     +'<div class="mm-k">'+head+'</div>'
     +'<div class="mm-big">vs '+nm(I.opp)+'</div>'
@@ -7724,6 +7744,12 @@ window.openEditGame=(gid)=>{
     ? lock('This game already has scores. Unlock and clear its results to change the format.')+'<div class="eg-cur">'+feedEsc(FMT_NICE[g.format]||g.format)+'</div>'
     : '<select id="eg-format">'+fam.map(f=>opt(f,FMT_NICE[f]||f,g.format)).join('')+'</select>'
       +(teams.length?'<div class="eg-hint">Teams stay the same — the schedule gets rebuilt.</div>':'');
+  h+='<div class="sec-label">What you call the playing area</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<input type="text" id="eg-blabel" maxlength="14" value="'+feedEsc(g.boardLabel||'Board')+'" placeholder="Board" style="flex:2;margin:0">'
+    +'<input type="number" id="eg-bcount" min="1" max="12" value="'+(g.boardCount||'')+'" placeholder="How many" style="flex:1;margin:0" inputmode="numeric">'
+    +'</div><div style="font-size:11px;color:#aaa;margin:4px 0 0">Board, Table, Field, Kan, Lane… and how many run at once'
+    +(g.boardCount?'':' (blank = '+(parseInt(S.boardCount)||4)+', the tournament default)')+'</div>';
   h+='<div class="sec-label">Team size</div>';
   h+= teams.length
     ? lock('Teams are already made. Remove the teams to change team size.')+'<div class="eg-cur">'+(g.teamSize||2)+' players per team</div>'
@@ -7763,7 +7789,9 @@ window.saveGameEdit=async(gid)=>{
   const tb=el('eg-tiebreak')?.value||g.tiebreak||'auto';
   const tbMode=tb==='auto'?(el('eg-tbmode')?.value||'restart'):(g.tbMode||'restart');
   const ws=el('eg-winscore')?.value;
+  const bc=Math.max(0,Math.min(12,parseInt(el('eg-bcount')?.value)||0))||null;
   const ng={...g,name,format:nf,teamSize:ts,tiebreak:tb,tbMode,
+    boardLabel:(el('eg-blabel')?.value||'').trim()||'Board', boardCount:bc,
     tbDesc:(el('eg-tbdesc')?.value||'').trim(),
     winScore:(ws===''||ws==null)?null:parseFloat(ws),
     exactScore:!!el('eg-exact')?.checked, winBy2:!!el('eg-winby2')?.checked,
@@ -9643,7 +9671,7 @@ async function renderActiveGameTab(myName){
 
     if(playing.length){
       html+='<div style="font-size:10px;font-weight:700;color:#27500A;margin-bottom:6px">▶ NOW PLAYING ('+playing.length+' board'+(playing.length!==1?'s':'')+')</div>';
-      playing.slice().sort((a,c2)=>((+boardOf(activeGame.id,a.id))||99)-((+boardOf(activeGame.id,c2.id))||99)).forEach((m,mi)=>{ const bn=boardOf(activeGame.id,m.id); html+=renderMatchCard(m,mi,'Board '+(typeof bn==='number'?bn:(mi+1)),false); });
+      playing.slice().sort((a,c2)=>((+boardOf(activeGame.id,a.id))||99)-((+boardOf(activeGame.id,c2.id))||99)).forEach((m,mi)=>{ const bn=boardOf(activeGame.id,m.id); html+=renderMatchCard(m,mi,boardWord(activeGame)+' '+(typeof bn==='number'?bn:(mi+1)),false); });
     }
 
     if(!window._amOpen) window._amOpen={};
