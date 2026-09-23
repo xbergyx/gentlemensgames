@@ -697,7 +697,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v137.22.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v139.23.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -771,7 +771,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v137.22.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v139.23.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2296,25 +2296,32 @@ window.deduplicateGlobalPlayers = async ()=>{
 };
 
 function loadGlobalPlayers(searchTerm=''){
-  get(ref(db,'players')).then(snap=>{
-    const all = snap.exists() ? snap.val() : {};
+  Promise.all([get(ref(db,'players')),get(ref(db,'preAssignments'))]).then(([ps,prs])=>{
     const e = el('global-players-list'); if(!e) return;
-    const filtered = Object.entries(all).filter(([uid2,p])=>{
-      if(!searchTerm) return true;
-      const s=searchTerm.toLowerCase();
-      return (p.name||'').toLowerCase().includes(s)||(p.phone||'').includes(s)||(p.email||'').toLowerCase().includes(s);
-    });
-    if(!filtered.length){ e.innerHTML='<p class="empty">No players found.</p>'; return; }
-    e.innerHTML=filtered.slice(0,20).map(([uid2,p])=>{
-      const badges=getPlayerBadgesFromProfile(p);
+    const rows=[];
+    Object.entries(ps.exists()?ps.val():{}).forEach(([k,p])=>{ if(p) rows.push({k,p,acct:true}); });
+    Object.entries(prs.exists()?prs.val():{}).forEach(([k,p])=>{ if(p) rows.push({k,p,acct:false}); });
+    const term=String(searchTerm||'').trim().toLowerCase();
+    const hay=p=>[p.name,p.preferredName,p.firstName,p.lastName,p.nickname,
+      ((p.firstName||'')+' '+(p.lastName||'')),p.phone,p.email,...(p.matchNames||[])].filter(Boolean).join(' ').toLowerCase();
+    const filtered=rows.filter(r=>!term||hay(r.p).includes(term))
+      .sort((a,b)=>(b.acct-a.acct)||String(a.p.preferredName||a.p.name||'').localeCompare(String(b.p.preferredName||b.p.name||'')));
+    if(!filtered.length){ e.innerHTML='<p class="empty">Nobody matches that.</p>'; return; }
+    const shown=filtered.slice(0,60);
+    e.innerHTML=(filtered.length>shown.length?'<div style="font-size:11px;color:#888;margin-bottom:6px">Showing '+shown.length+' of '+filtered.length+' — search to narrow it down.</div>':'')
+      +shown.map(({k,p,acct})=>{
+      const dn=p.preferredName||p.name||p.firstName||'?';
+      const full=((p.firstName||'')+' '+(p.lastName||'')).trim();
+      const badges=getPlayerBadgesFromProfile(statsOf(p));
       return`<div class="player-row">
-        <div class="avatar">${initials(p.name)}</div>
+        <div class="avatar">${initials(dn)}</div>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${p.name||'?'}</div>
-          <div style="font-size:11px;color:#888">${p.phone||''} ${p.email||''}</div>
+          <div style="font-size:13px;font-weight:600">${feedEsc(dn)}${full&&full.toLowerCase()!==String(dn).toLowerCase()?' <span style="font-weight:400;color:#888">('+feedEsc(full)+')</span>':''}
+            ${acct?'<span class="tag tag-green" style="font-size:9px">signed up</span>':'<span class="tag tag-amber" style="font-size:9px">not signed up</span>'}</div>
+          <div style="font-size:11px;color:#888">${feedEsc(p.phone||'')} ${feedEsc(p.email||'')}</div>
           <div class="badges-wrap">${renderBadges(badges)}</div>
         </div>
-        <button class="btn btn-sm" onclick="editGlobalPlayer('${uid2}')" style="width:auto">Edit</button>
+        ${acct?`<button class="btn btn-sm" onclick="editGlobalPlayer('${k}')" style="width:auto">Edit</button>`:''}
       </div>`;
     }).join('');
   });
@@ -2618,21 +2625,26 @@ async function loadGlobalProfilesForTournament(){
   _globalProfiles={};
   window._profileByUid={};
   if(ps.exists()) Object.entries(ps.val()).forEach(([u2,p])=>{ if(p) window._profileByUid[u2]=p; });
+  // Pass 1: what people actually go by. Pass 2: first names and nicknames, only where nothing better exists.
+  const strong=new Set();
+  if(ps.exists()) Object.values(ps.val()).forEach(p=>{
+    if(!p) return;
+    [p.preferredName,p.name].filter(Boolean).forEach(n=>{
+      const key=String(n).trim(); if(!key) return;
+      const ex=_globalProfiles[key];
+      if(!ex||!strong.has(key)||(p.years||0)>(ex.years||0)) _globalProfiles[key]=p;
+      strong.add(key);
+    });
+  });
   if(ps.exists()) Object.values(ps.val()).forEach(p=>{
     if(!p) return;
     const fullName=((p.firstName||'')+' '+(p.lastName||'')).trim();
-    // Index by all variants; full name wins ties (most specific)
-    [p.preferredName,p.name,p.firstName,p.nickname,fullName]
-      .filter(Boolean).forEach(n=>{
-        const key=n.trim();
-        if(!key) return;
-        const existing=_globalProfiles[key];
-        // Keep entry with most data, prefer full-name keyed entries
-        if(!existing||(p.years||0)>(existing.years||0))
-          _globalProfiles[key]=p;
-      });
-    // Always store under full name — guarantees collision-free lookup
-    if(fullName) _globalProfiles[fullName]=p;
+    [p.firstName,p.nickname,fullName].filter(Boolean).forEach(n=>{
+      const key=String(n).trim(); if(!key||strong.has(key)) return;   // never shadow someone's real name
+      const ex=_globalProfiles[key];
+      if(!ex||(p.years||0)>(ex.years||0)) _globalProfiles[key]=p;
+    });
+    if(fullName&&!strong.has(fullName)) _globalProfiles[fullName]=p;
   });
   if(prs.exists()) Object.values(prs.val()).forEach(p=>{
     if(!p) return;
@@ -7087,6 +7099,7 @@ function maybeTour(){
 }
 function photoFor(name){
   try{ const o=S&&S.photos&&(S.photos[name]||S.photos[String(name||'').trim()]); if(o) return o; }catch(e){}
+  try{ const pr=(typeof profileForPlayer==='function')?profileForPlayer(name):null; if(pr&&pr.photo) return pr.photo; }catch(e){}
   const p=_globalProfiles&&(_globalProfiles[name]||_globalProfiles[String(name||'').trim()]); return (p&&p.photo)||'';
 }
 function avatarHTML(name,size,extra){
