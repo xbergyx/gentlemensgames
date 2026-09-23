@@ -699,7 +699,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v144.23.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v145.23.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -773,7 +773,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v144.23.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v145.23.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4960,30 +4960,52 @@ window.tourneyStopActAs = ()=>{
 window.manageTourneyAdmins=()=>{
   get(ref(db,'players')).then(snap=>{
     const all=snap.exists()?snap.val():{},ta=S.tourneyAdmins||{},myUid=currentUser?.uid;
+    // Which roster slot does this login hold? Match on the uid first (a person can
+    // sign up as "Mitch" while their slot is "Mitchel Hoying"), then on the name.
+    function rosterSlotFor(uid2,p){
+      const roster=S.players||[],pu=S.playerUids||{};
+      if(pu[uid2]&&roster.includes(pu[uid2])) return pu[uid2];
+      const n=p&&(p.preferredName||p.name)||'';
+      if(n&&roster.includes(n)) return n;
+      let hit='';
+      try{ hit=roster.find(nm=>uidsForPlayer(nm).includes(uid2))||''; }catch(e){}
+      return hit;
+    }
+    function subLine(uid2,p,slot){
+      const n=p&&(p.preferredName||p.name)||'',bits=[];
+      if(slot&&slot!==n) bits.push('playing as <b>'+feedEsc(slot)+'</b>');
+      else if(!slot&&(S.spectators||{})[uid2]) bits.push('spectator');
+      const c=p&&(p.email||p.phone)||'';
+      if(c) bits.push(feedEsc(c));
+      return bits.join(' · ');
+    }
     function aRow(uid2,p){
       const n=p.preferredName||p.name||'?';
       return '<div class="player-row"><div class="avatar" style="background:#EEEDFE;color:#3C3489">🛡</div>'
         +'<div style="flex:1"><div style="font-size:13px;font-weight:600">'+n+'</div>'
-        +'<div style="font-size:11px;color:#888">'+(p.email||p.phone||'')+'</div></div>'
+        +'<div style="font-size:11px;color:#888">'+subLine(uid2,p,rosterSlotFor(uid2,p))+'</div></div>'
         +'<button class="btn btn-sm btn-danger" data-uid="'+uid2+'" data-add="false" onclick="toggleTourneyAdmin(this)" style="width:auto">Remove</button></div>';
     }
     function addRow(uid2,p){
       const n=p.preferredName||p.name||'?';
       return '<div class="player-row"><div class="avatar">'+initials(n)+'</div>'
         +'<div style="flex:1"><div style="font-size:13px;font-weight:600">'+n+'</div>'
-        +'<div style="font-size:11px;color:#888">'+(p.email||p.phone||'')+'</div></div>'
+        +'<div style="font-size:11px;color:#888">'+subLine(uid2,p,rosterSlotFor(uid2,p))+'</div></div>'
         +'<button class="btn btn-sm btn-success" data-uid="'+uid2+'" data-add="true" onclick="toggleTourneyAdmin(this)" style="width:auto">+ Add</button></div>';
     }
     const curHtml=Object.entries(ta).map(([u])=>{const p=all[u];return p?aRow(u,p):'';}).join('');
-    const inT=Object.entries(all).filter(([u,p])=>u!==myUid&&!ta[u]&&(S.players||[]).includes(p.preferredName||p.name||''));
-    const others=Object.entries(all).filter(([u,p])=>u!==myUid&&!ta[u]&&!(S.players||[]).includes(p.preferredName||p.name||''));
+    const pool=Object.entries(all).filter(([u,p])=>u!==myUid&&!ta[u]);
+    const inT=pool.filter(([u,p])=>!!rosterSlotFor(u,p));
+    const specs=pool.filter(([u,p])=>!rosterSlotFor(u,p)&&!!(S.spectators||{})[u]);
+    const others=pool.filter(([u,p])=>!rosterSlotFor(u,p)&&!(S.spectators||{})[u]);
     let html='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
       +'<div class="modal-handle"></div>'
       +'<div class="modal-title"><span>Tournament admins</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">X</button></div>'
       +'<div class="alert alert-info" style="font-size:11px;margin-bottom:10px">Admins can manage scores and run the tournament alongside you.</div>';
     if(curHtml) html+='<div style="font-size:11px;font-weight:700;color:#534AB7;margin-bottom:6px">Current admins</div>'+curHtml+'<div class="divider"></div>';
-    if(inT.length) html+='<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">Players in this tournament</div>'+inT.map(([u,p])=>addRow(u,p)).join('');
-    if(others.length) html+='<div style="font-size:11px;font-weight:700;color:#aaa;margin:8px 0 6px">Other users</div>'+others.slice(0,10).map(([u,p])=>addRow(u,p)).join('');
+    if(inT.length) html+='<div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px">Players in this tournament ('+inT.length+')</div>'+inT.map(([u,p])=>addRow(u,p)).join('');
+    if(specs.length) html+='<div style="font-size:11px;font-weight:700;color:#aaa;margin:8px 0 6px">Watching ('+specs.length+')</div>'+specs.map(([u,p])=>addRow(u,p)).join('');
+    if(others.length) html+='<div style="font-size:11px;font-weight:700;color:#aaa;margin:8px 0 6px">Other users — not in this tournament ('+others.length+')</div>'+others.slice(0,10).map(([u,p])=>addRow(u,p)).join('');
     html+='</div></div>';
     el('modal-area').innerHTML=html;
   });
