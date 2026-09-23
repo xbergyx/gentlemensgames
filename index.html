@@ -699,7 +699,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v143.23.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v144.23.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -773,7 +773,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v143.23.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v144.23.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2989,6 +2989,15 @@ window.searchPlayersToAdd=async(term)=>{
     </div>`).join('');
 };
 
+function countThisYear(upd,name){
+  if(!S||!S.yearsCounted) return upd;
+  const yr=+(S.tourneyYear)||new Date().getFullYear();
+  const h={...((S.history&&S.history[name])||{years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[],gameWins:{}})};
+  if(h.countedFor!==yr){ h.years=(+h.years||0)+1; h.countedFor=yr;
+    h.yearsAttended=[...new Set([...(h.yearsAttended||[]).map(Number).filter(Boolean),yr])].sort();
+    upd['history/'+name]=h; }
+  return upd;
+}
 window.addPlayerFromGlobal=async(playerUid,playerName)=>{
   playerName=safeName(playerName);
   if(!playerName){ alert('That profile has no usable name.'); return; }
@@ -3004,6 +3013,7 @@ window.addPlayerFromGlobal=async(playerUid,playerName)=>{
         lastPlaces:p.lastPlaces||0,yearsAttended:p.yearsAttended||[],
         gameWins:p.gameWins||{},gameStats:p.gameStats||{}};
   }
+  countThisYear(updates,playerName);
   await update(ref(db,'tournaments/'+currentTourneyId),updates);
   if(el('player-search-results')) el('player-search-results').innerHTML='';
   if(el('player-search-input')) el('player-search-input').value='';
@@ -3193,7 +3203,20 @@ function renderStartTourneyCard(){
 window.startTournament = async ()=>{
   if(!confirm('Start the tournament?')) return;
   const games=(S.games||[]).map(g=>({...g,status:'ranking'}));
-  await update(ref(db,'tournaments/'+currentTourneyId),{tournamentStarted:true,games});
+  const yr=+(S.tourneyYear)||new Date().getFullYear();
+  const upd={tournamentStarted:true,games};
+  // This year counts from the moment you start, so badges read right all day
+  if(!S.yearsCounted){
+    const history=JSON.parse(JSON.stringify(S.history||{}));
+    (S.players||[]).forEach(p=>{
+      const h=history[p]||{years:0,wins:0,podiums:0,lastPlaces:0,yearsAttended:[],gameWins:{}};
+      h.yearsAttended=[...new Set([...(h.yearsAttended||[]).map(Number).filter(Boolean),yr])].sort();
+      if(!h.countedFor||h.countedFor!==yr){ h.years=(+h.years||0)+1; h.countedFor=yr; }
+      history[p]=h;
+    });
+    upd.history=history; upd.yearsCounted=yr;
+  }
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
   if(!(S.brief&&S.brief.at)){
     setTimeout(()=>{
       try{ openBriefSheet(); }catch(e){ openNextGamePrompt(); return; }
@@ -5451,7 +5474,7 @@ window.declareTournamentWinner=async()=>{
   podium.slice(1).forEach(p=>{history[p].podiums=(history[p].podiums||0)+1;});
   if(last&&last!==winner) history[last].lastPlaces=(history[last].lastPlaces||0)+1;
   sorted.forEach(p=>{
-    history[p].years=(history[p].years||0)+1;
+    if(history[p].countedFor!==yr){ history[p].years=(history[p].years||0)+1; history[p].countedFor=yr; }
     if(!history[p].yearsAttended) history[p].yearsAttended=[];
     if(!history[p].yearsAttended.includes(yr)) history[p].yearsAttended.push(yr);
     (S.games||[]).forEach(g=>{
@@ -5545,12 +5568,18 @@ function getPlayerBadges(name){
   const h=(S.history&&S.history[name])||null;
   return getPlayerBadgesFromProfile(blendStats(profileForPlayer(name),h),name);
 }
+function thisYearCounted(h){
+  const yr=+(S&&S.tourneyYear)||new Date().getFullYear();
+  if(h&&h.countedFor===yr) return true;
+  return !!(S&&(S.yearsCounted===yr||S.tournamentFinalized));
+}
 function getPlayerBadgesFromProfile(h,name=''){
   const badges=[],yr=S?.tourneyYear||new Date().getFullYear(),fy=S?.foundingYear||2019;
-  // This year only counts once it has actually been played
-  const totalYears=(S&&S.tournamentFinalized)?(yr-fy+1):(yr-fy);
+  const counted=thisYearCounted(h);
+  const totalYears=counted?(yr-fy+1):(yr-fy);
   h=h||{};
-  if(!(+h.years>0))badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
+  const priorYears=Math.max(0,(+h.years||0)-(counted?1:0));
+  if(priorYears===0)badges.push({cls:'badge-firsttimer',icon:'🌱',text:'First Timer'});
   if(h.years>=1)badges.push({cls:'badge-years',icon:'📅',text:h.years+' year'+(h.years!==1?'s':'')});
   if(h.years>=totalYears&&totalYears>=2)badges.push({cls:'badge-everyyear',icon:'🔥',text:'Every Year'});
   if(h.wins===1)badges.push({cls:'badge-champ',icon:'👑',text:'Champion'});
@@ -7311,9 +7340,9 @@ function rookieInfo(p){
 function isRookie(p){
   const r=rookieInfo(p);
   if(r.priorYears>0) return false;                 // they were here in an earlier year
-  const finalized=!!(S&&S.tournamentFinalized);
-  if(r.years>(finalized?1:0)) return false;        // any year on the books before this one
-  if(!finalized&&(r.wins||r.podiums||r.lastPlaces||r.gwTotal)) return false; // has a past result
+  const counted=thisYearCounted((S&&S.history&&S.history[p])||null);
+  if(r.years>(counted?1:0)) return false;          // any year on the books before this one
+  if(!counted&&(r.wins||r.podiums||r.lastPlaces||r.gwTotal)) return false;
   return true;
 }
 window.cleanupFreshMeat=async()=>{
@@ -7539,6 +7568,8 @@ window.addPlaceholder=async()=>{
   }catch(e){}
   const upd={players:[...(S.players||[]),name],['ghostPlayers/'+key]:name};
   upd['history/'+name]={years,wins,podiums,lastPlaces,yearsAttended:[],gameWins:{},gameStats:{}};
+  if(S.yearsCounted){ const y2=+(S.tourneyYear)||new Date().getFullYear();
+    upd['history/'+name]={...upd['history/'+name],years:years+1,countedFor:y2,yearsAttended:[y2]}; }
   await update(ref(db,'tournaments/'+currentTourneyId),upd);
   closeModal();
   showBadgeToast('➕ '+feedEsc(name)+' penciled in · match them once they sign up',true);
