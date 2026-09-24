@@ -706,7 +706,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v147.24.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v148.24.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -780,7 +780,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v147.24.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v148.24.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2108,7 +2108,9 @@ async function renderSMSPanel(){
 }
 
 // ── TOURNAMENT LIST ───────────────────────────────────────
+let _switchWatched=false;
 function loadTournamentList(){
+  if(!_switchWatched){ _switchWatched=true; try{ watchPhotoSwitch(); }catch(e){} }
   onValue(ref(db,'tournaments'), snap=>{
     const all = snap.exists() ? snap.val() : {};
     const active=[], past=[], joinable=[];
@@ -2821,6 +2823,7 @@ function renderAdminSetup(){
     </div>`;
   renderStartTourneyCard();
   renderRankingUploadPlayerSelect();
+  try{ renderSpendCard(); }catch(e){}
   // Append tournament admins + view as player cards to setup tab
   const _sE2=el('admin-setup');
   if(_sE2&&isTourneyAdmin){
@@ -5932,6 +5935,8 @@ function renderChat(box){
   const cnt=el('chat-count-'+box); if(cnt) cnt.textContent='· '+chatPeople().length;
   const ns=el('chat-notify-'+box); if(ns&&document.activeElement!==ns&&ns.value!==myChatNotify()) ns.value=myChatNotify();
   const mb=el('chat-mute-'+box); if(mb){ const mh=chatMuteBanner(box); if(mb.innerHTML!==mh) mb.innerHTML=mh; }
+  const cam=wrap.querySelector('.chat-cam');
+  if(cam){ const hide=photosAreOff(); if(cam.dataset.off!==String(hide)){ cam.dataset.off=String(hide); cam.style.display=hide?'none':''; } }
   const inp=el('chat-input-'+box); if(inp){ const muted=!!muteInfo(chatMyUid()); if(inp.disabled!==muted){ inp.disabled=muted; inp.placeholder=muted?'🤐 You are silenced':'Message… (type @ to mention)'; } }
   updateChatBadges();
   try{ if(chatIsOpen()) chatPostRead(); }catch(e){}
@@ -6037,6 +6042,7 @@ window.onChatPhoto=async(box,input)=>{
   const mu=muteInfo(chatMyUid());
   if(mu){ alert('🤐 You\'re silenced for '+Math.ceil((mu.until-Date.now())/60000)+' more minute(s).'); return; }
   if(!/^image\//.test(file.type||'')){ alert('That\'s not a picture.'); return; }
+  if(photosAreOff()){ alert('📷 Photos are switched off right now.'); return; }
   if(file.size>25*1024*1024){ alert('That picture is too big (25MB max).'); return; }
   const cam=el('chat-file-'+box)?.previousSibling; // not used, kept simple
   const btn=document.querySelector('#chat-list-'+box)?.parentElement?.querySelector('.chat-cam');
@@ -6055,7 +6061,8 @@ window.onChatPhoto=async(box,input)=>{
     const inp=el('chat-input-'+box);
     const caption=(inp&&inp.value.trim())||'';
     const key=feedKey();
-    const msg={uid:chatMyUid(),name:chatMyName()||'Someone',text:caption||'📷 Photo',at:Date.now(),pic:thumb};
+    const msg={uid:chatMyUid(),name:chatMyName()||'Someone',text:caption||'📷 Photo',at:Date.now(),pic:thumb,
+      pb:Math.round((full.length+thumb.length)*0.75)};
     if(isSpectatorHere()) msg.spectator=true;
     const grp=[], men=findMentions(caption,grp);
     if(Object.keys(men).length) msg.mentions=men;
@@ -8069,6 +8076,70 @@ function renderBriefCards(){
     }
     if(ae.dataset.h!==h){ ae.innerHTML=h; ae.dataset.h=h; }
   }
+}
+
+
+// ── WHAT THIS IS COSTING ──────────────────────────────────
+// Firebase bills storage at $5/GB/month and downloads at $1/GB, with 1GB of
+// storage and 10GB of downloads free every month. The app can't read the actual
+// bill, so this adds up the photos it has posted and shows what they'd come to.
+const GB=1073741824, FREE_STORE_GB=1, FREE_DL_GB=10, $PER_GB_STORE=5, $PER_GB_DL=1;
+let _photosOff=false;
+function photosAreOff(){ return !!_photosOff; }
+function photoUsage(){
+  const msgs=Object.values((S&&S.chat)||{});
+  let bytes=0,count=0;
+  msgs.forEach(m=>{ if(m&&m.pic){ count++; bytes+=(+m.pb||160000); } });
+  const heads=((S&&S.players)||[]).length+Object.keys((S&&S.spectators)||{}).length;
+  // worst case: everybody opens every photo once
+  const dl=bytes*Math.max(1,heads);
+  return {count,bytes,dl,
+    storeCost:Math.max(0,(bytes/GB)-FREE_STORE_GB)*$PER_GB_STORE,
+    dlCost:Math.max(0,(dl/GB)-FREE_DL_GB)*$PER_GB_DL,
+    storePct:(bytes/GB)/FREE_STORE_GB*100, dlPct:(dl/GB)/FREE_DL_GB*100};
+}
+function fmtBytes(b){
+  if(b<1024) return b+' B';
+  if(b<1048576) return (b/1024).toFixed(0)+' KB';
+  if(b<GB) return (b/1048576).toFixed(1)+' MB';
+  return (b/GB).toFixed(2)+' GB';
+}
+function renderSpendCard(){
+  const host=el('admin-setup'); if(!host||!S||!isTourneyAdmin) return;
+  host.querySelectorAll('.spend-card').forEach(n=>n.remove());
+  const u=photoUsage(), off=photosAreOff();
+  const cost=u.storeCost+u.dlCost;
+  const worst=Math.max(u.storePct,u.dlPct);
+  const bar=Math.min(100,worst);
+  const tone=worst>=100?'#c0392b':worst>=60?'#c47f17':'#2e7d5b';
+  const c=document.createElement('div'); c.className='card spend-card';
+  c.innerHTML='<div class="card-title">💵 What photos are costing</div>'
+    +'<div style="font-size:26px;font-weight:800;color:'+tone+';line-height:1">'+(cost>0?'$'+cost.toFixed(2):'$0.00')+'</div>'
+    +'<div style="font-size:11px;color:#888;margin-bottom:8px">'+u.count+' photo'+(u.count===1?'':'s')+' · '+fmtBytes(u.bytes)+' stored</div>'
+    +'<div style="height:7px;background:#eceae4;border-radius:5px;overflow:hidden"><div style="height:100%;width:'+bar.toFixed(1)+'%;background:'+tone+'"></div></div>'
+    +'<div style="font-size:11px;color:#888;margin-top:5px">'+worst.toFixed(1)+'% of the free monthly allowance used'
+    +(cost>0?'':' — nothing billable yet')+'</div>'
+    +'<div style="font-size:11px;color:#888;margin-top:8px;line-height:1.45">Free every month: 1GB stored, 10GB downloaded. After that it\'s $5/GB stored and $1/GB downloaded. '
+    +'Downloads assume everyone opens every photo — the real number is lower.</div>'
+    +'<button class="btn btn-sm '+(off?'btn-success':'btn-danger')+'" onclick="toggleTourneyPhotos()" style="width:100%;margin-top:10px">'
+    +(off?'📷 Turn photos back on':'🚫 Turn photos off for everyone')+'</button>'
+    +(off?'<div style="font-size:11px;color:#c0392b;font-weight:600;margin-top:6px">Photos are off. The camera button is gone and the database refuses new ones.</div>':'');
+  host.appendChild(c);
+}
+window.toggleTourneyPhotos=async()=>{
+  if(!isAdmin){ alert('Only the host can switch photos off.'); return; }
+  const next=!photosAreOff();
+  if(next&&!confirm('Turn photos off for everyone? Existing pictures stay; no new ones can be posted.')) return;
+  try{ await set(ref(db,'settings/photosOff'),next); }
+  catch(err){ alert('Could not change it: '+(err&&err.message||err)); return; }
+  _photosOff=next;
+  try{ renderSpendCard(); refreshChats(); }catch(e){}
+};
+function watchPhotoSwitch(){
+  try{ onValue(ref(db,'settings/photosOff'),s=>{
+    const v=!!s.val();
+    if(v!==_photosOff){ _photosOff=v; try{ renderSpendCard(); refreshChats(); }catch(e){} }
+  }); }catch(e){}
 }
 
 // ── INSTALL GUIDE (browser) ───────────────────────────────
