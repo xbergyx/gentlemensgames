@@ -228,6 +228,13 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .chat-name{font-size:11px;font-weight:700;color:#888;margin:0 0 2px 10px}
 .chat-spec{font-size:10px}
 .chat-bubble{background:#f0eee8;padding:7px 11px;border-radius:16px;font-size:14px;line-height:1.35;word-wrap:break-word;overflow-wrap:anywhere}
+.chat-bubble.has-pic{padding:5px 5px 7px}
+.chat-pic{display:block;width:100%;max-width:210px;border-radius:12px;margin-bottom:4px;cursor:pointer;background:#e6e4dd}
+.chat-cam{padding:6px 9px;font-size:16px;line-height:1}
+.picbg{align-items:center;justify-content:center;display:flex}
+.picwrap{background:#fff;border-radius:16px;padding:10px;max-width:94vw;max-height:92vh;overflow:auto}
+.picwrap img{display:block;max-width:100%;max-height:74vh;border-radius:10px;margin:0 auto}
+#pic-note{font-size:11px;color:#888;text-align:center;margin-top:6px}
 .chat-row.mine .chat-bubble{background:#534AB7;color:#fff}
 .chat-bubble.at-me{box-shadow:0 0 0 2px #e3b341}
 .chat-at{color:#534AB7}
@@ -699,7 +706,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v145.23.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v147.24.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -773,7 +780,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v145.23.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v147.24.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -5888,7 +5895,7 @@ function chatListHTML(admin){
     const atMe=!mine&&it.mentions&&it.mentions[myUid];
     h+='<div class="chat-row'+(mine?' mine':'')+(grouped?' grouped':'')+'">'
       +(!mine&&!grouped?'<div class="chat-name">'+avatarHTML(it.name,18)+feedEsc(it.name)+(it.spectator?' <span class="chat-spec">👀</span>':'')+'</div>':'')
-      +'<div class="chat-bubble'+(atMe?' at-me':'')+'" ondblclick="openReactPicker(\''+it.k+'\',event)">'+chatText(it.text)
+      +'<div class="chat-bubble'+(atMe?' at-me':'')+(it.pic?' has-pic':'')+'" ondblclick="openReactPicker(\''+it.k+'\',event)">'+chatPicHTML(it)+chatText(it.text)
       +'<span class="chat-time">'+feedAgo(it.at)+'</span>'
       +(admin||mine?' <a href="#" class="chat-x" onclick="deleteChat(\''+it.k+'\');return false">✕</a>':'')
       +(admin&&isAdmin&&!mine&&it.uid&&!String(it.uid).startsWith('as:')?' <a href="#" class="chat-x" title="Silence" onclick="openMuteSheet(\''+it.uid+'\',\''+feedEsc(String(it.name)).replace(/'/g,'')+'\');return false"><span class="mute-btn"><span class="mute-ic">💬</span>Mute</span></a>':'')
@@ -5910,6 +5917,8 @@ function renderChat(box){
       +'<div class="chat-list" id="chat-list-'+box+'"></div>'
       +'<div class="chat-suggest" id="chat-suggest-'+box+'"></div>'
       +'<div class="chat-input-row"><textarea id="chat-input-'+box+'" rows="1" maxlength="500" placeholder="Message… (type @ to mention)" oninput="chatOnInput(\''+box+'\')" onkeydown="chatKey(event,\''+box+'\')"></textarea>'
+      +'<input type="file" accept="image/*" id="chat-file-'+box+'" style="display:none" onchange="onChatPhoto(\''+box+'\',this)">'
+      +'<button class="btn btn-sm chat-cam" title="Send a photo" onclick="el(\'chat-file-'+box+'\').click()" style="width:auto">📷</button>'
       +'<button class="btn btn-primary btn-sm" onclick="sendChat(\''+box+'\')" style="width:auto">Send</button></div>'
       +'</div>';
   }
@@ -5985,8 +5994,98 @@ window.sendChat=async(box)=>{
 };
 window.deleteChat=async(k)=>{
   if(!confirm('Delete this message?')) return;
+  const had=((S.chat||{})[k]||{}).pic;
   try{ await set(ref(db,'tournaments/'+currentTourneyId+'/chat/'+k),null); }
-  catch(err){ alert('Could not delete: '+(err&&err.message||err)); }
+  catch(err){ alert('Could not delete: '+(err&&err.message||err)); return; }
+  if(had){ try{ await set(ref(db,'chatPics/'+currentTourneyId+'/'+k),null); }catch(e){} }
+};
+
+// ── PHOTOS IN CHAT ────────────────────────────────────────
+// The whole tournament node streams to every phone, so only a tiny thumbnail
+// rides along in the message. The full-size copy lives outside it and is only
+// fetched when someone actually taps the picture.
+const PIC_FULL_PX=1280, PIC_FULL_Q=0.72, PIC_THUMB_PX=200, PIC_THUMB_Q=0.5;
+function shrinkImage(file,maxPx,quality){
+  return new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onerror=()=>rej(new Error('Could not read that file'));
+    fr.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>rej(new Error('That file is not an image we can read'));
+      img.onload=()=>{
+        let {width:w,height:h}=img;
+        const scale=Math.min(1,maxPx/Math.max(w,h));
+        w=Math.max(1,Math.round(w*scale)); h=Math.max(1,Math.round(h*scale));
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img,0,0,w,h);
+        res(c.toDataURL('image/jpeg',quality));
+      };
+      img.src=fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function chatPicHTML(it){
+  if(!it||!it.pic) return '';
+  return '<img class="chat-pic" src="'+it.pic+'" alt="photo" loading="lazy" onclick="openChatPic(\''+it.k+'\')">';
+}
+window.onChatPhoto=async(box,input)=>{
+  const file=input&&input.files&&input.files[0]; input.value='';
+  if(!file) return;
+  if(!currentUser){ alert('Sign in first.'); return; }
+  const mu=muteInfo(chatMyUid());
+  if(mu){ alert('🤐 You\'re silenced for '+Math.ceil((mu.until-Date.now())/60000)+' more minute(s).'); return; }
+  if(!/^image\//.test(file.type||'')){ alert('That\'s not a picture.'); return; }
+  if(file.size>25*1024*1024){ alert('That picture is too big (25MB max).'); return; }
+  const cam=el('chat-file-'+box)?.previousSibling; // not used, kept simple
+  const btn=document.querySelector('#chat-list-'+box)?.parentElement?.querySelector('.chat-cam');
+  if(btn){ btn.disabled=true; btn.textContent='⏳'; }
+  try{
+    let [full,thumb]=await Promise.all([
+      shrinkImage(file,PIC_FULL_PX,PIC_FULL_Q),
+      shrinkImage(file,PIC_THUMB_PX,PIC_THUMB_Q)
+    ]);
+    // a busy photo can still come out heavy — squeeze it until it comfortably fits
+    for(const [px,q] of [[1100,0.6],[900,0.5],[700,0.42]]){
+      if(full.length<=780000) break;
+      full=await shrinkImage(file,px,q);
+    }
+    if(full.length>780000){ alert('That picture is too detailed to send. Try a screenshot of it instead.'); return; }
+    const inp=el('chat-input-'+box);
+    const caption=(inp&&inp.value.trim())||'';
+    const key=feedKey();
+    const msg={uid:chatMyUid(),name:chatMyName()||'Someone',text:caption||'📷 Photo',at:Date.now(),pic:thumb};
+    if(isSpectatorHere()) msg.spectator=true;
+    const grp=[], men=findMentions(caption,grp);
+    if(Object.keys(men).length) msg.mentions=men;
+    if(grp.length) msg.group=grp[0];
+    // full copy first — if the rules aren't deployed yet we fail before posting a broken message
+    await set(ref(db,'chatPics/'+currentTourneyId+'/'+key),full);
+    await set(ref(db,'tournaments/'+currentTourneyId+'/chat/'+key),msg);
+    if(inp){ inp.value=''; inp.style.height='auto'; }
+    const list=el('chat-list-'+box); if(list) list.scrollTop=list.scrollHeight;
+  }catch(err){
+    const m=String(err&&err.message||err);
+    alert(/permission|PERMISSION/i.test(m)
+      ? 'Photos need the updated database rules. Paste the new chatPics block into Firebase → Realtime Database → Rules, then try again.'
+      : 'Could not send that photo: '+m);
+  }finally{ if(btn){ btn.disabled=false; btn.textContent='📷'; } }
+};
+window.openChatPic=async(k)=>{
+  const msg=(S&&S.chat&&S.chat[k])||{};
+  el('modal-area').innerHTML='<div class="modal-bg picbg" onclick="if(event.target===this)closeModal()">'
+    +'<div class="picwrap"><img id="pic-big" src="'+(msg.pic||'')+'" alt="photo">'
+    +'<div id="pic-note">Loading the full picture…</div>'
+    +'<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-sm" onclick="closeModal()" style="flex:1">Close</button>'
+    +'<a class="btn btn-sm btn-primary" id="pic-open" href="#" target="_blank" rel="noopener" style="flex:1;text-align:center;line-height:26px">Open full size</a></div></div></div>';
+  try{
+    const snap=await get(ref(db,'chatPics/'+currentTourneyId+'/'+k));
+    const full=snap.val();
+    const img=el('pic-big'), note=el('pic-note'), a=el('pic-open');
+    if(full&&img){ img.src=full; if(a) a.href=full; if(note) note.remove(); }
+    else if(note) note.textContent='The full-size copy is gone — this is the preview.';
+  }catch(e){ const note=el('pic-note'); if(note) note.textContent='Could not load the full picture.'; }
 };
 const _chatSeen=new Set(); let _chatInitTid=null;
 function checkChatToasts(tid){
