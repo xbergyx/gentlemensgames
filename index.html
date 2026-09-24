@@ -706,7 +706,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v149.24.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v150.24.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -780,7 +780,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v149.24.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v150.24.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2773,6 +2773,7 @@ window.switchToAdminView=()=>{
   showAdminPhase(_phase||'setup');
 };
 
+window.showAdminPhase=(p)=>showAdminPhase(p);   // the checklist rows call this from inline HTML
 function showAdminPhase(phase){
   _phase=phase;
   ['setup','players','games','rankings','scores','board','history','testing','votes','chat'].forEach(p=>{
@@ -4845,7 +4846,38 @@ window.saveScoreGame = async (gid)=>{
 
 // ── LEADERBOARD ───────────────────────────────────────────
 function getSkippedIds(){ return new Set((S.games||[]).filter(g=>g.status==='skipped').map(g=>g.id)); }
-function getTotalPts(player){ const skip=getSkippedIds(); return Object.entries(S.points||{}).reduce((s,[gid,gp])=>skip.has(gid)?s:s+(gp[player]||0),0); }
+function adjustmentPts(player){
+  return Object.values((S.points&&S.points.adjustments)||{})
+    .reduce((s,a)=>s+((a&&a.player===player)?(+a.amount||0):0),0);
+}
+function getTotalPts(player){ const skip=getSkippedIds();
+  // 'adjustments' sits under points but is keyed by adjustment, not by player
+  return Object.entries(S.points||{})
+    .reduce((s,[gid,gp])=>(skip.has(gid)||gid==='adjustments')?s:s+(gp[player]||0),0)
+    + adjustmentPts(player); }
+window.applyPointAdjustment=async()=>{
+  if(!isAdmin){ alert('Only the host can adjust points.'); return; }
+  const player=(el('adj-player')||{}).value||'';
+  const amount=parseFloat((el('adj-amount')||{}).value);
+  const reason=String((el('adj-reason')||{}).value||'').trim();
+  if(!player){ alert('Pick a player first.'); return; }
+  if(!isFinite(amount)||amount===0){ alert('Enter how many points to add or take away.'); return; }
+  if(!confirm((amount>0?'Add ':'Take away ')+Math.abs(amount)+' point(s) '+(amount>0?'to ':'from ')+player+'?'+(reason?'\n\nReason: '+reason:''))) return;
+  const aid='a'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  try{
+    await set(ref(db,'tournaments/'+currentTourneyId+'/points/adjustments/'+aid),
+      {player,amount,reason:reason||'',by:chatMyName()||'Host',at:Date.now()});
+  }catch(err){ alert('Could not apply it: '+(err&&err.message||err)); return; }
+  const a=el('adj-amount'), r=el('adj-reason'); if(a) a.value=''; if(r) r.value='';
+  try{ renderLeaderboard(); }catch(e){}
+};
+window.removePointAdjustment=async(aid)=>{
+  if(!isAdmin){ alert('Only the host can undo an adjustment.'); return; }
+  if(!confirm('Undo this adjustment?')) return;
+  try{ await set(ref(db,'tournaments/'+currentTourneyId+'/points/adjustments/'+aid),null); }
+  catch(err){ alert('Could not undo it: '+(err&&err.message||err)); return; }
+  try{ renderLeaderboard(); }catch(e){}
+};
 function getBreakdown(p){ const skip=getSkippedIds(); return (S.games||[]).filter(g=>S.points&&S.points[g.id]&&S.points[g.id][p]!==undefined).map(g=>skip.has(g.id)?`<s style="color:#ccc">${g.name}</s>`:g.name+':'+S.points[g.id][p]).join(' · ')||'No points yet'; }
 function renderLeaderboard(){
   const e=el('admin-board'); if(!e) return;
@@ -5926,7 +5958,7 @@ function renderChat(box){
       +'<div class="chat-suggest" id="chat-suggest-'+box+'"></div>'
       +'<div class="chat-input-row"><textarea id="chat-input-'+box+'" rows="1" maxlength="500" placeholder="Message… (type @ to mention)" oninput="chatOnInput(\''+box+'\')" onkeydown="chatKey(event,\''+box+'\')"></textarea>'
       +'<input type="file" accept="image/*" id="chat-file-'+box+'" style="display:none" onchange="onChatPhoto(\''+box+'\',this)">'
-      +'<button class="btn btn-sm chat-cam" title="Send a photo" onclick="el(\'chat-file-'+box+'\').click()" style="width:auto">📷</button>'
+      +'<button class="btn btn-sm chat-cam" title="Send a photo" onclick="pickChatPhoto(\''+box+'\')" style="width:auto">📷</button>'
       +'<button class="btn btn-primary btn-sm" onclick="sendChat(\''+box+'\')" style="width:auto">Send</button></div>'
       +'</div>';
   }
@@ -6040,6 +6072,12 @@ function chatPicHTML(it){
   if(!it||!it.pic) return '';
   return '<img class="chat-pic" src="'+it.pic+'" alt="photo" loading="lazy" onclick="openChatPic(\''+it.k+'\')">';
 }
+window.pickChatPhoto=(box)=>{
+  const i=el('chat-file-'+box);
+  if(!i){ alert('The photo picker is missing — close and reopen chat.'); return; }
+  if(photosAreOff()){ alert('📷 Photos are switched off right now.'); return; }
+  i.click();
+};
 window.onChatPhoto=async(box,input)=>{
   const file=input&&input.files&&input.files[0]; input.value='';
   if(!file) return;
@@ -11223,6 +11261,12 @@ window.toggleMatchEdit=(editId)=>{
   if(d) d.style.display=d.style.display==='none'?'block':'none';
 };
 
+window.copyJoinLink=()=>{
+  const link=APP_DOMAIN+'/?join='+((S&&S.joinCode)||'');
+  try{ navigator.clipboard.writeText(link).then(()=>alert('Copied!'),()=>prompt('Copy this:',link)); }
+  catch(e){ prompt('Copy this:',link); }
+};
+window.skipClaim=()=>{ try{ showView('home'); }catch(e){} };
 window.closeModal = ()=>{ const e=el('modal-area'); if(e)e.innerHTML=''; window._announceOpen=false; };
 
 // ── UTILS ─────────────────────────────────────────────────
