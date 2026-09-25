@@ -219,7 +219,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .mute-ic::after{content:'';position:absolute;left:-2px;right:-2px;top:50%;height:2px;background:#e74c3c;transform:rotate(-40deg);border-radius:2px}
 .ng-card{background:linear-gradient(135deg,#1e1650,#534AB7);color:#fff;border:none}
 .no-rank #ptab-rank{display:none!important}
-.is-spectator #ptab-rank,.is-spectator #ptab-vote{display:none!important}
+.is-spectator #ptab-rank{display:none!important}
 .chat-card{padding:.8rem .8rem .7rem}
 .chat-list{height:min(58vh,520px);overflow-y:auto;display:flex;flex-direction:column;gap:3px;padding:4px 2px;-webkit-overflow-scrolling:touch}
 .chat-row{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-top:6px}
@@ -228,6 +228,9 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .chat-name{font-size:11px;font-weight:700;color:#888;margin:0 0 2px 10px}
 .chat-spec{font-size:10px}
 .chat-bubble{background:#f0eee8;padding:7px 11px;border-radius:16px;font-size:14px;line-height:1.35;word-wrap:break-word;overflow-wrap:anywhere}
+.vote-card{background:linear-gradient(135deg,#3C3489,#7F77DD);color:#fff;border:0}
+.vote-card.done{background:#EEF6F1;color:#1d5c46}
+.vote-card .btn{background:#fff}
 .chat-bubble.has-pic{padding:5px 5px 7px}
 .chat-pic{display:block;width:100%;max-width:210px;border-radius:12px;margin-bottom:4px;cursor:pointer;background:#e6e4dd}
 .chat-cam{padding:6px 9px;font-size:16px;line-height:1}
@@ -706,7 +709,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v151.25.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v152.25.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -780,7 +783,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v151.25.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v152.25.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2605,7 +2608,7 @@ function buildTournamentShell(){
     <div id="admin-players" class="hidden"></div>
     <div id="admin-games" class="hidden"></div>
     <div id="admin-rankings" class="hidden"></div>
-    <div id="admin-scores" class="hidden"><div id="push-prompt-admin"></div><div id="next-game-admin"></div><div id="join-admin"></div><div id="brief-admin"></div><div id="boards-admin"></div><div id="admin-scores-main"></div></div>
+    <div id="admin-scores" class="hidden"><div id="push-prompt-admin"></div><div id="next-game-admin"></div><div id="join-admin"></div><div id="vote-admin"></div><div id="brief-admin"></div><div id="boards-admin"></div><div id="admin-scores-main"></div></div>
     <div id="admin-board" class="hidden"></div>
     <div id="admin-power" class="hidden"></div>
     <div id="admin-history" class="hidden"></div>
@@ -2616,6 +2619,7 @@ function buildTournamentShell(){
   </div>
   <div id="player-area" class="hidden">
     <div class="card hidden" id="player-header-card"></div>
+    <div id="vote-player"></div>
     <div id="brief-player"></div>
     <div class="ptab">
       <div class="ptab-btn active" id="ptab-active" data-tab="active"><span class="pi">🎯</span>Now</div>
@@ -4451,7 +4455,7 @@ window.submitMatchScore = async (gameId,matchId,type,poolKey,ri)=>{
     if(winScore<activeGame3.minScore){alert('Winning score must be at least '+activeGame3.minScore+'.');return;}
   }
   if(s1===s2&&!activeGame3?.hasRebuttal&&!approved){alert('No draws allowed.');return;}
-  const myName=actingAsName||(userProfile?.name)||'';
+  const myName=myRosterName();
   const b=S.bs&&S.bs[gameId]; if(!b) return;
   // Find which team I'm on
   const teams=S.teams&&S.teams[gameId]||[];
@@ -7318,7 +7322,7 @@ function renderChecklist(){
 }
 window.showAdminPhaseGlobal=(p)=>showAdminPhase(p);
 window.openMoreSheet=()=>{
-  const spec=isSpectatorHere(), vote=el('ptab-vote')&&el('ptab-vote').style.display!=='none';
+  const spec=isSpectatorHere(), vote=votesOpenFor(myRosterName()).length>0;
   const it=(ic,l,fn)=>'<button class="more-item" onclick="closeModal();'+fn+'"><span>'+ic+'</span>'+l+'</button>';
   ggSheet('Menu',
     ((S.brief&&S.brief.at)?it('📣','Game day info','openBriefView()'):'')
@@ -7475,6 +7479,7 @@ window.changeMyPhoto=async(preset)=>{
 function renderUXCards(){
   if(!S) return;
   try{ renderBriefCards(); renderJoinAdminCard(); }catch(e){}
+  try{ renderVoteCards(); }catch(e){}
   const mm=el('my-match-player'); if(mm){ const h=myMatchCardHTML(); if(mm.dataset.h!==h){ mm.innerHTML=h; mm.dataset.h=h; } }
   const bc=el('boards-admin'); if(bc){ const h=isTourneyAdmin?boardsCardHTML():''; if(bc.dataset.h!==h){ bc.innerHTML=h; bc.dataset.h=h; } }
   const su=el('admin-setup'); if(su&&!su.classList.contains('hidden')) renderChecklist();
@@ -8112,6 +8117,7 @@ window.ackBrief=async()=>{
   const n=chatMyName(); if(!n||!currentTourneyId) return;
   try{ await update(ref(db,'tournaments/'+currentTourneyId),{['briefAcks/'+n]:true}); }catch(e){}
   try{ renderBriefCards(); }catch(e){}
+  try{ renderVoteCards(); }catch(e){}
 };
 function renderBriefCards(){
   if(!S) return;
@@ -8785,7 +8791,7 @@ function renderPlayerView(myName){
     _tab=needRank?'rank':'active';
   }
   el('player-area')?.classList.toggle('no-rank',_noRank);
-  if(_spec&&['rank','vote'].includes(_tab)) _tab='active';
+  if(_spec&&_tab==='rank') _tab='active';
   if(_noRank&&_tab==='rank') _tab='active';
   showPlayerTab(_tab||'active',myName);
   try{ maybeTour(); }catch(e){}
@@ -8839,16 +8845,46 @@ function getSmartDefaultTab(myName){
     return 'lb';
   }
 }
-function updateVoteTabVisibility(myName){
-  const votes=S.votes||{};
-  const hasActiveVote=Object.values(votes).some(v=>v.active&&(!v.participants||v.participants.includes(myName)));
-  const btn=el('ptab-vote');
-  if(btn) btn.style.display=hasActiveVote?'':'none';
+function votesOpenFor(name){
+  const n=String(name||'').trim();
+  return Object.entries((S&&S.votes)||{})
+    .filter(([,v])=>v&&v.active&&(!v.participants||v.participants.includes(n)));
 }
+function unansweredVotesFor(name){
+  return votesOpenFor(name).filter(([,v])=>!v.results||v.results[name]===undefined);
+}
+function updateVoteTabVisibility(myName){
+  const btn=el('ptab-vote');
+  if(btn) btn.style.display=votesOpenFor(myName).length?'':'none';
+}
+// A vote is easy to miss in a menu, so it gets a card at the top of the screen
+function voteCardHTML(name,forAdmin){
+  const open=votesOpenFor(name), todo=unansweredVotesFor(name);
+  if(!open.length) return '';
+  const q=(todo[0]||open[0])[1].question||'A vote is open';
+  const done=!todo.length;
+  return '<div class="card vote-card'+(done?' done':'')+'">'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<div style="font-size:22px">🗳️</div>'
+    +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:800;letter-spacing:.03em">'
+    +(done?'YOU HAVE VOTED':'VOTE OPEN — THEY NEED YOUR ANSWER')+'</div>'
+    +'<div style="font-size:12px;opacity:.9;margin-top:2px">'+feedEsc(q)+'</div></div>'
+    +'<button class="btn btn-sm'+(done?'':' btn-primary')+'" onclick="'+(forAdmin?'goVoteAdmin()':"goPTab('vote')")+'" style="width:auto">'
+    +(done?'See it':'Vote')+'</button></div></div>';
+}
+function renderVoteCards(){
+  if(!S) return;
+  const me=myRosterName();
+  const pe=el('vote-player');
+  if(pe){ const h=voteCardHTML(me,false); if(pe.dataset.h!==h){ pe.innerHTML=h; pe.dataset.h=h; } }
+  const ae=el('vote-admin');
+  if(ae){ const h=isTourneyAdmin?voteCardHTML(me,true):''; if(ae.dataset.h!==h){ ae.innerHTML=h; ae.dataset.h=h; } }
+}
+window.goVoteAdmin=()=>{ try{ showAdminPhase('votes'); }catch(e){} };
 
 function showPlayerTab(tab,myName){
   _tab=tab;
-  myName=myName||actingAsName||(userProfile?.name)||'';
+  myName=myName||myRosterName();
   ['active','lb','games','info','teams','rank','vote','chat'].forEach(t=>{const e=el('pview-'+t);if(e)e.classList.add('hidden');const b=el('ptab-'+t);if(b)b.classList.remove('active');});
   const tv=el('pview-'+tab);if(tv)tv.classList.remove('hidden');
   const tb=el('ptab-'+tab);if(tb)tb.classList.add('active');
@@ -10128,7 +10164,7 @@ window.toggleResultsCard=function(btn){
   if(!window._expandedGames) window._expandedGames=new Set();
   if(window._expandedGames.has(gid)) window._expandedGames.delete(gid);
   else window._expandedGames.add(gid);
-  const myName=actingAsName||(userProfile?.name)||'';
+  const myName=myRosterName();
   renderPlayerGames(myName);
 };
 
@@ -10200,7 +10236,7 @@ window.playerSubmitScore = async (btnOrObj,matchIdArg,sideArg)=>{
   // Normalize: s1=team1 score, s2=team2 score regardless of who submits
   // s1=t1's score, s2=t2's score (inputs are always labeled by position, not by 'your team')
   const s1=rawS1, s2=rawS2;
-  const myName=actingAsName||(userProfile?.name)||'';
+  const myName=myRosterName();
   const otherSide=teamSide==='t1'?'t2':'t1';
   const statusEl=el('ps-'+matchId+'-status');
 
@@ -10258,7 +10294,7 @@ window.playerSubmitScore = async (btnOrObj,matchIdArg,sideArg)=>{
 window.playerSubmitScoreGame = async (btn)=>{
   const gameId=btn.dataset.gid, teamId=btn.dataset.tid;
   const isMulti=btn.dataset.multi==='1', rounds=parseInt(btn.dataset.rounds)||1;
-  const myName=actingAsName||(userProfile?.name)||'';
+  const myName=myRosterName();
   const statusEl=el('psc-'+gameId+'-status');
   let score, roundScores={};
   if(isMulti){
@@ -10281,7 +10317,7 @@ window.playerSubmitScoreGame = async (btn)=>{
 
 window.withdrawScoreSubmission = async (btn)=>{
   const gameId=btn.dataset.gid, teamId=btn.dataset.tid;
-  const myName=actingAsName||(userProfile?.name)||'';
+  const myName=myRosterName();
   await update(ref(db,'tournaments/'+currentTourneyId),{['pendingScores/'+gameId+'/'+teamId]:null});
   renderActiveGameTab(myName);
 };
@@ -10289,7 +10325,7 @@ window.withdrawScoreSubmission = async (btn)=>{
 window.approveScore = async (btn)=>{
   const gameId=btn.dataset.gid, matchId=btn.dataset.mid, teamSide=btn.dataset.side;
   let s1=parseFloat(btn.dataset.s1), s2=parseFloat(btn.dataset.s2);
-  const myName=actingAsName||(userProfile?.name)||'';
+  const myName=myRosterName();
   // Check if this is a InstaWin submission
   const pendSnap=await get(ref(db,'tournaments/'+currentTourneyId+'/pendingScores/'+gameId+'/'+matchId));
   const pendData=pendSnap.exists()?pendSnap.val():{};
@@ -10307,7 +10343,7 @@ window.approveScore = async (btn)=>{
 };
 
 window.disputeScoreWith = async (gameId,matchId,teamSide,myTeamRaw,oppRaw)=>{
-  const myName=actingAsName||(userProfile?.name)||'';
+  const myName=myRosterName();
   const otherSide=teamSide==='t1'?'t2':'t1';
   const s1=teamSide==='t1'?myTeamRaw:oppRaw, s2=teamSide==='t1'?oppRaw:myTeamRaw;
 
@@ -11066,15 +11102,21 @@ window.createVote = async ()=>{
   const checked=window._votePicks?Array.from(window._votePicks):(S.players||[]);
   if(!checked.length){alert('Select at least one participant.');return;}
   const vid=uid();
-  const vote={question:q,options:opts,results:{},participants:checked,createdBy:userProfile?.name||'Admin',createdAt:Date.now(),active:true};
-  await update(ref(db,'tournaments/'+currentTourneyId+'/votes/'+vid),vote);
+  const vote={question:q,options:opts,results:{},participants:checked,createdBy:myRosterName()||'Admin',createdAt:Date.now(),active:true};
+  try{
+    await update(ref(db,'tournaments/'+currentTourneyId+'/votes/'+vid),vote);
+    // a notice is what reaches everyone's phone — votes had no alert of their own
+    await set(ref(db,'tournaments/'+currentTourneyId+'/notices/'+feedKey()),
+      {title:'🗳️ Vote open',body:q+' — open the app to vote',at:Date.now(),by:myRosterName()||'Host'});
+  }catch(err){ alert('Could not start the vote: '+(err&&err.message||err)); return; }
   el('vote-question').value='';
   el('vote-options').value='';
+  try{ renderVoteCards(); }catch(e){}
   renderAdminVotes();
 };
 
 window.voteSelectAll=()=>{
-  window._votePicks=new Set((S.players||[]));
+  window._votePicks=new Set([...(S.players||[]),...spectatorNames()]);
   renderVoteParticipantPills();
 };
 window.voteSelectNone=()=>{
@@ -11087,32 +11129,41 @@ window.toggleVotePick=(name)=>{
   else window._votePicks.add(name);
   renderVoteParticipantPills();
 };
+function spectatorNames(){
+  return Object.values((S&&S.spectators)||{}).map(s=>String((s&&s.name)||'').trim())
+    .filter(n=>n&&!(S.players||[]).includes(n));
+}
 function renderVoteParticipantPills(){
   const wrap=el('vote-participants'); if(!wrap) return;
-  const players=S.players||[];
+  const players=S.players||[], specs=spectatorNames();
   if(!window._votePicks) window._votePicks=new Set(players);
-  wrap.innerHTML=players.map(p=>{
+  const pill=(p,isSpec)=>{
     const sel=window._votePicks.has(p);
-    return '<div onclick="toggleVotePick(this.dataset.name)" data-name="'+p.replace(/"/g,'&quot;')+'" style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;user-select:none;border:2px solid '+(sel?'#7F77DD':'#e0ddd6')+';background:'+(sel?'#EEEDFE':'#fff')+';color:'+(sel?'#3C3489':'#aaa')+'">'+p+'</div>';
-  }).join('');
-  const cnt=window._votePicks.size;
+    return '<div onclick="toggleVotePick(this.dataset.name)" data-name="'+p.replace(/"/g,'&quot;')+'" style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;user-select:none;border:2px solid '+(sel?'#7F77DD':'#e0ddd6')+';background:'+(sel?'#EEEDFE':'#fff')+';color:'+(sel?'#3C3489':'#aaa')+'">'+(isSpec?'👀 ':'')+p+'</div>';
+  };
+  wrap.innerHTML=players.map(p=>pill(p,false)).join('')
+    +(specs.length?'<div style="width:100%;font-size:10px;font-weight:700;color:#aaa;margin:6px 0 2px">SPECTATORS</div>'+specs.map(p=>pill(p,true)).join(''):'');
+  const cnt=window._votePicks.size, pool=players.length+specs.length;
   const countEl=el('vote-participant-count');
-  if(countEl) countEl.textContent=cnt===players.length?'All '+cnt+' players':cnt+' of '+players.length+' players selected';
+  if(countEl) countEl.textContent=(cnt===players.length&&!specs.some(s=>window._votePicks.has(s)))
+    ?'All '+cnt+' players':cnt+' of '+pool+' selected';
 }
 
 
 window.castVote = async (btn)=>{
   const vid=btn.dataset.vid, playerName=btn.dataset.name, optIdx=parseInt(btn.dataset.opt);
-  await update(ref(db,'tournaments/'+currentTourneyId+'/votes/'+vid+'/results'),{[playerName]:optIdx});
-  const myName=actingAsName||(userProfile?.name)||'';
-  renderPlayerVotes(myName);
+  try{ await update(ref(db,'tournaments/'+currentTourneyId+'/votes/'+vid+'/results'),{[playerName]:optIdx}); }
+  catch(err){ alert('Could not record your vote: '+(err&&err.message||err)); return; }
+  renderPlayerVotes(myRosterName());
+  try{ renderVoteCards(); }catch(e){}
 };
 
 window.clearMyVote = async (btn)=>{
   const vid=btn.dataset.vid, playerName=btn.dataset.name;
   await update(ref(db,'tournaments/'+currentTourneyId),{['votes/'+vid+'/results/'+playerName]:null});
-  const myName=actingAsName||(userProfile?.name)||'';
+  const myName=myRosterName();
   renderPlayerVotes(myName);
+  try{ renderVoteCards(); }catch(e){}
 };
 
 window.closeVote = async (btn)=>{
@@ -11192,7 +11243,7 @@ window.toggleDarkMode=()=>{
 // InstaWin — InstaWin, no score needed
 window.playerSubmitInstaWin = async (btn)=>{
   const gameId=btn.dataset.gid, matchId=btn.dataset.mid;
-  const myName=actingAsName||(userProfile?.name)||'';
+  const myName=myRosterName();
   const b=S.bs&&S.bs[gameId];
   const game=(S.games||[]).find(g=>g.id===gameId);
   if(!b||!game) return;
@@ -11269,7 +11320,7 @@ window.showBadgeTooltip = (el)=>{
 };
 
 window.dismissAnnouncement = async ()=>{
-  const myName=actingAsName||(userProfile?.name)||'';
+  const myName=myRosterName();
   if(!myName) return;
   const wasFinal=S&&S.activeAnnouncement&&S.activeAnnouncement.gameId==='__final';
   await update(ref(db,'tournaments/'+currentTourneyId),{['announcementAcks/'+myName]:true});
@@ -11282,7 +11333,7 @@ window.submitOTWinner = async (btn)=>{
   const baseS=parseFloat(btn.dataset.s1); // tied score
   // Keep scores tied — winner determined by OT selection, no point differential
   const s1=baseS, s2=baseS;
-  const myName=actingAsName||(userProfile?.name)||'';
+  const myName=myRosterName();
   const otherSide=teamSide==='t1'?'t2':'t1';
   const freshSnap=await get(ref(db,'tournaments/'+currentTourneyId+'/pendingScores/'+gameId+'/'+matchId));
   const existing=freshSnap.exists()?freshSnap.val():{};
