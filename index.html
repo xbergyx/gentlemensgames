@@ -219,7 +219,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .mute-ic::after{content:'';position:absolute;left:-2px;right:-2px;top:50%;height:2px;background:#e74c3c;transform:rotate(-40deg);border-radius:2px}
 .ng-card{background:linear-gradient(135deg,#1e1650,#534AB7);color:#fff;border:none}
 .no-rank #ptab-rank{display:none!important}
-.is-spectator #ptab-teams,.is-spectator #ptab-rank,.is-spectator #ptab-vote{display:none!important}
+.is-spectator #ptab-rank,.is-spectator #ptab-vote{display:none!important}
 .chat-card{padding:.8rem .8rem .7rem}
 .chat-list{height:min(58vh,520px);overflow-y:auto;display:flex;flex-direction:column;gap:3px;padding:4px 2px;-webkit-overflow-scrolling:touch}
 .chat-row{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-top:6px}
@@ -706,7 +706,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v150.24.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v151.25.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -780,7 +780,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v150.24.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v151.25.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2559,7 +2559,7 @@ window.openTournament = (tid)=>{
     // One person can hold two logins (an old email and a new one) — both stay mapped to their name
     try{ ensureGameChampDefs(); }catch(err){}
     const myUid = actingAsUid||currentUser?.uid;
-    const myName = actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
+    const myName = myRosterName();
     isTourneyAdmin=isAdmin||!!(S.tourneyAdmins&&S.tourneyAdmins[myUid]);
     loadGlobalProfilesForTournament().then(()=>{
       // If acting as another player, always show player view
@@ -2623,7 +2623,7 @@ function buildTournamentShell(){
       <div class="ptab-btn" id="ptab-chat" data-tab="chat"><span class="pi">💬</span>Chat</div>
       <div class="ptab-btn" id="ptab-games" data-tab="games"><span class="pi">📊</span>Results</div>
       <div class="ptab-btn" id="ptab-info" data-tab="info">📋 Games</div>
-      <div class="ptab-btn" id="ptab-teams" data-tab="teams">👥 My Teams</div>
+      <div class="ptab-btn" id="ptab-teams" data-tab="teams">👥 Teams</div>
       <div class="ptab-btn" id="ptab-rank" data-tab="rank">🎯 Rankings</div>
       <div class="ptab-btn" id="ptab-vote" data-tab="vote" style="display:none">🗳️ Vote</div>
     </div>
@@ -2721,7 +2721,7 @@ function renderAdminView(){
   if(header) header.textContent=S.tourneyName+' '+S.tourneyYear;
   show('admin-area'); hide('player-area');
   el('btn-me')?.classList.add('hidden'); el('btn-menu')?.classList.add('hidden');
-  const myName=actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
+  const myName=myRosterName();
   // Check if admin (as themselves) is in the tournament
   const myNameNorm=(myName||'').trim().toLowerCase();
   const amPlayer=(S.players||[]).some(p=>p.trim().toLowerCase()===myNameNorm)
@@ -2733,7 +2733,7 @@ function renderAdminView(){
 }
 window.switchToPlayerView=()=>{
   _viewingAsPlayer=true;
-  const myName=actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
+  const myName=myRosterName();
   hide('admin-area');
   el('btn-player-view')?.classList.add('hidden');
   el('btn-admin-view')?.classList.remove('hidden');
@@ -2767,7 +2767,7 @@ window.switchToAdminView=()=>{
   show('admin-area'); hide('player-area');
   el('btn-admin-view')?.classList.add('hidden');
   el('btn-manage-admins')?.classList.remove('hidden');
-  const myName=actingAsName||(userProfile?.preferredName||userProfile?.name)||'';
+  const myName=myRosterName();
   el('btn-player-view')?.classList.toggle('hidden',!(S.players||[]).includes(myName));
   el('admin-role-pill')?.remove();
   showAdminPhase(_phase||'setup');
@@ -4998,7 +4998,7 @@ window.tourneyStopActAs = ()=>{
   show('admin-area'); hide('player-area');
   el('btn-admin-view')?.classList.add('hidden');
   el('btn-manage-admins')?.classList.remove('hidden');
-  const myName=(userProfile?.preferredName||userProfile?.name)||'';
+  const myName=myRosterName();
   el('btn-player-view')?.classList.toggle('hidden',!(S.players||[]).includes(myName));
   showAdminPhase('setup'); // return to setup tab where View as player lives
 };
@@ -5836,7 +5836,20 @@ function chatMyUid(){
   }
   return currentUser?.uid||'';
 }
-function chatMyName(){ return String(actingAsName||userProfile?.preferredName||userProfile?.name||'').trim(); }
+// Everything in a tournament is keyed by the roster name. Someone can sign up as
+// "A.J." while their slot on the roster says "AJ" — their login is the link, so
+// resolve through that first and fall back to whatever their profile says.
+function rosterNameForUid(uid){
+  if(!uid||!S) return '';
+  const slot=(S.playerUids||{})[uid]||'';
+  return (slot&&(S.players||[]).includes(slot))?slot:'';
+}
+function myRosterName(){
+  if(actingAsName) return actingAsName;
+  return rosterNameForUid(currentUser?.uid)
+    || String(userProfile?.preferredName||userProfile?.name||'').trim();
+}
+function chatMyName(){ return String(actingAsName||rosterNameForUid(chatMyUid())||userProfile?.preferredName||userProfile?.name||'').trim(); }
 function isSpectatorHere(){
   if(!S) return false;
   const u=chatMyUid(), nm=chatMyName().toLowerCase();
@@ -6914,7 +6927,7 @@ function applyPendingNav(){
   const nav=window._pendingNav; if(!nav||!S||nav.t!==currentTourneyId) return;
   window._pendingNav=null;
   closeModal();
-  const myN=String(userProfile?.preferredName||userProfile?.name||'').trim().toLowerCase();
+  const myN=String(myRosterName()).trim().toLowerCase();
   const amPlayer=(S.players||[]).some(p=>String(p).trim().toLowerCase()===myN)||Object.keys(S.playerUids||{}).includes(currentUser?.uid)||!!(S.spectators&&S.spectators[currentUser?.uid]);
   const toAdmin=isTourneyAdmin&&(nav.v==='admin'||!amPlayer);
   const ptab=['chat','active','lb','games','info','teams','rank'].includes(nav.tab)?nav.tab:'active';
@@ -7310,7 +7323,7 @@ window.openMoreSheet=()=>{
   ggSheet('Menu',
     ((S.brief&&S.brief.at)?it('📣','Game day info','openBriefView()'):'')
     +it('📋','Game rules',"goPTab('info')")
-    +(spec?'':it('👥','My teams',"goPTab('teams')"))
+    +it('👥','Teams &amp; partners',"goPTab('teams')")
     +(!spec&&rankingsNeeded()?it('🎯','Rankings',"goPTab('rank')"):'')
     +(vote?it('🗳️','Vote',"goPTab('vote')"):'')
     +it('🙋','Me & my badges','openMeSheet()')
@@ -7453,7 +7466,7 @@ window.changeMyPhoto=async(preset)=>{
   try{
     await update(ref(db,'players/'+currentUser.uid),{photo:data});
     if(userProfile) userProfile.photo=data;
-    const nm=String(userProfile?.preferredName||userProfile?.name||'').trim();
+    const nm=String(myRosterName()).trim();
     if(nm&&_globalProfiles) _globalProfiles[nm]={...(_globalProfiles[nm]||{}),photo:data};
     showBadgeToast('📷 Photo updated',true);
     try{ if(S) renderPlayerView(chatMyName()); }catch(e){}
@@ -8633,7 +8646,7 @@ function feedAgo(t){
   if(s<60) return 'now'; if(s<3600) return Math.floor(s/60)+'m';
   if(s<86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d';
 }
-function feedMyName(){ return (actingAsName||userProfile?.preferredName||userProfile?.name||'').trim().toLowerCase(); }
+function feedMyName(){ return (actingAsName||rosterNameForUid(currentUser?.uid)||userProfile?.preferredName||userProfile?.name||'').trim().toLowerCase(); }
 function getBadgeFeed(){
   return Object.entries((S&&S.badgeFeed)||{}).filter(([,v])=>v&&v.player)
     .map(([k,v])=>({key:k,...v})).sort((a,b)=>(b.at||0)-(a.at||0));
@@ -8772,7 +8785,7 @@ function renderPlayerView(myName){
     _tab=needRank?'rank':'active';
   }
   el('player-area')?.classList.toggle('no-rank',_noRank);
-  if(_spec&&['teams','rank','vote'].includes(_tab)) _tab='active';
+  if(_spec&&['rank','vote'].includes(_tab)) _tab='active';
   if(_noRank&&_tab==='rank') _tab='active';
   showPlayerTab(_tab||'active',myName);
   try{ maybeTour(); }catch(e){}
@@ -10050,7 +10063,10 @@ async function renderActiveGameTab(myName){
 function renderMyTeams(myName){
   const e=el('pview-teams');if(!e)return;
   const locked=(S.games||[]).filter(g=>g.status==='locked'||g.status==='scoring'||g.status==='done'||g.status==='skipped');
-  if(!locked.length){e.innerHTML='<div class="card"><p class="empty">Teams appear once rankings are locked.</p></div>';return;}
+  if(!locked.length){
+    e.innerHTML='<div class="card"><div class="card-title">👥 My Teams</div><p class="empty">Your games have not been locked in yet.</p></div>'+allTeamsHTML(myName);
+    return;
+  }
   const fmtL={'h2h-points':'H2H points','h2h-wins':'H2H wins','score-low':'Low score','score-high':'High score','multi-round-high':'Multi-round high','multi-round-low':'Multi-round low','round-robin':'Round robin','single-elim':'Single elim','double-elim':'Double elim','two-pool':'2 pools','partial-rr':'RR + finals','pool-playoff':'Pool + knockout'};
   let html='<div class="card"><div class="card-title">👥 My Teams</div>';
   let found=false;
@@ -10072,9 +10088,39 @@ function renderMyTeams(myName){
       ${pts!==undefined?`<span class="tag tag-purple">${pts}pts</span>`:''}
     </div>`;
   });
-  if(!found) html+='<p class="empty">No teams assigned yet.</p>';
+  if(!found) html+='<p class="empty">You are not on a team yet — the full list is below.</p>';
   html+='</div>';
+  html+=allTeamsHTML(myName);
   e.innerHTML=html;
+}
+// Every team in every game, so nobody has to ask who they are with
+function allTeamsHTML(myName){
+  const locked=(S.games||[]).filter(g=>{
+    const t=(S.teams&&S.teams[g.id])||[];
+    return t.length&&g.status!=='skipped';
+  });
+  if(!locked.length) return '<div class="card"><div class="card-title">👥 Everyone\'s teams</div><p class="empty">No teams are set yet.</p></div>';
+  let h='<div class="card"><div class="card-title">👥 Everyone\'s teams</div>'
+    +'<div style="font-size:11px;color:#888;margin-bottom:8px">Every pairing for every game. Yours is highlighted.</div>';
+  locked.forEach(g=>{
+    const teams=(S.teams&&S.teams[g.id])||[];
+    const isActive=g.active||S.activeGameId===g.id;
+    h+='<div style="margin-top:10px"><div style="font-size:11px;font-weight:800;letter-spacing:.04em;color:#534AB7">'
+      +feedEsc(g.name).toUpperCase()+(isActive?' <span class="tag" style="background:#7F77DD;color:#fff;font-size:9px">NOW</span>':'')
+      +' <span style="font-weight:500;color:#aaa">'+teams.length+' team'+(teams.length===1?'':'s')+'</span></div>';
+    teams.forEach((t,i)=>{
+      const names=[t.p1,t.p2,t.p3].filter(Boolean);
+      const mine=names.some(n=>n===myName);
+      h+='<div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:8px;margin-top:3px;'
+        +(mine?'background:#EEEDFE;font-weight:700':'')+'">'
+        +'<span style="font-size:11px;color:#aaa;min-width:16px">'+(i+1)+'</span>'
+        +'<span style="flex:1;font-size:12px">'+names.map(n=>feedEsc(n)).join(' <span style="color:#bbb">&amp;</span> ')
+        +(names.length===1?' <span style="color:#aaa;font-size:11px">(solo)</span>':'')+'</span>'
+        +(mine?'<span class="tag tag-purple" style="font-size:9px">YOU</span>':'')+'</div>';
+    });
+    h+='</div>';
+  });
+  return h+'</div>';
 }
 
 window.toggleResultsCard=function(btn){
