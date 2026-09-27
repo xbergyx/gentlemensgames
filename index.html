@@ -709,7 +709,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v152.25.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v154.27.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -783,7 +783,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v152.25.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v154.27.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -4629,6 +4629,9 @@ window.finalizeGame = async (gameId)=>{
   const newPts={};
   teams.forEach(team=>{const place=pl[team.id]||n,pts=Math.max(1,n-place+1);[team.p1,team.p2].filter(Boolean).forEach(p=>{newPts[p]=pts;});});
   await update(ref(db,'tournaments/'+currentTourneyId),{['scores/'+gameId]:{_fin:true},['points/'+gameId]:newPts});
+  // hand out this game's badges straight away — no longer waits for the announce screen
+  try{ S.points=Object.assign({},S.points,{[gameId]:newPts}); const n=await awardGameBadges(gameId);
+       if(n) showBadgeToast('🏅 '+n+' badge'+(n===1?'':'s')+' awarded for '+((S.games||[]).find(g=>g.id===gameId)||{}).name,true); }catch(e){ console.warn('auto badges',e); }
   setTimeout(()=>openNextGamePrompt(gameId),400);
 };
 window.lockGameScores = async (gameId)=>{
@@ -4841,6 +4844,8 @@ window.saveScoreGame = async (gid)=>{
     [team.p1,team.p2,team.p3].filter(Boolean).forEach(p=>{newPts[p]=pts;});
   });
   await update(ref(db,'tournaments/'+currentTourneyId),{['scores/'+gid]:newScores,['points/'+gid]:newPts});
+  try{ const n=await awardGameBadges(gid);
+       if(n) showBadgeToast('🏅 '+n+' badge'+(n===1?'':'s')+' awarded for '+((S.games||[]).find(g=>g.id===gid)||{}).name,true); }catch(e){ console.warn('auto badges',e); }
   // Deactivate the current game and offer to activate next
   const updatedGames=(S.games||[]).map(g=>g.id===gid?{...g,active:false}:g);
   await update(ref(db,'tournaments/'+currentTourneyId),{games:updatedGames,activeGameId:null});
@@ -5275,9 +5280,11 @@ window.openGameAnnouncement = (gameId)=>{
   const b=S.bs&&S.bs[gameId];
   const pts=S.points&&S.points[gameId]||{};
   const skip=getSkippedIds();
+  const _sameGame=(window._announceGameId===gameId);
   window._announceGameId=gameId;
-  // Only reset badges on first open, not on re-render
-  if(!window._announceOpen) window._announceBadges={};
+  // Start clean on a fresh open OR whenever this is a different game than the
+  // one still sitting in memory. Only a re-render of the same game keeps edits.
+  if(!window._announceOpen||!_sameGame) window._announceBadges={};
   window._announceOpen=true;
 
   // Auto-detect game champ badge + other auto badges
@@ -5294,107 +5301,8 @@ window.openGameAnnouncement = (gameId)=>{
   });
 
   // Pre-assign badges only if not already set (preserve user changes on re-render)
-  if(!window._announceOpen||(window._announceOpen&&Object.keys(window._announceBadges).length===0)){
-    try{
-      const gm=computeTiming().matches.filter(x=>x.g.id===gameId);
-      if(gm.length>=2){
-        const addB=(ps,bid)=>ps.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes(bid)) window._announceBadges[p].push(bid); });
-        const srt=gm.slice().sort((a,b)=>a.dur-b.dur);
-        addB(srt[srt.length-1].ps,'marathon-match');
-        const q=srt[0], w=q.m.winner; if(w) addB([w.p1,w.p2,w.p3].filter(Boolean),'quick-draw');
-      }
-    }catch(e){ console.warn('timing badges',e); }
-    // Game champ badge to winner
-    if(champBadge&&sorted.length){
-      const winner=sorted[0];
-      const winPlayers=[winner.p1,winner.p2,winner.p3].filter(Boolean);
-      winPlayers.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes(champBadge.id)) window._announceBadges[p].push(champBadge.id); });
-    }
-    // Last place badge
-    if(sorted.length>1){
-      const last=sorted[sorted.length-1];
-      const lastPlayers=[last.p1,last.p2,last.p3].filter(Boolean);
-      lastPlayers.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('last-place-game')) window._announceBadges[p].push('last-place-game'); });
-    }
-    // Undefeated badge (all formats): won every match they played, 2+ played
-    const allGM=b?getAllMatchesFromBracket(b,game.format).filter(m=>m&&m.winner&&m.t1&&m.t2&&m.score1!=null&&m.score2!=null):[];
-    if(allGM.length){
-      const teamWins={}, teamPlayed={};
-      allGM.forEach(m=>{ teamWins[m.winner.id]=(teamWins[m.winner.id]||0)+1; teamPlayed[m.t1.id]=(teamPlayed[m.t1.id]||0)+1; teamPlayed[m.t2.id]=(teamPlayed[m.t2.id]||0)+1; });
-      sorted.forEach(t=>{ if((teamPlayed[t.id]||0)>=2&&(teamWins[t.id]||0)===teamPlayed[t.id]){
-        const ps=[t.p1,t.p2,t.p3].filter(Boolean);
-        ps.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('undefeated')) window._announceBadges[p].push('undefeated'); });
-      }});
-    }
-    // Per-match auto badges
-    if(allGM.length){
-      const allM=allGM;
-      let maxDiff=0; let blowoutWinner=null; let blowoutLoser=null;
-
-      allM.forEach(m=>{
-        const diff=Math.abs(m.score1-m.score2);
-        const t1ps=[m.t1?.p1,m.t1?.p2,m.t1?.p3].filter(Boolean);
-        const t2ps=[m.t2?.p1,m.t2?.p2,m.t2?.p3].filter(Boolean);
-        const winPs=m.winner?.id===m.t1?.id?t1ps:t2ps;
-        const losePs=m.winner?.id===m.t1?.id?t2ps:t1ps;
-
-        // Naked Lap — scored 0 in a match
-        const loserScore=m.winner?.id===m.t1?.id?m.score2:m.score1;
-        if(loserScore===0){
-          losePs.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('naked-lap')) window._announceBadges[p].push('naked-lap'); });
-        }
-
-        // Ice in the Veins — won in OT
-        if(m.wasOT){
-          winPs.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('ice-veins-game')) window._announceBadges[p].push('ice-veins-game'); });
-        }
-
-        // InstaWin
-        if(m.isInstaWin||m.isDinger){
-          winPs.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('instawin-game')) window._announceBadges[p].push('instawin-game'); });
-        }
-
-        // Track blowout
-        if(diff>maxDiff){ maxDiff=diff; blowoutWinner=winPs; blowoutLoser=losePs; }
-      });
-
-      // Blowout King
-      if(blowoutWinner&&maxDiff>=5){
-        blowoutWinner.forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('blowout-king')) window._announceBadges[p].push('blowout-king'); });
-      }
-
-      // Hot streak — 3+ wins in a row
-      const teamMatchOrder={};
-      allM.forEach(m=>{
-        const t1ps=[m.t1?.p1,m.t1?.p2,m.t1?.p3].filter(Boolean);
-        const t2ps=[m.t2?.p1,m.t2?.p2,m.t2?.p3].filter(Boolean);
-        const winPs=m.winner?.id===m.t1?.id?t1ps:t2ps;
-        const losePs=m.winner?.id===m.t1?.id?t2ps:t1ps;
-        const allTeamPs=[[...t1ps,m.t1?.id],[...t2ps,m.t2?.id]];
-        allTeamPs.forEach(([...ps])=>{
-          const tid=ps.pop();
-          if(!teamMatchOrder[tid]) teamMatchOrder[tid]=[];
-          teamMatchOrder[tid].push(m.winner?.id===tid?1:0);
-        });
-      });
-      Object.entries(teamMatchOrder).forEach(([tid,results])=>{
-        let streak=0,maxS=0;
-        results.forEach(r=>{ streak=r?streak+1:0; if(streak>maxS)maxS=streak; });
-        if(maxS>=3){
-          const t=sorted.find(t=>t.id===tid);
-          if(t){[t.p1,t.p2,t.p3].filter(Boolean).forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('hot-streak')) window._announceBadges[p].push('hot-streak'); });}
-        }
-      });
-
-      // Perfect game — won all matches
-      sorted.forEach(t=>{
-        const wins=allM.filter(m=>m.winner?.id===t.id).length;
-        const total=allM.filter(m=>m.t1?.id===t.id||m.t2?.id===t.id).length;
-        if(wins===total&&total>=3){
-          [t.p1,t.p2,t.p3].filter(Boolean).forEach(p=>{ if(!window._announceBadges[p]) window._announceBadges[p]=[]; if(!window._announceBadges[p].includes('perfect-game')) window._announceBadges[p].push('perfect-game'); });
-        }
-      });
-    }
+  if(Object.keys(window._announceBadges).length===0){
+    window._announceBadges=computeGameAutoBadges(gameId);
   }
 
   // Check existing tourney badges to detect first-time
@@ -6445,7 +6353,7 @@ function computeTiming(){
   const now=Date.now(), out={games:[],players:{},matches:[],live:[]};
   const skip=getSkippedIds();
   (S.games||[]).forEach(g=>{
-    if(skip.has(g.id)) return;
+    if(skip.has(g.id)||g.noTiming) return;   // host filled these in himself — the clock means nothing
     const t=(S.gameTimes||{})[g.id]||{};
     if(t.startedAt) out.games.push({g,start:t.startedAt,end:t.endedAt||null,dur:(t.endedAt||now)-t.startedAt,running:!t.endedAt});
     if(!isMatchGame(g)) return;
@@ -6583,11 +6491,12 @@ function computeRecap(){
   if(all.length){
     const bl=all.reduce((a,b)=>(b.ws-b.ls)>(a.ws-a.ls)?b:a);
     if(bl.ws-bl.ls>0) R.blowout=bl;
-    const topW=Math.max(...all.map(x=>x.ws));
-    const ug=all.filter(x=>x.ws>0&&x.ws<topW).reduce((a,b)=>(!a||b.ws<a.ws)?b:a,null);
-    if(ug) R.ugliest=ug;
+    // (no cross-game score comparison — each game plays to a different number)
   }
   R.ot=recapTop(ot,2); R.heart=recapTop(heart,2); R.streak=recapTop(streakBest,3);
+  // Longest game — measured, and only over games whose clock is trustworthy
+  const timed=(T.games||[]).filter(x=>x&&x.dur>0&&!x.g.noTiming&&isMatchGame(x.g));
+  if(timed.length) R.longGame=timed.reduce((a,b)=>b.dur>a.dur?b:a);
   // speed
   const sp=Object.entries(T.players).filter(([,r])=>r.n>=3);
   if(sp.length>=2){
@@ -6734,7 +6643,7 @@ function recapHTML(myName){
   if(R.streak) s+=recapRow('🔥','Longest win streak',recapWho(R.streak),R.streak.val+' straight wins');
   if(R.ot) s+=recapRow('🧊','Overtime addict',recapWho(R.ot),R.ot.val+' match'+(R.ot.val===1?'':'es')+' went to OT');
   if(R.heart) s+=recapRow('😬','Heartbreaker',recapWho(R.heart),R.heart.val+' losses by 1 or 2 points');
-  if(R.ugliest) s+=recapRow('🍀','Ugliest win',feedEsc(recapTeamName(R.ugliest.win)),'Won '+feedEsc(R.ugliest.g.name)+' with just '+R.ugliest.ws+' points');
+  if(R.longGame) s+=recapRow('🕰️','Longest game',feedEsc(R.longGame.g.name),fmtMin(R.longGame.dur)+' from first match to last');
   if(R.disputes) s+=recapRow('🚩','Most disputes',recapWho(R.disputes),R.disputes.val+' score dispute'+(R.disputes.val===1?'':'s')+' filed');
   if(R.chatty) s+=recapRow('💬','Chattiest',recapWho(R.chatty),R.chatty.val+' messages');
   if(R.mentioned) s+=recapRow('📣','Most @mentioned',recapWho(R.mentioned),R.mentioned.val+' mentions. Popular or blamed?');
@@ -7162,6 +7071,7 @@ window.showReactors=(k)=>{
 // ── UX PACK (v119) ────────────────────────────────────────
 function boardOf(gid,mid){ const v=S&&S.activeMatchIds&&S.activeMatchIds[gid]&&S.activeMatchIds[gid][mid]; return typeof v==='number'?v:(v?true:0); }
 function ggSheet(title,body){
+  window._announceOpen=false;   // this replaces whatever modal was there
   el('modal-area').innerHTML='<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'
     +'<div class="modal-handle"></div><div class="modal-title"><span>'+title+'</span><button class="btn btn-sm" onclick="closeModal()" style="width:auto">✕</button></div>'
     +body+'</div></div>';
@@ -7970,6 +7880,8 @@ window.openEditGame=(gid)=>{
     +'<input type="number" id="eg-bcount" min="1" max="12" value="'+(g.boardCount||'')+'" placeholder="How many" style="flex:1;margin:0" inputmode="numeric">'
     +'</div><div style="font-size:11px;color:#aaa;margin:4px 0 0">Board, Table, Field, Kan, Lane… and how many run at once'
     +(g.boardCount?'':' (blank = '+(parseInt(S.boardCount)||4)+', the tournament default)')+'</div>';
+  h+='<label style="display:flex;align-items:center;gap:8px;font-size:12px;margin:10px 0 2px"><input type="checkbox" id="eg-timing" '+(g.noTiming?'':'checked')+' style="width:auto;margin:0"> Count this game in the timing stats</label>'
+    +'<div style="font-size:11px;color:#888;margin-bottom:6px">Turn this off for a game you scored yourself afterwards — the clock on it is not real, and it would skew the fastest/slowest and longest-game numbers.</div>';
   h+='<div class="sec-label">Team size</div>';
   h+= teams.length
     ? lock('Teams are already made. Remove the teams to change team size.')+'<div class="eg-cur">'+(g.teamSize||2)+' players per team</div>'
@@ -8012,6 +7924,7 @@ window.saveGameEdit=async(gid)=>{
   const bc=Math.max(0,Math.min(12,parseInt(el('eg-bcount')?.value)||0))||null;
   const ng={...g,name,format:nf,teamSize:ts,tiebreak:tb,tbMode,
     boardLabel:(el('eg-blabel')?.value||'').trim()||'Board', boardCount:bc,
+    noTiming: el('eg-timing')?!el('eg-timing').checked:!!g.noTiming,
     tbDesc:(el('eg-tbdesc')?.value||'').trim(),
     winScore:(ws===''||ws==null)?null:parseFloat(ws),
     exactScore:!!el('eg-exact')?.checked, winBy2:!!el('eg-winby2')?.checked,
@@ -8142,6 +8055,239 @@ function renderBriefCards(){
 
 
 
+
+
+// ── AUTO BADGES FOR ONE GAME ──────────────────────────────
+// Pulled out of the announce screen so the same answer can be used the moment
+// points are awarded, and again when re-checking afterwards.
+function computeGameAutoBadges(gameId){
+  const game=(S.games||[]).find(g=>g.id===gameId); if(!game) return {};
+  const teams=(S.teams&&S.teams[gameId])||[];
+  const b=S.bs&&S.bs[gameId];
+  const pts=(S.points&&S.points[gameId])||{};
+  const sorted=[...teams].sort((x,y)=>((pts[y.p1]||pts[y.id]||0)-(pts[x.p1]||pts[x.id]||0)));
+  const gameNameLower=(game.name||'').toLowerCase();
+  const GAME_BADGE_MAP={'cornhole':'cornhole-champ','kanjam':'kanjam-champ','kan jam':'kanjam-champ','beer die':'beerdie-champ','beer darts':'beerdarts-champ','bowling':'bowling-champ','golf':'golf-champ','spikeball':'spikeball-champ','cocaine':'cocaine-champ','bucketball':'bucketball-champ'};
+  try{ ensureGameChampDefs(); }catch(e){}
+  const champBadgeId=Object.entries(GAME_BADGE_MAP).find(([kk])=>gameNameLower.includes(kk))?.[1]||('champ-'+gameId);
+  const champBadge=champBadgeId?BADGE_DEFS.find(bd=>bd.id===champBadgeId):null;
+  const out={};
+
+    try{
+      const gm=computeTiming().matches.filter(x=>x.g.id===gameId);
+      if(gm.length>=2){
+        const addB=(ps,bid)=>ps.forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes(bid)) out[p].push(bid); });
+        const srt=gm.slice().sort((a,b)=>a.dur-b.dur);
+        addB(srt[srt.length-1].ps,'marathon-match');
+        const q=srt[0], w=q.m.winner; if(w) addB([w.p1,w.p2,w.p3].filter(Boolean),'quick-draw');
+      }
+    }catch(e){ console.warn('timing badges',e); }
+    // Game champ badge to winner
+    if(champBadge&&sorted.length){
+      const winner=sorted[0];
+      const winPlayers=[winner.p1,winner.p2,winner.p3].filter(Boolean);
+      winPlayers.forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes(champBadge.id)) out[p].push(champBadge.id); });
+    }
+    // Last place badge
+    if(sorted.length>1){
+      const last=sorted[sorted.length-1];
+      const lastPlayers=[last.p1,last.p2,last.p3].filter(Boolean);
+      lastPlayers.forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes('last-place-game')) out[p].push('last-place-game'); });
+    }
+    // Undefeated badge (all formats): won every match they played, 2+ played
+    const allGM=b?getAllMatchesFromBracket(b,game.format).filter(m=>m&&m.winner&&m.t1&&m.t2&&m.score1!=null&&m.score2!=null):[];
+    if(allGM.length){
+      const teamWins={}, teamPlayed={};
+      allGM.forEach(m=>{ teamWins[m.winner.id]=(teamWins[m.winner.id]||0)+1; teamPlayed[m.t1.id]=(teamPlayed[m.t1.id]||0)+1; teamPlayed[m.t2.id]=(teamPlayed[m.t2.id]||0)+1; });
+      sorted.forEach(t=>{ if((teamPlayed[t.id]||0)>=2&&(teamWins[t.id]||0)===teamPlayed[t.id]){
+        const ps=[t.p1,t.p2,t.p3].filter(Boolean);
+        ps.forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes('undefeated')) out[p].push('undefeated'); });
+      }});
+    }
+    // Per-match auto badges
+    if(allGM.length){
+      const allM=allGM;
+      let maxDiff=0; let blowoutWinner=null; let blowoutLoser=null;
+
+      allM.forEach(m=>{
+        const diff=Math.abs(m.score1-m.score2);
+        const t1ps=[m.t1?.p1,m.t1?.p2,m.t1?.p3].filter(Boolean);
+        const t2ps=[m.t2?.p1,m.t2?.p2,m.t2?.p3].filter(Boolean);
+        const winPs=m.winner?.id===m.t1?.id?t1ps:t2ps;
+        const losePs=m.winner?.id===m.t1?.id?t2ps:t1ps;
+
+        // Naked Lap — scored 0 in a match
+        const loserScore=m.winner?.id===m.t1?.id?m.score2:m.score1;
+        if(loserScore===0){
+          losePs.forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes('naked-lap')) out[p].push('naked-lap'); });
+        }
+
+        // Ice in the Veins — won in OT
+        if(m.wasOT){
+          winPs.forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes('ice-veins-game')) out[p].push('ice-veins-game'); });
+        }
+
+        // InstaWin
+        if(m.isInstaWin||m.isDinger){
+          winPs.forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes('instawin-game')) out[p].push('instawin-game'); });
+        }
+
+        // Track blowout
+        if(diff>maxDiff){ maxDiff=diff; blowoutWinner=winPs; blowoutLoser=losePs; }
+      });
+
+      // Blowout King
+      if(blowoutWinner&&maxDiff>=5){
+        blowoutWinner.forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes('blowout-king')) out[p].push('blowout-king'); });
+      }
+
+      // Hot streak — 3+ wins in a row
+      const teamMatchOrder={};
+      allM.forEach(m=>{
+        const t1ps=[m.t1?.p1,m.t1?.p2,m.t1?.p3].filter(Boolean);
+        const t2ps=[m.t2?.p1,m.t2?.p2,m.t2?.p3].filter(Boolean);
+        const winPs=m.winner?.id===m.t1?.id?t1ps:t2ps;
+        const losePs=m.winner?.id===m.t1?.id?t2ps:t1ps;
+        const allTeamPs=[[...t1ps,m.t1?.id],[...t2ps,m.t2?.id]];
+        allTeamPs.forEach(([...ps])=>{
+          const tid=ps.pop();
+          if(!teamMatchOrder[tid]) teamMatchOrder[tid]=[];
+          teamMatchOrder[tid].push(m.winner?.id===tid?1:0);
+        });
+      });
+      Object.entries(teamMatchOrder).forEach(([tid,results])=>{
+        let streak=0,maxS=0;
+        results.forEach(r=>{ streak=r?streak+1:0; if(streak>maxS)maxS=streak; });
+        if(maxS>=3){
+          const t=sorted.find(t=>t.id===tid);
+          if(t){[t.p1,t.p2,t.p3].filter(Boolean).forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes('hot-streak')) out[p].push('hot-streak'); });}
+        }
+      });
+
+      // Perfect game — won all matches
+      sorted.forEach(t=>{
+        const wins=allM.filter(m=>m.winner?.id===t.id).length;
+        const total=allM.filter(m=>m.t1?.id===t.id||m.t2?.id===t.id).length;
+        if(wins===total&&total>=3){
+          [t.p1,t.p2,t.p3].filter(Boolean).forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes('perfect-game')) out[p].push('perfect-game'); });
+        }
+      });
+    }
+  
+  return out;
+}
+// Write any of them that the player does not already have. Never removes.
+async function awardGameBadges(gameId,{silent=true}={}){
+  const earned=computeGameAutoBadges(gameId);
+  const have=S.tourneyBadges||{};
+  const tb=JSON.parse(JSON.stringify(have));
+  const upd={}; let added=0; const now=Date.now();
+  Object.entries(earned).forEach(([p,bids])=>{
+    (bids||[]).forEach(bid=>{
+      if(have[p]&&have[p][bid]) return;
+      if(!tb[p]) tb[p]={};
+      tb[p][bid]=true;
+      const bd=BADGE_DEFS.find(x=>x.id===bid); if(!bd) return;
+      const g=(S.games||[]).find(x=>x.id===gameId);
+      upd['badgeFeed/'+feedKey()+'_'+(added)]={player:p,badgeId:bid,icon:bd.icon,name:bd.name,desc:bd.desc||'',
+        spicy:!!bd.spicy,at:now+added,src:'announce',gameId,gameName:(g&&g.name)||''};
+      added++;
+    });
+  });
+  if(!added) return 0;
+  upd['tourneyBadges']=tb;
+  try{ await update(ref(db,'tournaments/'+currentTourneyId),upd); }
+  catch(err){ if(!silent) alert('Could not save the badges: '+(err&&err.message||err)); return 0; }
+  return added;
+}
+
+// ── RE-CHECK EVERY BADGE ──────────────────────────────────
+// Runs the same calculation the app uses when a game is announced, over every
+// game that has points, and reports the difference both ways.
+function auditBadges(){
+  const earned={}, add=(p,bid)=>{ (earned[p]=earned[p]||new Set()).add(bid); };
+  (S.games||[]).forEach(g=>{
+    if(!(S.points&&S.points[g.id])) return;      // game never finished
+    const got=computeGameAutoBadges(g.id);
+    Object.entries(got).forEach(([p,bids])=>(bids||[]).forEach(bid=>add(p,bid)));
+  });
+  const have=S.tourneyBadges||{};
+  const missing={}, unexpected={};
+  Object.entries(earned).forEach(([p,set])=>{
+    const gaps=[...set].filter(bid=>!(have[p]&&have[p][bid]));
+    if(gaps.length) missing[p]=gaps;
+  });
+  Object.entries(have).forEach(([p,bids])=>{
+    const shouldHave=earned[p]||new Set();
+    const odd=Object.keys(bids||{}).filter(bid=>{
+      if(shouldHave.has(bid)) return false;
+      const bd=BADGE_DEFS.find(x=>x.id===bid);
+      if(!bd) return true;              // a badge id nothing defines any more
+      if(!bd.auto) return false;        // you gave it by hand — not ours to question
+      return true;                      // automatic, but the data does not back it
+    });
+    if(odd.length) unexpected[p]=odd;
+  });
+  return {earned,missing,unexpected};
+}
+function badgeLabel(bid){ const bd=BADGE_DEFS.find(x=>x.id===bid); return bd?bd.icon+' '+bd.name:('? '+bid); }
+window.openBadgeAudit=()=>{
+  if(!isTourneyAdmin) return;
+  const {missing,unexpected}=auditBadges();
+  const mN=Object.keys(missing), uN=Object.keys(unexpected);
+  const rows=(obj,names,tone)=>names.map(p=>'<div style="padding:6px 0;border-top:1px solid #eceae4">'
+      +'<div style="font-size:12px;font-weight:700">'+feedEsc(p)+'</div>'
+      +'<div style="font-size:11px;color:'+tone+'">'+obj[p].map(badgeLabel).map(feedEsc).join(', ')+'</div></div>').join('');
+  let body='';
+  if(!mN.length&&!uN.length){
+    body='<div class="alert alert-success" style="font-size:12px">Everything checks out. Every automatic badge matches what actually happened, across all '+((S.games||[]).filter(g=>S.points&&S.points[g.id]).length)+' finished game(s).</div>';
+  }
+  if(mN.length) body+='<div class="sec-label">Missing — earned but never given ('+mN.length+')</div>'+rows(missing,mN,'#2e7d5b')
+    +'<button class="btn btn-primary btn-sm" onclick="applyBadgeAudit()" style="width:100%;margin-top:8px">Give these out</button>';
+  if(uN.length) body+='<div class="sec-label" style="margin-top:12px">Held, but the data does not back it ('+uN.length+')</div>'+rows(unexpected,uN,'#c0392b')
+    +'<div style="font-size:11px;color:#888;margin-top:4px">Badges you handed out yourself are not listed here. These are automatic ones whose match data no longer supports them — usually a score that was corrected afterwards.</div>'
+    +'<button class="btn btn-sm btn-danger" onclick="clearAuditExtras()" style="width:100%;margin-top:8px">Take these back</button>';
+  ggSheet('🏅 Double-check badges',body+'<div style="font-size:11px;color:#888;margin-top:10px">Manual and personality badges are left alone either way.</div>');
+};
+window.applyBadgeAudit=async()=>{
+  if(!isTourneyAdmin) return;
+  const {missing}=auditBadges(); const names=Object.keys(missing);
+  if(!names.length){ alert('Nothing missing.'); return; }
+  const tb=JSON.parse(JSON.stringify(S.tourneyBadges||{}));
+  const upd={}; let i=0; const now=Date.now();
+  names.forEach(p=>{ if(!tb[p]) tb[p]={};
+    missing[p].forEach(bid=>{ tb[p][bid]=true;
+      const bd=BADGE_DEFS.find(x=>x.id===bid); if(!bd) return;
+      upd['badgeFeed/'+feedKey()+'_'+(i++)]={player:p,badgeId:bid,icon:bd.icon,name:bd.name,desc:bd.desc||'',spicy:!!bd.spicy,at:now+i,src:'announce'};
+    }); });
+  upd['tourneyBadges']=tb;
+  try{ await update(ref(db,'tournaments/'+currentTourneyId),upd); }
+  catch(err){ alert('Could not add them: '+(err&&err.message||err)); return; }
+  alert('✓ Handed out. They are on the cards and in the feed now.');
+  try{ renderLeaderboard(); renderBadgeFeeds(); }catch(e){}
+  openBadgeAudit();
+};
+window.clearAuditExtras=async()=>{
+  if(!isTourneyAdmin) return;
+  const {unexpected}=auditBadges(); const names=Object.keys(unexpected);
+  if(!names.length){ alert('Nothing to take back.'); return; }
+  const lines=names.map(p=>'• '+p+': '+unexpected[p].map(badgeLabel).join(', ')).join('\n');
+  if(!confirm('Take these back?\n\n'+lines)) return;
+  const tb=JSON.parse(JSON.stringify(S.tourneyBadges||{}));
+  const upd={};
+  names.forEach(p=>{ unexpected[p].forEach(bid=>{ if(tb[p]) delete tb[p][bid]; }); });
+  Object.entries(S.badgeFeed||{}).forEach(([k,v])=>{
+    if(v&&v.player&&unexpected[v.player]&&unexpected[v.player].includes(v.badgeId)) upd['badgeFeed/'+k]=null;
+  });
+  upd['tourneyBadges']=tb;
+  try{ await update(ref(db,'tournaments/'+currentTourneyId),upd); }
+  catch(err){ alert('Could not remove them: '+(err&&err.message||err)); return; }
+  alert('✓ Taken back.');
+  try{ renderLeaderboard(); renderBadgeFeeds(); }catch(e){}
+  openBadgeAudit();
+};
+
+
 // ── EVERY LINE THAT CAN COST MONEY ────────────────────────
 // Rates: Realtime Database $5/GB stored (1GB free) and $1/GB downloaded (10GB/mo
 // free); Cloud Functions $0.40 per million calls (2M free); phone sign-in $0.01
@@ -8255,6 +8401,7 @@ function renderSpendCard(){
     +'<div style="font-size:11px;color:#888;margin-top:8px;line-height:1.45">Free every month: 1GB stored, 10GB downloaded. After that it\'s $5/GB stored and $1/GB downloaded. '
     +'Downloads assume everyone opens every photo — the real number is lower.</div>'
     +'<button class="btn btn-sm btn-primary" onclick="openBillSheet()" style="width:100%;margin-top:10px">See every cost</button>'
+    +'<button class="btn btn-sm" onclick="openBadgeAudit()" style="width:100%;margin-top:6px">🏅 Double-check badges</button>'
     +'<button class="btn btn-sm '+(off?'btn-success':'btn-danger')+'" onclick="toggleTourneyPhotos()" style="width:100%;margin-top:6px">'
     +(off?'📷 Turn photos back on':'🚫 Turn photos off for everyone')+'</button>'
     +(off?'<div style="font-size:11px;color:#c0392b;font-weight:600;margin-top:6px">Photos are off. The camera button is gone and the database refuses new ones.</div>':'');
