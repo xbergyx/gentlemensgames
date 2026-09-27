@@ -49,6 +49,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 .badge-veteran{background:#F5F3FF;color:#6d28d9;border-color:#c4b5fd}
 .badge-founder{background:#FDF2F8;color:#9d174d;border-color:#f9a8d4}
 .badge-winless{background:#F9FAFB;color:#374151;border-color:#d1d5db}
+.badge-tourney{background:#EEEDFE;color:#3C3489;border-color:#b9b2f0}.badge-spicy{background:#FEF2F2;color:#a03028;border-color:#f3b0ab}
 .badge-specialist{background:#ECFDF5;color:#065f46;border-color:#6ee7b7}.badge-gamewinner{background:#EAF3DE;color:#27500A;border-color:#97C459}
 .recap{background:linear-gradient(170deg,#0d0a2a,#1e1650 60%,#2a2170);border-radius:18px;padding:14px;color:#e8e6ff}
 .recap-hero{text-align:center;padding:10px 0 14px;border-bottom:1px solid rgba(255,255,255,.1)}
@@ -484,6 +485,8 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
 [data-theme="dark"] .badge-founder    { background: #220a18; color: #d060a0; border-color: #3a1028; }
 [data-theme="dark"] .badge-winless    { background: var(--bg2); color: var(--text3); border-color: var(--border); }
 [data-theme="dark"] .badge-specialist { background: #0e2018; color: #50c890; border-color: #184030; }
+[data-theme="dark"] .badge-tourney { background:#1a1740; color:#a79ef5; border-color:#2e2870; }
+[data-theme="dark"] .badge-spicy { background:#2a1414; color:#f0908a; border-color:#4a2020; }
 [data-theme="dark"] .badge-gamewinner { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
 [data-theme="dark"] .badge-custom     { background: #280a12; color: #f07090; border-color: #481020; }
 [data-theme="dark"] .badge-lastplace  { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
@@ -709,7 +712,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v154.27.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v155.27.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -783,7 +786,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v154.27.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v155.27.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -2832,6 +2835,16 @@ function renderAdminSetup(){
     </div>`;
   renderStartTourneyCard();
   renderRankingUploadPlayerSelect();
+  try{
+    if(isTourneyAdmin&&el('admin-setup')){
+      el('admin-setup').querySelectorAll('.setup-badge-card').forEach(n=>n.remove());
+      const bc=document.createElement('div'); bc.className='card setup-badge-card';
+      bc.innerHTML='<div class="card-title">🏅 Badge check</div>'
+        +'<div style="font-size:11px;color:#888;margin-bottom:8px">Check every badge against what happened. Works during the day and after it.</div>'
+        +'<button class="btn" onclick="openBadgeAudit()">🏅 Double-check badges</button>';
+      el('admin-setup').appendChild(bc);
+    }
+  }catch(e){}
   try{ renderSpendCard(); }catch(e){}
   // Append tournament admins + view as player cards to setup tab
   const _sE2=el('admin-setup');
@@ -4913,6 +4926,9 @@ function renderLeaderboard(){
     <button class="btn" onclick="applyPointAdjustment()" style="width:100%;background:#FEF2F2;border-color:#f0a0a0;color:#c0392b;font-weight:700">⚡ Apply adjustment</button>
     ${Object.entries(S.points?.adjustments||{}).length?'<div style="margin-top:10px"><div style="font-size:10px;font-weight:700;color:#888;margin-bottom:6px">APPLIED ADJUSTMENTS</div>'+Object.entries(S.points?.adjustments||{}).map(([aid,a])=>'<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0ede6;font-size:11px"><span style="flex:1"><strong>'+a.player+'</strong> '+(a.amount>0?'+'+a.amount:a.amount)+' pts — '+(a.reason||'no reason')+'</span><button onclick="removePointAdjustment(\''+aid+'\')" style="font-size:10px;color:#c0392b;background:none;border:none;cursor:pointer">✕</button></div>').join('')+'</div>':''}
   </div>`:'');
+  html+=`<div class="card"><div class="card-title">🏅 Badge check</div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px">Compares every badge handed out against what actually happened in each game. Tells you what is missing and what should not be there.</div>
+      <button class="btn" onclick="openBadgeAudit()" style="width:100%">🏅 Double-check badges</button></div>`;
   html+=`<div class="card"><div class="card-title">🏆 Declare champion</div><div class="alert alert-warn" style="font-size:11px">Do at end of day. Saves to history and awards all badges.</div>
       <button class="btn btn-primary" onclick="declareTournamentWinner()">🏆 Finalize &amp; save to history</button>
       <button class="btn" onclick="openTournamentAwards()" style="margin-top:6px">🏅 Preview / announce final awards</button><div id="declare-status"></div></div>`;
@@ -5547,7 +5563,17 @@ function blendStats(prof,h){
 }
 function getPlayerBadges(name){
   const h=(S.history&&S.history[name])||null;
-  return getPlayerBadgesFromProfile(blendStats(profileForPlayer(name),h),name);
+  const out=getPlayerBadgesFromProfile(blendStats(profileForPlayer(name),h),name);
+  // Naked Lap, Blowout King, Dead Last and the rest live in this tournament's
+  // own badge list, which the card never looked at. Career history alone was
+  // never going to show them.
+  const tb=(S&&S.tourneyBadges&&S.tourneyBadges[name])||{};
+  Object.keys(tb).forEach(bid=>{
+    const bd=BADGE_DEFS.find(x=>x.id===bid); if(!bd) return;
+    if(out.some(b=>b.text===bd.name||b.text.startsWith(bd.name+' '))) return;
+    out.push({cls:bd.spicy?'badge-spicy':'badge-tourney',icon:bd.icon,text:bd.name});
+  });
+  return out;
 }
 function thisYearCounted(h){
   const yr=+(S&&S.tourneyYear)||new Date().getFullYear();
@@ -8082,17 +8108,27 @@ function computeGameAutoBadges(gameId){
         const q=srt[0], w=q.m.winner; if(w) addB([w.p1,w.p2,w.p3].filter(Boolean),'quick-draw');
       }
     }catch(e){ console.warn('timing badges',e); }
-    // Game champ badge to winner
+    // Game champ — everyone tied at the top gets it, not whoever happened to
+    // sort first. Golf finished 6–6 and the old code picked one of them at random.
+    const teamPts=x=>((pts[x.p1]!=null?pts[x.p1]:pts[x.id])||0);
     if(champBadge&&sorted.length){
-      const winner=sorted[0];
-      const winPlayers=[winner.p1,winner.p2,winner.p3].filter(Boolean);
-      winPlayers.forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes(champBadge.id)) out[p].push(champBadge.id); });
+      const top=teamPts(sorted[0]);
+      const bottom=teamPts(sorted[sorted.length-1]);
+      if(top>bottom){   // a game where everyone scored the same has no winner
+        sorted.filter(x=>teamPts(x)===top).forEach(t=>{
+          [t.p1,t.p2,t.p3].filter(Boolean).forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes(champBadge.id)) out[p].push(champBadge.id); });
+        });
+      }
     }
-    // Last place badge
+    // Last place — same treatment at the other end
     if(sorted.length>1){
-      const last=sorted[sorted.length-1];
-      const lastPlayers=[last.p1,last.p2,last.p3].filter(Boolean);
-      lastPlayers.forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes('last-place-game')) out[p].push('last-place-game'); });
+      const top=teamPts(sorted[0]);
+      const bottom=teamPts(sorted[sorted.length-1]);
+      if(top>bottom){
+        sorted.filter(x=>teamPts(x)===bottom).forEach(t=>{
+          [t.p1,t.p2,t.p3].filter(Boolean).forEach(p=>{ if(!out[p]) out[p]=[]; if(!out[p].includes('last-place-game')) out[p].push('last-place-game'); });
+        });
+      }
     }
     // Undefeated badge (all formats): won every match they played, 2+ played
     const allGM=b?getAllMatchesFromBracket(b,game.format).filter(m=>m&&m.winner&&m.t1&&m.t2&&m.score1!=null&&m.score2!=null):[];
@@ -8401,7 +8437,7 @@ function renderSpendCard(){
     +'<div style="font-size:11px;color:#888;margin-top:8px;line-height:1.45">Free every month: 1GB stored, 10GB downloaded. After that it\'s $5/GB stored and $1/GB downloaded. '
     +'Downloads assume everyone opens every photo — the real number is lower.</div>'
     +'<button class="btn btn-sm btn-primary" onclick="openBillSheet()" style="width:100%;margin-top:10px">See every cost</button>'
-    +'<button class="btn btn-sm" onclick="openBadgeAudit()" style="width:100%;margin-top:6px">🏅 Double-check badges</button>'
+
     +'<button class="btn btn-sm '+(off?'btn-success':'btn-danger')+'" onclick="toggleTourneyPhotos()" style="width:100%;margin-top:6px">'
     +(off?'📷 Turn photos back on':'🚫 Turn photos off for everyone')+'</button>'
     +(off?'<div style="font-size:11px;color:#c0392b;font-weight:600;margin-top:6px">Photos are off. The camera button is gone and the database refuses new ones.</div>':'');
