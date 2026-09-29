@@ -712,7 +712,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
     </div>
   </div>
   <div id="view-auth" class="hidden">
-    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v155.27.09.26</p></div>
+    <div class="logo"><h1>⚜️ Gentleman's Games</h1><p>Sign in to continue</p><p style="font-size:10px;color:#aaa;margin-top:4px">v156.29.09.26</p></div>
     <div class="card" id="auth-step-1">
       <div class="card-title">👋 Sign in or join</div>
       <button class="btn" onclick="signInWithGoogle()" style="background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -786,7 +786,7 @@ input:focus,select:focus{outline:none;border-color:#7F77DD;box-shadow:0 0 0 3px 
       <div>
         <div style="font-size:18px;font-weight:700">⚜️ Gentleman's Games</div>
         <div style="font-size:11px;color:#888" id="home-user-label"></div>
-        <div style="font-size:9px;color:#ccc;margin-top:2px">v155.27.09.26</div>
+        <div style="font-size:9px;color:#ccc;margin-top:2px">v156.29.09.26</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="btn-admin-panel" onclick="openAdminPanel()" style="width:auto;display:none;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">🛡 Admin</button>
@@ -3470,12 +3470,37 @@ async function advanceMatchScheduler(gameId,freshB){
     active.set(m.id,0);
     pl.forEach(p=>busy.add(p));
   }
+  // Spread people around the boards. Handing out the lowest free number every
+  // time parked the same team on the same board all afternoon, so pick the free
+  // board this match's players have been on least.
+  const boardUse={};
+  const noteBoard=(m,bn)=>{ if(!bn) return; pipForSchedule(m).forEach(p=>{ (boardUse[p]=boardUse[p]||{})[bn]=((boardUse[p]||{})[bn]||0)+1; }); };
+  done.forEach(m=>{ const bn=(S.matchTimes&&S.matchTimes[gameId]&&S.matchTimes[gameId][m.id]||{}).board; noteBoard(m,bn); });
   const used=new Set([...active.values()].filter(Boolean));
-  for(const [id,bn] of active){ if(!bn){ let n=1; while(used.has(n)) n++; active.set(id,n); used.add(n); } }
+  const byId=new Map(allM.map(m=>[m.id,m]));
+  for(const [id,bn] of active){
+    if(bn) continue;
+    const m=byId.get(id), ps=m?pipForSchedule(m):[];
+    let best=null,bestScore=Infinity;
+    for(let n=1;n<=cap;n++){
+      if(used.has(n)) continue;
+      const score=ps.reduce((sum,p)=>sum+(((boardUse[p]||{})[n])||0),0);
+      if(score<bestScore){ bestScore=score; best=n; }
+    }
+    if(best==null){ let n=1; while(used.has(n)) n++; best=n; }
+    active.set(id,best); used.add(best); noteBoard(m,best);
+  }
   const nowActive={}; active.forEach((bn,id)=>{ nowActive[id]=bn; });
   const same=Object.keys(nowActive).length===Object.keys(prev).length&&Object.entries(nowActive).every(([k,v])=>prev[k]===v);
   if(same) return;
-  await update(ref(db,'tournaments/'+currentTourneyId),{['activeMatchIds/'+gameId]:Object.keys(nowActive).length?nowActive:null});
+  const upd={['activeMatchIds/'+gameId]:Object.keys(nowActive).length?nowActive:null};
+  // remember which board each match landed on, so the next round can move people
+  Object.entries(nowActive).forEach(([id,bn])=>{
+    if(!bn) return;
+    const known=(S.matchTimes&&S.matchTimes[gameId]&&S.matchTimes[gameId][id]||{}).board;
+    if(known!==bn) upd['matchTimes/'+gameId+'/'+id+'/board']=bn;
+  });
+  await update(ref(db,'tournaments/'+currentTourneyId),upd);
 }
 
 // Called when game is activated — set initial 4 matches
@@ -3831,7 +3856,28 @@ function makePairsFromGameRankings(gameId){
 
 // ── BRACKETS ─────────────────────────────────────────────
 function initStandings(teams){ const st={}; teams.forEach(t=>{st[t.id]={w:0,l:0,pf:0,pa:0};}); return st; }
-function rrMatches(teams){ const m=[]; for(let i=0;i<teams.length;i++) for(let j=i+1;j<teams.length;j++) m.push({id:uid(),t1:teams[i],t2:teams[j],winner:null,score1:null,score2:null}); return m; }
+// Circle method: with 6 teams this is 5 rounds of 3 matches, and every team
+// plays in every round. The old version listed the pairs in nested-loop order
+// and then shuffled, which left teams idle early and stragglers at the end.
+function rrMatches(teams){
+  const list=teams.slice(); if(list.length%2) list.push(null);
+  const n=list.length, out=[];
+  let arr=list.slice();
+  for(let r=0;r<n-1;r++){
+    for(let i=0;i<n/2;i++){
+      const a=arr[i], c=arr[n-1-i];
+      if(a&&c) out.push({id:uid(),t1:a,t2:c,winner:null,score1:null,score2:null,round:r+1});
+    }
+    arr=[arr[0],arr[n-1],...arr.slice(1,n-1)];
+  }
+  return out;
+}
+// keep the rounds in order, but vary the order within a round
+function orderByRound(matches){
+  const byRound={};
+  matches.forEach(m=>{ const r=m.round||0; (byRound[r]=byRound[r]||[]).push(m.id); });
+  return Object.keys(byRound).sort((a,b)=>(+a)-(+b)).flatMap(r=>shuffle(byRound[r]));
+}
 // ── PARTIAL ROUND ROBIN + PLACEMENT FINALS ────────────────
 function prrRoundCount(n){ return Math.max(1,Math.min(3,n-1)); }
 function prrMatches(teams,rounds){
@@ -3891,7 +3937,7 @@ function buildBracket(game,teams){
     b.matchOrderB=shuffle(b.poolBM.map(m=>m.id));
   }
   else if(fmt==='partial-rr'){b.type='partial-rr';b.teams=teams.slice();b.matches=prrMatches(teams,prrRoundCount(teams.length));b.standings=initStandings(teams);b.matchOrder=b.matches.map(m=>m.id);b.crossover=[];b.crossoverBuilt=false;}
-  else if(fmt==='round-robin'){b.type='round-robin';b.matches=rrMatches(teams);b.standings=initStandings(teams);b.matchOrder=shuffle(b.matches.map(m=>m.id));}
+  else if(fmt==='round-robin'){b.type='round-robin';b.matches=rrMatches(teams);b.standings=initStandings(teams);b.matchOrder=orderByRound(b.matches);}
   else if(fmt==='pool-playoff'){
     b.type='pool-playoff';
     const gs=Math.max(2,Math.ceil(teams.length/Math.ceil(teams.length/3)));
@@ -4258,7 +4304,14 @@ function renderMatchFeed(){
       const disputed=subs._disputed;
       const sub1=subs.t1, sub2=subs.t2;
       // Determine what each side claims
-      function scoreStr(sub,side){ if(!sub) return null; const s1=side==='t1'?sub.s1:sub.s2, s2=side==='t1'?sub.s2:sub.s1; const winLabel=s1>s2?t1Label:t2Label; return {s1:sub.s1,s2:sub.s2,winner:s1>s2?t1Label:t2Label,score:sub.s1+'–'+sub.s2,by:sub.submittedBy}; }
+      // s1/s2 are always team 1's and team 2's score, whoever typed them in.
+      // This used to flip them for a team-2 submission and name the wrong winner.
+      function scoreStr(sub,side){
+        if(!sub) return null;
+        const flag=sub.otWinner||(sub.isInstaWin?sub.instaWinWinner:null)||null;
+        const winner=flag?(flag==='t1'?t1Label:t2Label):(sub.s1>sub.s2?t1Label:t2Label);
+        return {s1:sub.s1,s2:sub.s2,winner,score:sub.s1+'–'+sub.s2,by:sub.submittedBy};
+      }
       const claim1=sub1?scoreStr(sub1,'t1'):null;
       const claim2=sub2?scoreStr(sub2,'t2'):null;
       const primaryClaim=claim1||claim2;
@@ -9991,9 +10044,12 @@ async function renderActiveGameTab(myName){
       if(myMatch.winner){
         // Match done
         const won=myMatch.winner.id===myTeam.id;
+        // read it from where he is standing: his score first
+        const mine=myIsT1?myMatch.score1:myMatch.score2;
+        const theirs=myIsT1?myMatch.score2:myMatch.score1;
         html+='<div class="alert '+(won?'alert-success':'alert-warn')+'" style="text-align:center;font-size:14px;font-weight:700">';
         html+=(won?'🎉 You won! ':'😔 You lost ');
-        html+=myMatch.score1+'–'+myMatch.score2+'</div>';
+        html+=mine+'–'+theirs+'</div>';
 
       } else if(theirSubmission && !mySubmission){
         // Opponents already submitted — show approve/dispute
@@ -10019,7 +10075,7 @@ async function renderActiveGameTab(myName){
         } else if(_isOT){
           // OT: show tied score + who won OT
           html+='<div style="text-align:center;padding:8px 0;margin-bottom:10px">';
-          html+='<div style="font-size:28px;font-weight:800;color:#888;margin-bottom:6px">'+theirS1+' – '+theirS2+'</div>';
+          html+='<div style="font-size:28px;font-weight:800;color:#888;margin-bottom:6px">'+myTeamScore+' – '+theirTeamScore+'</div>';
           html+='<div style="font-size:13px;font-weight:700;color:#27500A">⚡ '+approvalWinner+' won overtime</div>';
           html+='</div>';
         } else {
